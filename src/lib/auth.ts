@@ -23,27 +23,48 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
+          if (process.env.NODE_ENV === "production") {
+            console.warn("[Auth] Credentials callback: missing email or password")
+          }
           return null
         }
 
-        const client = await clientPromise
-        const db = client.db()
-        const user = await db.collection('users').findOne({ email: credentials.email })
+        try {
+          const client = await clientPromise
+          // Use same DB as register (lib/mongodb uses DB_NAME 'test')
+          const db = client.db(process.env.MONGODB_DB_NAME || "test")
+          const user = await db.collection("users").findOne({ email: credentials.email })
 
-        if (!user) {
+          if (!user) {
+            if (process.env.NODE_ENV === "production") {
+              console.warn("[Auth] Credentials: user not found for email (check MONGODB_URI and DB)")
+            }
+            return null
+          }
+
+          if (!user.password) {
+            if (process.env.NODE_ENV === "production") {
+              console.warn("[Auth] Credentials: user has no password (OAuth-only account?)")
+            }
+            return null
+          }
+
+          const passwordMatch = await compare(credentials.password, user.password)
+          if (!passwordMatch) {
+            if (process.env.NODE_ENV === "production") {
+              console.warn("[Auth] Credentials: invalid password")
+            }
+            return null
+          }
+
+          return {
+            id: user._id.toString(),
+            email: user.email,
+            name: user.name,
+          }
+        } catch (err) {
+          console.error("[Auth] Credentials: authorize error", err instanceof Error ? err.message : "unknown")
           return null
-        }
-
-        const passwordMatch = await compare(credentials.password, user.password)
-
-        if (!passwordMatch) {
-          return null
-        }
-
-        return {
-          id: user._id.toString(),
-          email: user.email,
-          name: user.name,
         }
       }
     })
@@ -67,7 +88,7 @@ export const authOptions: NextAuthOptions = {
         // Resolve admin: from DB (user.role / user.isAdmin) or from ADMIN_EMAILS env
         try {
           const client = await clientPromise
-          const db = client.db()
+          const db = client.db(process.env.MONGODB_DB_NAME || "test")
           const uid = token.id as string
           if (uid) {
             const dbUser = await db.collection('users').findOne({
