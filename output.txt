@@ -1,0 +1,10 @@
+
+> cursor-ai-git-analysis@0.1.0 dev
+> next dev
+
+  ▲ Next.js 13.5.4
+  - Local:        http://localhost:3000
+  - Environments: .env.local, .env
+
+ ✓ Ready in 2.8s
+[?25h

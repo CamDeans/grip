@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background-primary text-text-primary antialiased;
+  }
+}
+
+@layer components {
+  /* Cursor AI-style buttons */
+  .btn {
+    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-all
+    focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-primary
+    disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-500 text-white hover:bg-primary-600 focus:ring-primary-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-background-tertiary text-text-primary hover:bg-background-secondary focus:ring-primary-500;
+  }
+
+  /* Cursor AI-style inputs */
+  .input {
+    @apply block w-full rounded-md border border-border-default bg-background-secondary px-4 py-2
+    text-text-primary placeholder-text-muted
+    focus:border-primary-500 focus:ring-primary-500
+    hover:border-border-hover
+    transition-colors;
+  }
+
+  /* Cursor AI-style cards */
+  .card {
+    @apply rounded-lg border border-border-default bg-background-secondary p-6
+    hover:border-border-hover transition-colors;
+  }
+
+  /* Cursor AI-style code blocks */
+  .code-block {
+    @apply font-mono text-sm bg-background-primary rounded-md p-4
+    border border-border-default;
+  }
+}
+
+/* Cursor AI-style animations */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .7; }
+}
+
+.animate-cursor-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

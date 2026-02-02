@@ -1,0 +1,78 @@
+import { Anthropic } from '@anthropic-ai/sdk'
+
+// Don't use NEXT_PUBLIC_ for API keys to avoid exposing them to the client
+// Instead, we'll create an API endpoint to handle this server-side
+export async function generateKeywords(title: string, description: string): Promise<string[]> {
+  try {
+    // Call our secure API endpoint instead of directly using the Anthropic client
+    const response = await fetch('/api/ai/generate-keywords', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title,
+        description,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to generate keywords');
+    }
+
+    const data = await response.json();
+    return data.keywords || [];
+  } catch (error) {
+    console.error('Error generating keywords:', error);
+    throw new Error('Failed to generate keywords');
+  }
+}
+
+// Server-side helper function for use in API routes
+export async function generateKeywordsServer(title: string, description: string): Promise<string[]> {
+  try {
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+
+    const response = await anthropic.messages.create({
+      model: 'claude-3-opus-20240229',
+      max_tokens: 300,
+      temperature: 0.7,
+      messages: [{
+        role: 'user',
+        content: `Based on this project information, generate 5 relevant keywords that would be effective for searching GitHub repositories. The keywords should be specific and targeted. Return ONLY the keywords themselves as a comma-separated list without explanation.
+
+Project Title: ${title}
+Project Description: ${description}
+
+Example response format:
+nextjs, react, tailwind, authentication, dashboard`
+      }]
+    });
+
+    // Handle Claude 3 response format
+    if (response.content && response.content[0] && 'text' in response.content[0]) {
+      const keywordsText = response.content[0].text.trim();
+      
+      if (!keywordsText) {
+        throw new Error('No valid keywords generated');
+      }
+      
+      // Parse comma-separated keywords and trim whitespace
+      const keywords = keywordsText.split(',').map(keyword => keyword.trim()).filter(Boolean);
+      
+      if (keywords.length === 0) {
+        return ['repository'];
+      }
+      
+      return keywords;
+    }
+
+    throw new Error('Invalid response format from AI');
+  } catch (error) {
+    console.error('Error generating keywords:', error);
+    return ['repository']; // Fallback keyword
+  }
+}

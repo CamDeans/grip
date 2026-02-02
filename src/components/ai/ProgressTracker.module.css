@@ -1,0 +1,39 @@
+.progressBar {
+  height: 100%;
+  transition: all 500ms;
+}
+
+.phaseProgressBar {
+  height: 100%;
+  transition: all 500ms;
+}
+
+.phaseProgressBar.completed {
+  background-color: var(--success);
+}
+
+.phaseProgressBar.inProgress {
+  background-color: var(--primary);
+}
+
+.phaseProgressBar.pending {
+  background-color: var(--text-muted);
+}
+
+.statusDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+}
+
+.statusDot.completed {
+  background-color: var(--success);
+}
+
+.statusDot.inProgress {
+  background-color: var(--primary);
+}
+
+.statusDot.pending {
+  background-color: var(--text-muted);
+} 

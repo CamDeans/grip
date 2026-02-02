@@ -1,0 +1,413 @@
+import { ObjectId } from 'mongodb'
+import { clientPromise } from '@/lib/mongodb'
+import { ProjectFile, IProjectFile } from '@/lib/models/ProjectFile'
+import { IProjectStructureData, IFileNode } from '@/lib/models/ProjectStructure'
+import { getProjectStructure } from '@/lib/services/planStorageService'
+import { 
+  ITemplate, 
+  ITemplateVariables, 
+  getTemplateById, 
+  renderTemplate, 
+  generateFileName,
+  generateTemplateVariables,
+  loadBuiltInTemplates,
+  loadCustomTemplates
+} from '@/lib/services/templateEngineService'
+import crypto from 'crypto'
+import { connectToDatabase } from '@/lib/mongodb'
+import { getFileDependencies } from '@/lib/services/dependencyResolverService'
+
+/**
+ * File Generator Service - Creates service to generate code based on templates and context
+ * Part of Phase 4, Step 2 of the G.R.I.P. AI Assistant Enhancement Plan
+ */
+
+/**
+ * Interface for file generation request
+ */
+export interface FileGenerationRequest {
+  projectId: string;
+  filePath: string;
+  filename?: string;
+  templateId: string;
+  variables?: ITemplateVariables;
+  description?: string;
+}
+
+/**
+ * Interface for file generation result
+ */
+export interface FileGenerationResult {
+  fileId: string;
+  projectId: string;
+  path: string;
+  filename: string;
+  content: string;
+  size: number;
+  language: string;
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Generate a code file using a template
+ * @param request File generation request
+ * @returns File generation result
+ */
+export async function generateFile(request: FileGenerationRequest): Promise<FileGenerationResult> {
+  try {
+    console.log(`Generating file for project ${request.projectId} using template ${request.templateId}`)
+    
+    // Get project structure
+    const projectStructure = await getProjectStructure(request.projectId)
+    if (!projectStructure) {
+      throw new Error(`Project structure not found: ${request.projectId}`)
+    }
+    
+    // Get template
+    const template = await getTemplateById(request.templateId)
+    if (!template) {
+      throw new Error(`Template not found: ${request.templateId}`)
+    }
+    
+    // Find file node in project structure if it exists
+    let fileNode: IFileNode | null = null
+    const findFileNode = (node: IFileNode, path: string): IFileNode | null => {
+      if (node.path === path) {
+        return node
+      }
+      
+      if (node.children) {
+        for (const child of node.children) {
+          const found = findFileNode(child, path)
+          if (found) return found
+        }
+      }
+      
+      return null
+    }
+    
+    fileNode = findFileNode(projectStructure.fileHierarchy, request.filePath)
+    
+    // If we don't have a file node, create a placeholder
+    if (!fileNode) {
+      const pathParts = request.filePath.split('/')
+      const folderPath = pathParts.slice(0, -1).join('/')
+      const filename = pathParts[pathParts.length - 1]
+      
+      fileNode = {
+        type: 'file',
+        name: filename,
+        path: request.filePath,
+        language: template.language
+      }
+    }
+    
+    // Generate variables if not provided
+    let variables = request.variables || {}
+    if (Object.keys(variables).length === 0) {
+      variables = await generateTemplateVariables(template, {
+        projectId: request.projectId,
+        filePath: request.filePath,
+        fileNode,
+        projectStructure,
+        description: request.description
+      })
+    }
+    
+    // Generate filename if not provided
+    const filename = request.filename || generateFileName(template, variables)
+    
+    // Render template with variables
+    const content = renderTemplate(template, variables)
+    
+    // Create file in database
+    await connectToDatabase()
+    
+    // Calculate hash of content
+    const hash = crypto.createHash('md5').update(content).digest('hex')
+    
+    // Get dependencies
+    const dependencies = await getFileDependencies(request.projectId, request.filePath)
+    
+    // Parse imports from content
+    const imports: string[] = []
+    const importRegex = /import\s+(?:{[^}]*}|\*\s+as\s+\w+|\w+)\s+from\s+['"]([^'"]+)['"]/g
+    let match
+    while ((match = importRegex.exec(content)) !== null) {
+      imports.push(match[1])
+    }
+    
+    // Check if file already exists
+    const existingFile = await ProjectFile.findOne({
+      projectId: new ObjectId(request.projectId),
+      path: request.filePath,
+      filename
+    })
+    
+    let file: IProjectFile
+    
+    if (existingFile) {
+      // Update existing file
+      existingFile.content = content
+      existingFile.size = Buffer.byteLength(content, 'utf8')
+      existingFile.hash = hash
+      existingFile.metadata.dependencies = dependencies
+      existingFile.metadata.imports = imports
+      
+      // Add to history if content changed
+      if (existingFile.hash !== hash) {
+        existingFile.history.push({
+          version: existingFile.version,
+          content: existingFile.content,
+          timestamp: new Date(),
+          changes: 'Updated via template generator'
+        })
+        
+        existingFile.version += 1
+      }
+      
+      await existingFile.save()
+      file = existingFile
+    } else {
+      // Create new file
+      file = new ProjectFile({
+        projectId: new ObjectId(request.projectId),
+        path: request.filePath,
+        filename,
+        content,
+        language: template.language,
+        size: Buffer.byteLength(content, 'utf8'),
+        version: 1,
+        hash,
+        metadata: {
+          generatedBy: 'template-engine',
+          purpose: request.description || 'Generated from template',
+          dependencies,
+          imports
+        },
+        history: []
+      })
+      
+      await file.save()
+    }
+    
+    // Return result
+    return {
+      fileId: file._id?.toString() || '',
+      projectId: request.projectId,
+      path: file.path,
+      filename: file.filename,
+      content: file.content,
+      size: file.size,
+      language: file.language,
+      success: true
+    }
+  } catch (error) {
+    console.error('Error generating file:', error)
+    return {
+      fileId: '',
+      projectId: request.projectId,
+      path: request.filePath,
+      filename: request.filename || 'error.txt',
+      content: '',
+      size: 0,
+      language: 'text',
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }
+  }
+}
+
+/**
+ * Get generated files for a project
+ * @param projectId Project ID to get files for
+ * @returns Array of files
+ */
+export async function getGeneratedFiles(projectId: string): Promise<IProjectFile[]> {
+  try {
+    console.log(`Getting generated files for project ${projectId}`)
+    await connectToDatabase()
+    
+    const files = await ProjectFile.find({
+      projectId: new ObjectId(projectId)
+    }).sort({ path: 1, filename: 1 })
+    
+    return files
+  } catch (error) {
+    console.error('Error getting generated files:', error)
+    return []
+  }
+}
+
+/**
+ * Get a specific generated file by ID
+ * @param fileId File ID to get
+ * @returns File or null if not found
+ */
+export async function getGeneratedFile(fileId: string): Promise<IProjectFile | null> {
+  try {
+    console.log(`Getting generated file ${fileId}`)
+    await connectToDatabase()
+    
+    const file = await ProjectFile.findById(fileId)
+    
+    return file
+  } catch (error) {
+    console.error('Error getting generated file:', error)
+    return null
+  }
+}
+
+/**
+ * Batch generate multiple files
+ * @param requests Array of file generation requests
+ * @returns Array of file generation results
+ */
+export async function batchGenerateFiles(requests: FileGenerationRequest[]): Promise<FileGenerationResult[]> {
+  try {
+    console.log(`Batch generating ${requests.length} files`)
+    
+    const results: FileGenerationResult[] = []
+    
+    for (const request of requests) {
+      const result = await generateFile(request)
+      results.push(result)
+    }
+    
+    return results
+  } catch (error) {
+    console.error('Error batch generating files:', error)
+    return []
+  }
+}
+
+/**
+ * Get templates available for a file path
+ * @param projectId Project ID
+ * @param filePath File path to get templates for
+ * @returns Array of suitable templates
+ */
+export async function getTemplatesForFilePath(projectId: string, filePath: string): Promise<ITemplate[]> {
+  try {
+    console.log(`Getting templates for file path ${filePath}`)
+    
+    // Get all templates
+    const builtInTemplates = await loadBuiltInTemplates()
+    const customTemplates = await loadCustomTemplates(projectId)
+    
+    const allTemplates = [...builtInTemplates, ...customTemplates]
+    
+    // Determine file type from path if possible
+    const extension = filePath.split('.').pop()?.toLowerCase()
+    
+    // Filter templates based on file extension if available
+    if (extension) {
+      return allTemplates.filter(t => t.fileType === extension)
+    }
+    
+    // If no extension, try to infer from path (e.g., components folder = React components)
+    if (filePath.includes('/components/')) {
+      return allTemplates.filter(t => t.id.includes('component'))
+    }
+    
+    if (filePath.includes('/pages/') || filePath.includes('/app/')) {
+      return allTemplates.filter(t => t.id.includes('page'))
+    }
+    
+    if (filePath.includes('/api/')) {
+      return allTemplates.filter(t => t.id.includes('api'))
+    }
+    
+    if (filePath.includes('/utils/') || filePath.includes('/lib/')) {
+      return allTemplates.filter(t => t.id.includes('utility'))
+    }
+    
+    // No specific match, return all templates
+    return allTemplates
+  } catch (error) {
+    console.error('Error getting templates for file path:', error)
+    return []
+  }
+}
+
+/**
+ * Delete a generated file
+ * @param fileId File ID to delete
+ * @returns True if successful, false otherwise
+ */
+export async function deleteGeneratedFile(fileId: string): Promise<boolean> {
+  try {
+    console.log(`Deleting generated file ${fileId}`)
+    await connectToDatabase()
+    
+    const result = await ProjectFile.findByIdAndDelete(fileId)
+    
+    return !!result
+  } catch (error) {
+    console.error('Error deleting generated file:', error)
+    return false
+  }
+}
+
+/**
+ * Generate all files from project structure
+ * @param projectId Project ID to generate files for
+ * @returns Array of file generation results
+ */
+export async function generateAllFiles(projectId: string): Promise<FileGenerationResult[]> {
+  try {
+    console.log(`Generating all files for project ${projectId}`)
+    
+    // Get project structure
+    const projectStructure = await getProjectStructure(projectId)
+    if (!projectStructure) {
+      throw new Error(`Project structure not found: ${projectId}`)
+    }
+    
+    // Get all file nodes that have generationMetadata
+    const filesToGenerate: Array<IFileNode & { generationMetadata: any }> = []
+    
+    const findFilesWithMetadata = (node: any) => {
+      if (node.type === 'file' && node.generationMetadata) {
+        filesToGenerate.push(node)
+      }
+      
+      if (node.children) {
+        for (const child of node.children) {
+          findFilesWithMetadata(child)
+        }
+      }
+    }
+    
+    findFilesWithMetadata(projectStructure.fileHierarchy)
+    
+    // Sort by priority
+    filesToGenerate.sort((a, b) => 
+      (b.generationMetadata.priority || 0) - (a.generationMetadata.priority || 0)
+    )
+    
+    // Generate each file
+    const results: FileGenerationResult[] = []
+    
+    for (const fileNode of filesToGenerate) {
+      // Create generation request
+      const request: FileGenerationRequest = {
+        projectId,
+        filePath: fileNode.path,
+        filename: fileNode.name,
+        templateId: fileNode.generationMetadata.template,
+        variables: fileNode.generationMetadata.variables || {},
+        description: fileNode.generationMetadata.description
+      }
+      
+      const result = await generateFile(request)
+      results.push(result)
+    }
+    
+    return results
+  } catch (error) {
+    console.error('Error generating all files:', error)
+    return []
+  }
+} 
