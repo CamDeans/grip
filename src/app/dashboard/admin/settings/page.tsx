@@ -3,8 +3,8 @@
 import { AdminDashboardLayout } from '@/components/admin/AdminDashboardLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/Button'
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/Switch'
+import { Label } from '@/components/ui/Label'
 import { useState } from 'react'
 import { 
   AlertTriangleIcon, 

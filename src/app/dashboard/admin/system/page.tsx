@@ -5,7 +5,7 @@ import { AdminDashboardLayout } from '@/components/admin/AdminDashboardLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Label } from '@/components/ui/Label'
 import { 
   PlayIcon, 
   PauseIcon, 
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Switch } from '@/components/ui/switch'
+import { Switch } from '@/components/ui/Switch'
 
 export default function SystemManagementPage() {
   // Task worker state

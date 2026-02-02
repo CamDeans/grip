@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/Switch'
+import { Label } from '@/components/ui/Label'
 import {
   AlertCircle,
   Save,

@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Label } from '@/components/ui/label'
+import { Label } from '@/components/ui/Label'
 import { toast } from '@/components/ui/use-toast'
 import { 
   PlusIcon, 
