@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/Select'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -280,7 +280,7 @@ export function CodeGenerator({ projectId }: CodeGeneratorProps) {
                         variant="ghost"
                         size="sm"
                       >
-                        <a href={`/projects/${projectId}/files/${file.fileId}`} target="_blank" rel="noreferrer">
+                        <a href={`/projects/${projectId}/files/${file.fileId}`} target="_blank" rel="noreferrer" aria-label="View file">
                           <Code className="h-4 w-4" />
                         </a>
                       </Button>

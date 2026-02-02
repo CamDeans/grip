@@ -19,7 +19,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle 
-} from '@/components/ui/Card'
+} from '@/components/ui/card'
 import { RefreshCwIcon, DownloadIcon } from 'lucide-react'
 import { ProjectAutomationService } from '@/lib/services/projectAutomationService'
 
@@ -277,7 +277,7 @@ export function BuildLogViewer({
       )}
       
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="md:col-span-1 overflow-y-auto" style={{ maxHeight: height }}>
+        <div className="md:col-span-1 overflow-y-auto max-h-[50vh]" style={{ maxHeight: height }}>
           <div className="font-semibold mb-2">Task Logs</div>
           {logs.length === 0 && !loading ? (
             <div className="text-text-muted text-sm">No logs found</div>
@@ -336,7 +336,7 @@ export function BuildLogViewer({
             </div>
           ) : (
             <pre
-              className="bg-background-tertiary text-text-primary p-4 rounded overflow-auto text-sm"
+              className="bg-background-tertiary text-text-primary p-4 rounded overflow-auto text-sm min-h-[200px] max-h-[50vh]"
               style={{ height, maxHeight: height }}
             >
               {logContent || 'Select a log to view its content'}

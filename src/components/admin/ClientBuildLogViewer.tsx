@@ -3,7 +3,7 @@
 import '@/lib/polyfill'
 import { useEffect, useState } from 'react';
 import { Spinner } from '@/components/ui/spinner';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -308,7 +308,7 @@ const ClientBuildLogViewer = (props: BuildLogViewerProps) => {
                 </div>
               ) : (
                 <>
-                  <div className="col-span-1 border-r overflow-y-auto" style={{ maxHeight: height }}>
+                  <div className="col-span-1 border-r overflow-y-auto max-h-[50vh]" style={{ maxHeight: height }}>
                     <div className="space-y-2 pr-2">
                       {logs.map(log => (
                         <div
@@ -351,7 +351,7 @@ const ClientBuildLogViewer = (props: BuildLogViewerProps) => {
                         </div>
                         
                         <div 
-                          className="flex-1 bg-black text-white font-mono text-sm p-4 rounded-md overflow-auto whitespace-pre-wrap" 
+                          className="flex-1 bg-black text-white font-mono text-sm p-4 rounded-md overflow-auto whitespace-pre-wrap min-h-[300px] max-h-[50vh]" 
                           style={{ minHeight: '300px', maxHeight: height }}
                         >
                           {loading ? (

@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/Card'
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Terminal as TerminalIcon, MessageSquare, Share2, Loader2 } from 'lucide-react'

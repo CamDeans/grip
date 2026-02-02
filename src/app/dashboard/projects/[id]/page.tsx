@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui'
 import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle } from 'lucide-react'
 import Link from 'next/link'

@@ -8,7 +8,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle 
-} from '@/components/ui/Card'
+} from '@/components/ui/card'
 import { ErrorRecoveryService } from '@/lib/services/errorRecoveryService'
 import { ITask } from '@/lib/models/Task'
 import { LoggingService } from '@/lib/services/loggingService'

@@ -6,7 +6,7 @@ import {
   CardTitle,
   CardDescription,
   CardFooter
-} from '@/components/ui/Card';
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
@@ -374,10 +374,13 @@ export function AdminControlsCard({
                   >
                     Allow High Priority Override
                   </label>
+                  {/* aria-checked is set from state; valid values "true" | "false" */}
                   <div
                     role="switch"
                     id="priorityOverride"
-                    aria-checked={systemState.allowHighPriorityOverride ? "true" : "false"}
+                    aria-checked={systemState.allowHighPriorityOverride ? 'true' : 'false'}
+                    aria-label="Allow high priority override"
+                    title="Allow high priority override"
                     className={`inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${disabled || loading ? 'opacity-50 cursor-not-allowed' : ''} ${systemState.allowHighPriorityOverride ? 'bg-primary' : 'bg-border'}`}
                     onClick={disabled || loading ? undefined : () => handlePriorityOverrideChange(!systemState.allowHighPriorityOverride)}
                   >
@@ -400,10 +403,13 @@ export function AdminControlsCard({
                       Blocks new tasks but allows current tasks to complete
                     </p>
                   </div>
+                  {/* aria-checked is set from state; valid values "true" | "false" */}
                   <div
                     role="switch"
                     id="maintenanceMode"
-                    aria-checked={systemState.maintenanceMode ? "true" : "false"}
+                    aria-checked={systemState.maintenanceMode ? 'true' : 'false'}
+                    aria-label="Maintenance mode"
+                    title="Maintenance mode"
                     className={`inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${disabled || loading ? 'opacity-50 cursor-not-allowed' : ''} ${systemState.maintenanceMode ? 'bg-primary' : 'bg-border'}`}
                     onClick={disabled || loading ? undefined : () => handleMaintenanceModeChange(!systemState.maintenanceMode)}
                   >

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { GradientTitle } from '@/components/ui/GradientTitle'
 import { 

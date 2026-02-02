@@ -15,7 +15,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Command, PanelRight, Book, Terminal, GitBranch, Package } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Card } from '@/components/ui/Card'
+import { Card } from '@/components/ui/card'
 
 // Command category types
 type CommandCategory = 

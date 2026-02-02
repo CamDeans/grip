@@ -16,6 +16,7 @@ const Select: React.FC<SelectProps> = ({ children, onValueChange, ...props }) =>
     }
   }
 
+  const accessibleName = props['aria-label'] ?? props.title ?? props.placeholder ?? 'Select option'
   return (
     <select 
       {...props}
@@ -24,7 +25,8 @@ const Select: React.FC<SelectProps> = ({ children, onValueChange, ...props }) =>
         "w-full h-10 rounded-md border border-border-default text-black bg-white dark:text-white dark:bg-background-tertiary px-3 py-2 text-sm",
         props.className
       )}
-      aria-label={props['aria-label'] || props.placeholder || "Select item"}
+      aria-label={accessibleName}
+      title={props.title ?? accessibleName}
     >
       {children}
     </select>

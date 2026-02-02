@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/Card'
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Terminal as TerminalIcon, Code, Database, Braces } from 'lucide-react'

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
@@ -196,7 +196,7 @@ export default function DebugTasksPage() {
               <div className="col-span-3">
                 <h3 className="font-medium mb-2">Log Output</h3>
                 {selectedLogOutput ? (
-                  <div className="bg-background-primary text-text-primary p-4 rounded-md font-mono text-sm overflow-auto whitespace-pre-wrap" style={{ maxHeight: '400px' }}>
+                  <div className="bg-background-primary text-text-primary p-4 rounded-md font-mono text-sm overflow-auto whitespace-pre-wrap max-h-[400px]">
                     {selectedLogOutput}
                   </div>
                 ) : (
@@ -208,7 +208,7 @@ export default function DebugTasksPage() {
                 <div className="mt-4">
                   <h3 className="font-medium mb-2">Debug Details</h3>
                   {debugData ? (
-                    <div className="text-black bg-white dark:text-white dark:bg-background-tertiary p-4 rounded-md text-sm font-mono overflow-auto" style={{ maxHeight: '200px' }}>
+                    <div className="text-black bg-white dark:text-white dark:bg-background-tertiary p-4 rounded-md text-sm font-mono overflow-auto max-h-[200px]">
                       <pre>{JSON.stringify(debugData.query || {}, null, 2)}</pre>
                     </div>
                   ) : null}

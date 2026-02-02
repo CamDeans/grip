@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { signOut, useSession } from 'next-auth/react'
-import { Card, CardContent, CardDescription, CardHeader, CardFooter } from "@/components/ui/Card"
+import { Card, CardContent, CardDescription, CardHeader, CardFooter } from "@/components/ui/card"
 import { Button } from '@/components/ui'
 import { useTheme } from 'next-themes'
 import { Input } from '@/components/ui/input'

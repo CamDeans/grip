@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProjectGrid } from '@/components/projects/ProjectGrid'
 import { GradientTitle } from '@/components/ui/GradientTitle'
-import { Card } from '@/components/ui/Card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui'
 import { Skeleton } from '@/components/ui/skeleton'
 import { 

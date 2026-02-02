@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Card } from '@/components/ui/Card'
+import { Card } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { GradientTitle } from '@/components/ui/GradientTitle'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -12,6 +12,7 @@ import {
   CodeBracketIcon, 
   CommandLineIcon 
 } from '@heroicons/react/24/outline'
+import styles from './analytics.module.css'
 
 interface Analytics {
   totalProjects: number
@@ -133,10 +134,8 @@ export default function AnalyticsPage() {
                 {analytics?.activityData.map((item, index) => (
                   <div key={index} className="flex-1 flex flex-col items-center">
                     <div
-                      className="w-full bg-primary rounded-t"
-                      style={{
-                        height: `${(item.count / Math.max(...analytics.activityData.map(d => d.count)) * 200) || 4}px`
-                      }}
+                      className={`w-full bg-primary rounded-t ${styles.activityBar}`}
+                      style={{ ['--bar-height' as string]: `${(item.count / Math.max(...analytics.activityData.map(d => d.count)) * 200) || 4}px` }}
                     />
                     <span className="text-xs text-text-secondary mt-2">{formatDate(item.date)}</span>
                   </div>
@@ -157,16 +156,16 @@ export default function AnalyticsPage() {
                   {analytics?.languageData.map((item, index) => (
                     <div key={index} className="flex items-center space-x-2">
                       <div 
-                        className="h-3 w-3 rounded-full" 
-                        style={{ backgroundColor: item.color }}
+                        className={`h-3 w-3 rounded-full ${styles.languageDot}`}
+                        style={{ ['--dot-color' as string]: item.color }}
                       />
                       <span className="text-sm">{item.language}</span>
                       <div className="flex-1 h-2 bg-background-tertiary rounded-full overflow-hidden">
                         <div 
-                          className="h-full rounded-full" 
+                          className={`h-full rounded-full ${styles.languageBarFill}`}
                           style={{ 
-                            width: `${(item.count / analytics.languageData.reduce((acc, curr) => acc + curr.count, 0) * 100)}%`,
-                            backgroundColor: item.color 
+                            ['--bar-pct' as string]: `${(item.count / analytics.languageData.reduce((acc, curr) => acc + curr.count, 0) * 100)}%`,
+                            ['--bar-color' as string]: item.color
                           }}
                         />
                       </div>
@@ -202,8 +201,8 @@ export default function AnalyticsPage() {
                   return (
                     <div 
                       key={index}
-                      className={`h-full ${colors[item.status] || 'bg-primary'}`}
-                      style={{ width: `${percentage}%` }}
+                      className={`h-full ${colors[item.status] || 'bg-primary'} ${styles.buildSegment}`}
+                      style={{ ['--segment-pct' as string]: `${percentage}%` }}
                       title={`${item.status}: ${item.count} (${percentage.toFixed(1)}%)`}
                     />
                   )

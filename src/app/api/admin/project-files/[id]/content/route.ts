@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerAuthSession } from '@/lib/auth';
+import { isAdminUser } from '@/lib/utils/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ProjectFile } from '@/lib/models';
 import { ObjectId } from 'mongodb';

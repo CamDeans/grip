@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui'
 import { CopyIcon, CodeIcon, CheckIcon, ChevronDownIcon } from 'lucide-react'

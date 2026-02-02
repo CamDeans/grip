@@ -9,7 +9,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -170,16 +170,14 @@ export function FileExplorer({
   
   // Render file or directory item
   const renderItem = (item: FileStructureItem, level = 0) => {
-    const paddingLeft = `${level * 16}px`;
-    
     if (item.type === 'directory') {
       const isExpanded = expandedFolders[item.path] || false;
       
       return (
         <div key={item.id}>
           <div 
-            className={`flex items-center py-1 px-2 hover:bg-background-tertiary cursor-pointer rounded`}
-            style={{ paddingLeft }}
+            className="flex items-center py-1 px-2 hover:bg-background-tertiary cursor-pointer rounded pl-[calc(var(--level)*16px)]"
+            style={{ ['--level' as string]: level }}
             onClick={() => toggleDirectory(item.path)}
           >
             {isExpanded ? (
@@ -217,8 +215,8 @@ export function FileExplorer({
       return (
         <div 
           key={item.id}
-          className={`flex items-center py-1 px-2 hover:bg-background-tertiary cursor-pointer rounded ${selectedFile?.id === item.id ? 'bg-primary/10' : ''}`}
-          style={{ paddingLeft }}
+          className={`flex items-center py-1 px-2 hover:bg-background-tertiary cursor-pointer rounded pl-[calc(var(--level)*16px)] ${selectedFile?.id === item.id ? 'bg-primary/10' : ''}`}
+          style={{ ['--level' as string]: level }}
           onClick={() => handleFileSelect(item)}
         >
           <div className="w-4 mr-1"></div> {/* Spacing for alignment with folders */}
@@ -311,7 +309,7 @@ export function FileExplorer({
             )}
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ height }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[400px]" style={{ height }}>
             <TabsContent value="files" className="m-0">
               <Card className="h-full border">
                 <CardContent className="p-0">

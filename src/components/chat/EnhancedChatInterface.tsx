@@ -723,9 +723,9 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
                 <div className="max-w-[85%] md:max-w-[75%] rounded-lg p-2 bg-muted text-foreground">
                   <div className="flex items-center space-x-2">
                     <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:0ms]" />
+                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:150ms]" />
+                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:300ms]" />
                     </div>
                     <span className="text-sm text-muted-foreground">GRIP is thinking...</span>
                   </div>

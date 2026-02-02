@@ -1,0 +1,18 @@
+/* Analytics chart styles - dynamic values set via CSS variables from component */
+.activityBar {
+  height: var(--bar-height, 4px);
+}
+
+.languageDot {
+  background-color: var(--dot-color);
+}
+
+.languageBarFill {
+  width: var(--bar-pct, 0%);
+  background-color: var(--bar-color);
+}
+
+.buildSegment {
+  height: 100%;
+  width: var(--segment-pct, 0%);
+}

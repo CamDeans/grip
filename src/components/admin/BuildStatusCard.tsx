@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ClientLoggingService } from '@/lib/services/clientLoggingService'
 import { IBuildLogData } from '@/lib/models/clientModels/BuildLog'
@@ -223,11 +223,11 @@ export function BuildStatusCard({ projectId, refreshInterval = 10000 }: BuildSta
               <div className="w-full bg-background-tertiary rounded-full h-2.5">
                 {stats.total > 0 && (
                   <div 
-                    className="bg-primary h-2.5 rounded-full"
+                    className="bg-primary h-2.5 rounded-full min-w-0"
                     style={{ 
                       width: `${Math.round((stats.byStatus.completed / stats.total) * 100)}%` 
                     }}
-                  ></div>
+                  />
                 )}
               </div>
               <div className="text-xs text-text-secondary mt-1 text-right">

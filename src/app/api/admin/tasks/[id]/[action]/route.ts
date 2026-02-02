@@ -4,14 +4,6 @@ import { isAdminUser } from '@/lib/utils/auth'
 import { connectToDatabase } from '@/lib/mongodb'
 import { Task } from '@/lib/models/Task'
 
-// Helper function to check if user has admin role
-function isAdminUser(session: any): boolean {
-  // This implementation depends on how roles are stored in your session
-  return session?.user?.isAdmin === true || 
-         session?.user?.role === 'admin' || 
-         (session?.user?.roles && session?.user?.roles.includes('admin'));
-}
-
 // Common handler for both PUT and POST methods
 async function handleTaskAction(
   request: NextRequest,

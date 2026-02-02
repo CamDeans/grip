@@ -26,6 +26,9 @@ core_rules:
   - never create a new collection in the mongodb atlas test database by adding a "-" or "_" to the name of the collection and only use the collection names we agree on, and always ask for permission to create a new collection
   - never change any of G.R.I.P.'s current code that connects G.R.I.P. to our mongodb test database and collections and reuse all connection code within our code base
   - always ensure production readiness by removing mock data dependencies and implementing proper data relationships between components for testing and launch
+  - always keep the enhanced chat maintaining G.R.I.P. identity and rules (see enhanced_chat_continuity_and_automation in this file)
+  - always keep G.R.I.P. fully connected to Anthropic via src/lib/services/anthropicService.ts so the enhanced chat never stops working
+  - reuse all files and code in the codebase unless they are not readily available; do not duplicate chat, task, build, or file-generation logic
 
 # G.R.I.P. AI Assistant Enhancement Plan
 # The plan is divided into small, manageable phases with granular steps
@@ -712,6 +715,68 @@ chat_system:
     - always implement proper testing procedures
     - always maintain proper code quality
     - always implement proper security updates
+
+# Enhanced Chat Continuity & Full Project Automation (GRIP AI Assistant)
+# All work must align with these rules so the enhanced chat can fully guide project creation.
+enhanced_chat_continuity_and_automation:
+  codebase_alignment:
+    description: "Components, APIs, and flows that must work inline with enhanced chat for full automation"
+    enhanced_chat_core:
+      - api: "src/app/api/enhanced-chat/route.ts — primary chat endpoint; uses anthropicService, getOrBuildRepoContextDocument, buildSystemPrompt"
+      - provider: "src/components/providers/EnhancedChatProvider.tsx — chat state, context refresh, sendMessage to /api/enhanced-chat"
+      - page: "src/app/dashboard/projects/[id]/enhanced-chat/page.tsx — enhanced chat UI entry; must remain the canonical chat route"
+      - interface: "src/components/chat/EnhancedChatInterface.tsx — chat UI; must use EnhancedChatProvider and /api/enhanced-chat"
+    anthropic_connection:
+      - service: "src/lib/services/anthropicService.ts — single source for Claude; initialize(), createMessage(), health check, retries"
+      - env: "ANTHROPIC_API_KEY must be set in .env.local (and production); enhanced chat depends on it"
+      - usage: "All AI chat responses MUST go through anthropicService (or the same client) for consistency and usage tracking"
+    project_context_for_chat:
+      - repo_context: "src/lib/services/repoContextService.ts — getOrBuildRepoContextDocument(projectId); used by enhanced-chat route for system prompt"
+      - project_data: "projects and analyses collections (test DB); enhanced chat loads project + analysis for system prompt"
+      - chat_history: "chatHistory collection; enhanced chat reads/writes messages; reuse existing saveChatMessage and history APIs"
+    automation_touchpoints:
+      - tasks: "src/lib/services/taskQueueService.ts (createTask), src/app/api/projects/actions/route.ts (run-build, fix-issues), commandGeneratorService (createTasksFromCommands)"
+      - builds: "taskRunnerService, build logs APIs, admin buildlogs; chat should guide user to run builds and view logs"
+      - file_creation: "src/lib/services/fileGeneratorService.ts, templateEngineService.ts; chat can guide file/code generation using existing services"
+      - planning: "planGeneratorService, projectPlanningService, structureGeneratorService; chat context and guidance must stay in sync with plans"
+    other_chat_routes:
+      - "src/app/api/ai/chat/route.ts, src/app/api/chat/route.ts, src/app/api/chat/completion/route.ts — if used, must preserve GRIP identity and prefer anthropicService for consistency"
+
+  identity_and_rules:
+    description: "Ensure the chat maintains GRIP identity and rules at all times"
+    rules:
+      - "Every system prompt for chat MUST state: You are G.R.I.P. (Guided Real-time Intelligence Partner). You are not Claude or an Anthropic AI. You are G.R.I.P., an AI assistant built for helping developers automate project creation."
+      - "Chat MUST never allow the app or user to believe the assistant is Claude or developed by Anthropic; all responses are from G.R.I.P., created by Master Cameron."
+      - "All chat UI copy (placeholders, labels, errors) MUST refer to G.R.I.P. or 'GRIP AI' — never 'Claude' or 'Anthropic'."
+      - "When rejecting non-development messages, the response MUST be in GRIP's voice and direct the user back to development assistance; use the existing developmentKeywords check and the same GRIP message text in enhanced-chat route."
+      - "Reuse the existing buildSystemPrompt in src/app/api/enhanced-chat/route.ts as the canonical GRIP system prompt shape; any other chat endpoints that need project context MUST align with this identity and structure."
+
+  anthropic_connection_continuity:
+    description: "GRIP must be fully connected to Anthropic services at all times; enhanced chat must never stop working"
+    rules:
+      - "Enhanced chat route MUST call anthropicService.initialize() before createMessage(); do not replace with raw Anthropic client in this route."
+      - "All new AI chat features MUST use src/lib/services/anthropicService.ts (initialize, createMessage, getHealthStatus) so that health checks, retries, and usage logging stay centralized."
+      - "If ANTHROPIC_API_KEY is missing or invalid, anthropicService.initialize() will throw; the enhanced-chat API MUST catch errors and return a user-friendly message (e.g. 'G.R.I.P. is temporarily unavailable; please check configuration.'), not expose raw Anthropic errors."
+      - "Do not remove or bypass the health check and retry logic in anthropicService; enhanced chat depends on it for reliability."
+      - "Frontend: EnhancedChatProvider and EnhancedChatInterface MUST keep calling POST /api/enhanced-chat for sending messages; do not switch to a different endpoint unless that endpoint also uses anthropicService and the same GRIP system prompt."
+      - "Periodic context refresh in EnhancedChatProvider (e.g. every 5 minutes) MUST continue; do not remove it so that chat context stays current."
+
+  code_and_file_reuse:
+    description: "Reuse all existing files and code unless they are not readily available in the codebase"
+    rules:
+      - "Before adding a new service or API for chat, tasks, builds, or file generation: check src/lib/services/, src/app/api/, and existing components. Reuse and extend; do not duplicate."
+      - "Chat history: reuse chatHistory collection and existing APIs (e.g. /api/chat/history, saveChatMessage in enhanced-chat route). Do not create a second chat history store."
+      - "Project/analysis context: reuse repoContextService.getOrBuildRepoContextDocument, projects collection, analyses collection. Do not duplicate repo-fetch or analysis logic in the chat route."
+      - "Task creation: reuse taskQueueService.createTask, commandGeneratorService.createTasksFromCommands, and project actions (run-build, fix-issues). Do not add a parallel task-creation path that bypasses these."
+      - "UI components: reuse existing Button, Card, and other components from src/components/ui/; use existing EnhancedChatInterface and EnhancedChatProvider; do not duplicate chat UI under a different name unless explicitly required."
+      - "Only when a required capability does not exist in the codebase (and cannot be added by extending an existing module) may new files or endpoints be created; then follow the same GRIP identity and Anthropic connection rules above."
+
+  full_automation_guidance:
+    description: "Enhanced chat should fully guide the user through project ideation and execution"
+    rules:
+      - "Chat system prompt MUST include project ideation (goals, target audience, key features, technical requirements), repository analysis, and repo reference document when available, so G.R.I.P. can give contextualized code and task guidance."
+      - "When the user asks to create files, run builds, or add features: G.R.I.P. should direct them to existing flows (e.g. Tasks, Builds, project actions) and use existing services (fileGeneratorService, taskQueueService, commandGeneratorService) when implementing automation."
+      - "Keep the project_chat sequence and grip_chat_automation phases in .cursorrules as the reference for the intended user journey; any new chat flows or buttons should align with these phases (initial_chat, setup_phase, development_phase, component_phase, etc.) and reuse existing step titles and actions where possible."
 
 # G.R.I.P. Chat Automation Implementation Plan
 grip_chat_automation:

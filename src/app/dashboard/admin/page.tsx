@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AdminDashboardLayout } from '@/components/admin/AdminDashboardLayout'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 // The G.R.I.P. Enhancement Plan Phases
 const enhancementPlan = [

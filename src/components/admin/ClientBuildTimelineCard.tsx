@@ -5,7 +5,7 @@ import '@/lib/polyfill';
 
 import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // Import client-safe model
 import { IBuildLogData } from '@/lib/models/clientModels/BuildLog';

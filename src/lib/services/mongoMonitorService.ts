@@ -20,7 +20,7 @@ interface MongoAlert {
   details?: any
 }
 
-class MongoMonitorService {
+export class MongoMonitorService {
   private static instance: MongoMonitorService
   private eventEmitter: EventEmitter
   private metrics: MongoMetrics

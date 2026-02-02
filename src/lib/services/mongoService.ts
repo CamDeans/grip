@@ -34,14 +34,8 @@ const clientOpts = {
   socketTimeoutMS: SOCKET_TIMEOUT_MS,
   heartbeatFrequencyMS: HEARTBEAT_FREQUENCY_MS,
   monitorCommands: true,
-  autoEncryption: {
-    keyVaultNamespace: 'encryption.__keyVault',
-    kmsProviders: {
-      local: {
-        key: Buffer.from(process.env.ENCRYPTION_KEY || '')
-      }
-    }
-  }
+  // autoEncryption omitted: requires optional dependency mongodb-client-encryption.
+  // Add it back and install that package if you need client-side field-level encryption.
 }
 
 // Mongoose Configuration

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Terminal } from '@/components/terminal/Terminal'
 import { Button } from '@/components/ui'
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card'
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Terminal as TerminalIcon, Plus, RefreshCw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
