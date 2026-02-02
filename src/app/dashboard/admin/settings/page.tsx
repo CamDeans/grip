@@ -2,7 +2,7 @@
 
 import { AdminDashboardLayout } from '@/components/admin/AdminDashboardLayout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui/Button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { useState } from 'react'

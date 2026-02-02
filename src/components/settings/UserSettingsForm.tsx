@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useToast } from '../providers/ToastProvider'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui/Button'
 
 interface UserSettings {
   _id?: string

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/skeleton'
 
 // Extracted from EnhancedChatInterface.tsx for better testability

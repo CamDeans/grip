@@ -7,7 +7,7 @@ import {
   CardDescription,
   CardFooter
 } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/input';
 import { 
   PlayIcon, 

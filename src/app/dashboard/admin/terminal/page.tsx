@@ -4,7 +4,7 @@ import { AdminDashboardLayout } from '@/components/admin/AdminDashboardLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Terminal } from '@/components/terminal/Terminal'
 import { useState, useEffect, useRef } from 'react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui/Button'
 import { PlusIcon } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 

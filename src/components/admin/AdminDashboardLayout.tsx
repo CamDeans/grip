@@ -12,7 +12,7 @@ import {
   SlidersHorizontal,
   MessageSquare
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui/Button'
 
 interface AdminDashboardLayoutProps {
   children: React.ReactNode

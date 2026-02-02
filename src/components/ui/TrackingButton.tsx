@@ -1,5 +1,5 @@
 import { forwardRef, useState } from 'react'
-import { Button, ButtonProps } from '@/components/ui/button'
+import { Button, ButtonProps } from '@/components/ui/Button'
 import { useInteractionTracking } from '@/hooks/useInteractionTracking'
 import { useParams } from 'next/navigation'
 

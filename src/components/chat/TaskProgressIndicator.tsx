@@ -15,7 +15,7 @@ import {
   RefreshCwIcon,
   AlertCircleIcon
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'

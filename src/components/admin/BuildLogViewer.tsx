@@ -3,7 +3,7 @@ import { IBuildLogData } from '@/lib/models/BuildLog'
 import { LoggingService } from '@/lib/services/loggingService'
 import { Spinner } from '@/components/ui/spinner'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/input'
 import { 
   Select,

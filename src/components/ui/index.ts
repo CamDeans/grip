@@ -1,4 +1,4 @@
-export { Button } from './button'
+export { Button } from './Button'
 export * from './GradientTitle'
 export * from './card'
 export * from './input'
