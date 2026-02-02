@@ -15,10 +15,13 @@ export async function GET(
   { params }: RouteParams
 ) {
   try {
-    // Check authentication
+    // Check authentication and admin
     const session = await getServerAuthSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!isAdminUser(session)) {
+      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
     
     const { id } = params;

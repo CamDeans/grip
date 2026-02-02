@@ -110,12 +110,18 @@ export function LoginForm() {
                 {isLoading ? 'Signing in...' : 'Sign in'}
               </Button>
 
-              <div className="flex justify-center">
+              <div className="flex justify-center gap-4">
                 <Link
                   href="/register"
                   className="text-sm font-medium text-primary hover:text-primary-hover"
                 >
                   Create an account
+                </Link>
+                <Link
+                  href="/admin/login"
+                  className="text-sm font-medium text-text-muted hover:text-primary"
+                >
+                  Admin sign in
                 </Link>
               </div>
 

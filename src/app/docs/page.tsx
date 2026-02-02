@@ -275,7 +275,19 @@ export default function DocumentationPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Link 
+                href="/support" 
+                className="block p-4 rounded-lg border border-border hover:border-primary/50 hover:bg-background-hover transition-colors"
+              >
+                <h3 className="font-medium flex items-center">
+                  <CodeBracketIcon className="h-5 w-5 mr-2 text-primary" />
+                  Support ticket
+                </h3>
+                <p className="text-sm text-text-secondary mt-1">
+                  Create a ticket for domain setup, bugs, or questions.
+                </p>
+              </Link>
               <Link 
                 href="https://github.com/GRIP-organization/GRIP/issues/new" 
                 target="_blank"
@@ -286,7 +298,7 @@ export default function DocumentationPage() {
                   Report an Issue
                 </h3>
                 <p className="text-sm text-text-secondary mt-1">
-                  Found a bug or have a feature request? Let us know!
+                  Bug reports and feature requests on GitHub.
                 </p>
               </Link>
               

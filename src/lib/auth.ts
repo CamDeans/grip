@@ -5,6 +5,7 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import clientPromise from './db'
 import { compare } from "bcryptjs"
 import { Adapter } from "next-auth/adapters"
+import { ObjectId } from "mongodb"
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
@@ -63,6 +64,28 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string
+        // Resolve admin: from DB (user.role / user.isAdmin) or from ADMIN_EMAILS env
+        try {
+          const client = await clientPromise
+          const db = client.db()
+          const uid = token.id as string
+          if (uid) {
+            const dbUser = await db.collection('users').findOne({
+              _id: new ObjectId(uid)
+            }) as { role?: string; isAdmin?: boolean; email?: string } | null
+            if (dbUser?.role === 'admin' || dbUser?.isAdmin === true) {
+              (session.user as { role?: string }).role = 'admin'
+            } else if (
+              process.env.ADMIN_EMAILS &&
+              session.user?.email &&
+              process.env.ADMIN_EMAILS.split(',').map((e: string) => e.trim().toLowerCase()).includes(session.user.email.trim().toLowerCase())
+            ) {
+              (session.user as { role?: string }).role = 'admin'
+            }
+          }
+        } catch {
+          // ignore; session stays without role
+        }
       }
       return session
     }

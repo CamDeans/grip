@@ -254,6 +254,54 @@ export default function ApiDocumentationPage() {
       ]
     },
     {
+      category: 'support',
+      title: 'Support API',
+      description: 'Create and manage support tickets',
+      endpoints: [
+        {
+          id: 'create-ticket',
+          method: 'POST',
+          path: '/api/support/tickets',
+          description: 'Create a support ticket (public). Sends email notification to support if Resend is configured.',
+          requestType: 'application/json',
+          requestExample: `{
+  "name": "Jane Doe",
+  "email": "jane@example.com",
+  "subject": "Domain setup help",
+  "message": "I need help connecting my custom domain.",
+  "domain": "app.myapp.com"
+}`,
+          responseType: 'application/json',
+          responseExample: `{
+  "success": true,
+  "ticketId": "abc123",
+  "message": "Support ticket created. We will get back to you soon."
+}`
+        },
+        {
+          id: 'list-tickets',
+          method: 'GET',
+          path: '/api/support/tickets',
+          description: 'List support tickets (admin-only). Use ?status=open or ?limit=50.',
+          responseType: 'application/json',
+          responseExample: `{
+  "tickets": [
+    {
+      "_id": "...",
+      "name": "Jane Doe",
+      "email": "jane@example.com",
+      "subject": "Domain setup help",
+      "message": "...",
+      "domain": "app.myapp.com",
+      "status": "open",
+      "createdAt": "2024-01-15T12:00:00Z"
+    }
+  ]
+}`
+        }
+      ]
+    },
+    {
       category: 'analytics',
       title: 'Analytics API',
       description: 'Access project and user analytics',

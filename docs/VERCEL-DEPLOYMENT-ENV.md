@@ -26,10 +26,25 @@ Set these in **Vercel → Project → Settings → Environment Variables**. Use 
 
 | Variable | Description | When to set |
 |----------|-------------|-------------|
+| `ADMIN_EMAILS` | Comma-separated list of emails that are treated as admin | To grant admin access without DB role (e.g. `you@example.com,other@example.com`) |
 | `GITHUB_ACCESS_TOKEN` or `GITHUB_TOKEN` | GitHub PAT (e.g. repo scope) | If you use GitHub repo search / content in the app |
 | `JWT_SECRET` | JWT signing secret | If your app uses JWT outside NextAuth |
 | `ENCRYPTION_KEY` | 32-byte key for encrypted fields (e.g. Mongo) | Only if you use encryption in mongoService/db |
 | `INTERNAL_API_KEY` | Key for internal API calls (e.g. notifications) | Only if you call those APIs with a key |
+
+---
+
+## Support email (Resend)
+
+When a user submits a support ticket at `/support`, the app can email you and send a confirmation to the user. Set these only if you use Resend:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `RESEND_API_KEY` | Resend API key | `re_...` from [Resend](https://resend.com) |
+| `SUPPORT_EMAIL` | Email that receives new ticket notifications | `cameronmdeans@gmail.com` |
+| `FROM_EMAIL` | “From” address for outgoing emails | `onboarding@resend.dev` (Resend default for testing) or `support@yourdomain.com` after you verify a domain |
+
+If `RESEND_API_KEY` or `SUPPORT_EMAIL` is missing, tickets are still saved in the database; only the email step is skipped. See `docs/SUPPORT-EMAIL-SETUP.md` for setup steps.
 
 ---
 

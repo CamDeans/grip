@@ -9,7 +9,8 @@ import {
   TerminalIcon,
   BarChart3Icon,
   Settings,
-  SlidersHorizontal
+  SlidersHorizontal,
+  MessageSquare
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -66,6 +67,12 @@ export function AdminDashboardLayout({ children }: AdminDashboardLayoutProps) {
       label: 'Admin Settings', 
       icon: <Settings className="h-4 w-4 mr-2" />,
       href: '/dashboard/admin/settings'
+    },
+    { 
+      id: 'support', 
+      label: 'Support Tickets', 
+      icon: <MessageSquare className="h-4 w-4 mr-2" />,
+      href: '/dashboard/admin/support'
     },
   ]
 

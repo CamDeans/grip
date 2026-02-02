@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
+import { isAdminUser } from '@/lib/utils/auth'
 import { connectToDatabase } from '@/lib/mongodb'
 import { TerminalSession } from '@/lib/models'
 
@@ -8,6 +9,9 @@ export async function GET(request: NextRequest) {
     const session = await getServerAuthSession()
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!isAdminUser(session)) {
+      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 })
     }
 
     // Connect to MongoDB
@@ -44,7 +48,7 @@ export async function GET(request: NextRequest) {
       }
     })
     
-    // If we don't have real data yet, provide mock data for dev purposes
+    // When no TerminalSession documents exist, return placeholder counts for dev/demo (real data from MongoDB otherwise)
     if (stats.total === 0) {
       return NextResponse.json({
         total: 5,

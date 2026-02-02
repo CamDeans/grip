@@ -33,13 +33,14 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/use-toast'
+import { isAdminUser } from '@/lib/utils/auth'
 
-const navigation = [
+const baseNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
   { name: 'Projects', href: '/dashboard/projects', icon: FolderIcon },
   { name: 'Terminal', href: '/dashboard/terminal', icon: TerminalIcon },
   { name: 'Analytics', href: '/dashboard/analytics', icon: ChartBarIcon },
-  { name: 'Admin', href: '/dashboard/admin', icon: ShieldIcon },
+  { name: 'Admin', href: '/dashboard/admin', icon: ShieldIcon, adminOnly: true },
   { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon },
 ]
 
@@ -77,6 +78,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       });
     }
   };
+
+  const navigation = baseNavigation.filter(
+    (item) => !item.adminOnly || (session && isAdminUser(session))
+  )
 
   const renderNavItems = () => (
     <ul role="list" className="-mx-2 space-y-1">
@@ -337,10 +342,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <p className="text-xs text-text-secondary">
               &copy; {new Date().getFullYear()} G.R.I.P. All rights reserved.
             </p>
-            <div className="flex space-x-4 mt-2 sm:mt-0">
-              <button className="text-xs text-text-secondary hover:text-primary">Privacy</button>
-              <button className="text-xs text-text-secondary hover:text-primary">Terms</button>
-              <button className="text-xs text-text-secondary hover:text-primary">Contact</button>
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-2 sm:mt-0">
+              <Link href="/docs" className="text-xs text-text-secondary hover:text-primary">Documentation</Link>
+              <Link href="/docs/api" className="text-xs text-text-secondary hover:text-primary">API Reference</Link>
+              <Link href="/support" className="text-xs text-text-secondary hover:text-primary">Support</Link>
+              <Link href="/contact" className="text-xs text-text-secondary hover:text-primary">Contact</Link>
+              <Link href="/privacy" className="text-xs text-text-secondary hover:text-primary">Privacy</Link>
+              <Link href="/terms" className="text-xs text-text-secondary hover:text-primary">Terms</Link>
+              <Link href="/admin/login" className="text-xs text-text-muted hover:text-primary">Admin</Link>
             </div>
           </div>
         </footer>

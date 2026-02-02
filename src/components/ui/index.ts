@@ -1,5 +1,5 @@
-export { Button } from './button'
+export { Button } from './Button'
 export * from './GradientTitle'
-export * from './Card'
+export * from './card'
 export * from './input'
 export * from './scroll-area' 

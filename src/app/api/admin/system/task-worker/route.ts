@@ -1,5 +1,6 @@
-﻿import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { getServerAuthSession } from "@/lib/auth"
+import { isAdminUser } from "@/lib/utils/auth"
 import { connectToDatabase } from "@/lib/mongodb"
 import { startSystem, pauseSystem, getSystemState, updateSystemState } from "@/lib/services/systemControlService"
 
@@ -43,6 +44,9 @@ export async function POST(request: NextRequest) {
     const session = await getServerAuthSession()
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (!isAdminUser(session)) {
+      return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 })
     }
 
     // Get action from request body

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerAuthSession } from '@/lib/auth';
+import { isAdminUser } from '@/lib/utils/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Task, BuildLog } from '@/lib/models';
 import { ProjectAutomationService } from '@/lib/services/projectAutomationService';
@@ -13,10 +14,13 @@ import mongoose from 'mongoose';
  */
 export async function GET(req: NextRequest) {
   try {
-    // Check authentication
+    // Check authentication and admin
     const session = await getServerAuthSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!isAdminUser(session)) {
+      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
     
     // Connect to database

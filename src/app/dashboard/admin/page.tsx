@@ -77,15 +77,15 @@ const enhancementPlan = [
     id: 'phase_8',
     name: 'Chat Interface Enhancement',
     description: 'Update chat UI to support development workflow',
-    status: 'in_progress',
+    status: 'completed',
     icon: <FolderIcon className="h-8 w-8 text-teal-500" />,
-    href: '/dashboard/admin'
+    href: '/dashboard/chat'
   },
   {
     id: 'phase_9',
     name: 'Testing and Integration',
     description: 'Test the complete system and ensure smooth integration',
-    status: 'in_progress',
+    status: 'completed',
     icon: <CheckCircleIcon className="h-8 w-8 text-violet-500" />,
     href: '/dashboard/admin'
   }
@@ -127,6 +127,13 @@ const adminSections = [
     description: 'Control system automation',
     icon: <SlidersHorizontal className="h-8 w-8 text-destructive" />,
     href: '/dashboard/admin/controls'
+  },
+  {
+    id: 'support',
+    title: 'Support Tickets',
+    description: 'View and manage support tickets',
+    icon: <XCircleIcon className="h-8 w-8 text-primary" />,
+    href: '/dashboard/admin/support'
   }
 ]
 
@@ -143,32 +150,34 @@ export default function AdminDashboardPage() {
     active: 0,
     inactive: 0
   })
+
+  const [userStats, setUserStats] = useState({
+    totalUsers: 0,
+    newThisWeek: 0,
+    totalProjects: 0,
+    usersWithProjects: 0,
+    conversionRate: 0
+  })
   
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // Fetch build stats
-        const buildResponse = await fetch('/api/admin/stats/builds')
-        if (buildResponse.ok) {
-          const buildData = await buildResponse.json()
-          setBuildStats(buildData)
-        }
-        
-        // Fetch terminal stats
-        const terminalResponse = await fetch('/api/admin/stats/terminals')
-        if (terminalResponse.ok) {
-          const terminalData = await terminalResponse.json()
-          setTerminalStats(terminalData)
-        }
+        const [buildRes, terminalRes, userRes] = await Promise.all([
+          fetch('/api/admin/stats/builds'),
+          fetch('/api/admin/stats/terminals'),
+          fetch('/api/admin/stats/users')
+        ])
+        if (buildRes.ok) setBuildStats(await buildRes.json())
+        if (terminalRes.ok) setTerminalStats(await terminalRes.json())
+        if (userRes.ok) setUserStats(await userRes.json())
       } catch (error) {
         console.error('Error fetching stats:', error)
       } finally {
         setIsLoading(false)
       }
     }
-    
     fetchStats()
   }, [])
 
@@ -238,6 +247,71 @@ export default function AdminDashboardPage() {
           </div>
         </div>
         
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle>User Metrics</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="animate-pulse h-20 bg-background-tertiary rounded" />
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="text-center p-3 bg-primary/10 rounded-lg">
+                    <div className="text-2xl font-bold text-primary">{userStats.totalUsers}</div>
+                    <div className="text-xs text-primary">Total Users</div>
+                  </div>
+                  <div className="text-center p-3 bg-accent-blue/10 rounded-lg">
+                    <div className="text-2xl font-bold text-accent-blue">{userStats.newThisWeek}</div>
+                    <div className="text-xs text-accent-blue">New (7d)</div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle>Conversion</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="animate-pulse h-20 bg-background-tertiary rounded" />
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="text-center p-3 bg-success/10 rounded-lg">
+                    <div className="text-2xl font-bold text-success">{userStats.conversionRate}%</div>
+                    <div className="text-xs text-success">Conversion</div>
+                  </div>
+                  <div className="text-center p-3 bg-background-tertiary rounded-lg">
+                    <div className="text-2xl font-bold text-text-primary">{userStats.usersWithProjects}</div>
+                    <div className="text-xs text-text-secondary">With Projects</div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle>Payments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-4 text-text-secondary text-sm">
+                Payment metrics coming soon. Connect Stripe or your provider to see revenue and subscriptions.
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle>Support</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Link href="/dashboard/admin/support" className="text-primary hover:underline text-sm">
+                View support tickets →
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
           <Card>
             <CardHeader className="pb-2">

@@ -2,7 +2,7 @@
 
 // Import polyfill first
 import '@/lib/polyfill'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AdminDashboardLayout } from '@/components/admin/AdminDashboardLayout'
 import ClientBuildLogViewer from '@/components/admin/ClientBuildLogViewer'
 import ClientBuildStatusCard from '@/components/admin/ClientBuildStatusCard'
@@ -14,7 +14,6 @@ import { RefreshCwIcon } from 'lucide-react'
 import { IBuildLogData } from '@/lib/models/clientModels/BuildLog'
 import { ClientTime } from '@/components/ui/ClientOnly'
 import { FileExplorer } from '@/components/admin/FileExplorer'
-import { useSearchParams } from 'next/navigation'
 
 export default function BuildMonitorPage() {
   const [builds, setBuilds] = useState<IBuildLogData[]>([])
@@ -42,11 +41,10 @@ export default function BuildMonitorPage() {
     { value: 'running', label: 'Running' }
   ]
 
-  // Load builds
-  const loadBuilds = async () => {
+  // Load builds - stable callback so effects don't re-run every render
+  const loadBuilds = useCallback(async () => {
     setIsLoading(true)
     try {
-      // Construct the API URL with filter parameters
       let apiUrl = '/api/admin/builds';
       if (filter !== 'all') {
         const statusMap: Record<string, string> = {
@@ -56,12 +54,10 @@ export default function BuildMonitorPage() {
         };
         apiUrl += `?status=${statusMap[filter] || 'all'}`;
       }
-      
       if (selectedProject !== 'all') {
         const separator = apiUrl.includes('?') ? '&' : '?';
         apiUrl += `${separator}projectId=${selectedProject}`;
       }
-      
       const res = await fetch(apiUrl)
       const data = await res.json()
       setBuilds(data.builds || [])
@@ -70,36 +66,32 @@ export default function BuildMonitorPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [filter, selectedProject])
 
-  // Initial load
+  // Initial load and when filter/selectedProject change
   useEffect(() => {
     loadBuilds()
-  }, [filter, selectedProject])
-  
-  // Auto-refresh builds at interval
-  useEffect(() => {
-    if (!autoRefresh) return;
-    
-    const intervalId = setInterval(() => {
-      setRefreshTimestamp(new Date());
-      loadBuilds();
-    }, refreshInterval);
-    
-    return () => clearInterval(intervalId);
-  }, [autoRefresh, refreshInterval, filter, selectedProject]);
+  }, [loadBuilds])
 
-  // Handle manual refresh
-  const handleRefresh = () => {
-    setRefreshTimestamp(new Date());
-    loadBuilds();
-  };
-  
-  // Toggle auto-refresh
-  const toggleAutoRefresh = () => {
-    setAutoRefresh(prev => !prev);
-  };
-  
+  // Auto-refresh builds at interval (only when autoRefresh is on)
+  useEffect(() => {
+    if (!autoRefresh) return
+    const intervalId = setInterval(() => {
+      setRefreshTimestamp(new Date())
+      loadBuilds()
+    }, refreshInterval)
+    return () => clearInterval(intervalId)
+  }, [autoRefresh, refreshInterval, loadBuilds])
+
+  const handleRefresh = useCallback(() => {
+    setRefreshTimestamp(new Date())
+    loadBuilds()
+  }, [loadBuilds])
+
+  const toggleAutoRefresh = useCallback(() => {
+    setAutoRefresh(prev => !prev)
+  }, [])
+
   // Get count of builds in different statuses
   const statusCounts = {
     running: builds.filter(build => build.status === 'running').length,
@@ -107,12 +99,6 @@ export default function BuildMonitorPage() {
     failed: builds.filter(build => build.status === 'failed').length,
     total: builds.length
   };
-  
-  const searchParams = useSearchParams();
-
-  useEffect(() => {
-    loadBuilds();
-  }, [searchParams, loadBuilds]);
   
   return (
     <AdminDashboardLayout>

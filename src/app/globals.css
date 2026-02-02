@@ -64,7 +64,7 @@
   .card {
     @apply rounded-lg border border-border bg-background-secondary p-6 
     shadow-sm hover:shadow-md transition-all duration-200 ease-in-out
-    hover:border-hover;
+    hover:border-border-hover;
   }
 
   /*  container */

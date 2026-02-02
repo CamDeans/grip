@@ -4,11 +4,12 @@ import clientPromise from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { anthropicService } from '@/lib/services/anthropicService'
+import { getOrBuildRepoContextDocument } from '@/lib/services/repoContextService'
 
 // Phase 2, Step 2: Create Project Data Fetcher for enhanced chat
 
 // Build a custom system prompt with project context
-const buildSystemPrompt = (projectContext: any, analysisContext: any) => {
+const buildSystemPrompt = (projectContext: any, analysisContext: any, repoReferenceDoc?: string) => {
   let prompt = `You are G.R.I.P. (Guided Real-time Intelligence Partner) designed to help with software development projects. 
 You are not Claude or an Anthropic AI. You are G.R.I.P., an AI assistant built specifically for helping developers automate project creation.
 
@@ -127,6 +128,13 @@ Based on the repository analysis, you can help with:
 - Setting up configuration files consistent with the project requirements
 - Implementing the technical requirements specified in the project ideation
 `
+  }
+
+  if (repoReferenceDoc && repoReferenceDoc.length > 0) {
+    prompt += `\n## Full repository reference (analyzed from stored repo)\nUse this document as the primary reference for the codebase. It contains structure and file excerpts from the complete repo stored in the database.\n\n`
+    prompt += repoReferenceDoc.slice(0, 28000)
+    if (repoReferenceDoc.length > 28000) prompt += '\n_(document truncated)_'
+    prompt += '\n\n'
   }
 
   // Additional instructions - enhanced for code automation
@@ -486,8 +494,11 @@ I focus on providing technical guidance and development assistance. For question
       projectId: new ObjectId(projectId)
     })
 
+    // Get or build repo reference document (full repo analyzed and submitted to Claude at chat start)
+    const repoReferenceDoc = await getOrBuildRepoContextDocument(projectId)
+
     // Build system prompt with context
-    const systemPrompt = buildSystemPrompt(project, analysis)
+    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc)
 
     // Initialize Anthropic service
     await anthropicService.initialize()

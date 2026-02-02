@@ -1,0 +1,37 @@
+# Run build on push/PR to catch errors before merge.
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+        env:
+          # Dummy values so build can complete (no real secrets in CI).
+          MONGODB_URI: mongodb://localhost:27017
+          NEXTAUTH_SECRET: build-time-secret-min-32-chars-long
+          NEXTAUTH_URL: http://localhost:3000
+          GITHUB_CLIENT_ID: x
+          GITHUB_CLIENT_SECRET: x
+          ANTHROPIC_API_KEY: x
