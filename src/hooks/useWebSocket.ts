@@ -59,7 +59,10 @@ export function useWebSocket(projectIdOrOptions: string | WebSocketOptions) {
   }, [])
 
   useEffect(() => {
-    // Skip connection if websockets are disabled, but only log once
+    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app') && !process.env.NEXT_PUBLIC_WEBSOCKET_URL) {
+      shouldTryToConnect.current = false
+    }
+
     if (!shouldTryToConnect.current) {
       if (!hasLoggedDisabled.current) {
         console.log('WebSocket connections are disabled via environment variable')

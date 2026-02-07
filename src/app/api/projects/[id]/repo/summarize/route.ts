@@ -60,7 +60,15 @@ export async function POST(
       (f) => f.content && typeof f.content === 'string' && f.content.length > 0
     ).slice(0, limit)
 
-    await anthropicService.initialize()
+    try {
+      await anthropicService.initialize()
+    } catch (initErr) {
+      console.error('Anthropic init failed in summarize:', initErr)
+      return NextResponse.json(
+        { error: 'G.R.I.P. AI service is unavailable. Check ANTHROPIC_API_KEY.' },
+        { status: 503 }
+      )
+    }
 
     let done = 0
     for (const file of withContent) {
@@ -92,8 +100,9 @@ export async function POST(
     })
   } catch (error) {
     console.error('Summarize error:', error)
+    const message = error instanceof Error ? error.message : 'Summarize failed'
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Summarize failed' },
+      { error: message },
       { status: 500 }
     )
   }

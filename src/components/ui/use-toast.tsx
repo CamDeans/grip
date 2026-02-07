@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { toast as sonnerToast } from "sonner"
 
 import type {
   ToastActionElement,
@@ -155,21 +156,17 @@ export function useToast() {
 }
 
 const dispatch = (action: Action) => {
-  // This is a placeholder since we're not setting up the full toast provider
-  console.warn("Toast action dispatched without provider", action)
+  // No-op when using Sonner; kept for tests that mock the reducer
 }
 
 export function toast(props: Omit<ToasterToast, "id">) {
   const id = genId()
-
-  dispatch({
-    type: "ADD_TOAST",
-    toast: {
-      ...props,
-      id,
-      open: true,
-    },
-  })
-
+  const title = typeof props.title === 'string' ? props.title : (props.title ? String(props.title) : 'Notification')
+  const description = typeof props.description === 'string' ? props.description : (props.description ? String(props.description) : undefined)
+  if (props.variant === 'destructive') {
+    sonnerToast.error(title, { description })
+  } else {
+    sonnerToast.success(title, { description })
+  }
   return id
 } 

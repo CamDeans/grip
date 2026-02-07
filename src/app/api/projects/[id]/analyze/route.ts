@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
-import { clientPromise } from '@/lib/mongodb'
+import clientPromise from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { analyzeRepositoryStructure } from '@/lib/analysis'
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerAuthSession()
@@ -14,34 +14,58 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { repository } = await request.json()
-    
-    // Start analysis
+    const { id } = await params
+    if (!id || !ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 })
+    }
+
+    const body = await request.json().catch(() => ({}))
+    const repository = body?.repository
+    if (!repository?.owner || !repository?.name) {
+      return NextResponse.json(
+        { error: 'Missing repository (owner and name required)' },
+        { status: 400 }
+      )
+    }
+
     const analysis = await analyzeRepositoryStructure(
       repository.owner,
       repository.name,
-      params.id
+      id
     )
 
-    // Store analysis results
     const client = await clientPromise
-    const db = client.db()
+    const db = client.db('test')
+    const projectIdObj = new ObjectId(id)
+
+    await db.collection('analyses').updateOne(
+      { projectId: projectIdObj },
+      {
+        $set: {
+          projectId: projectIdObj,
+          repositoryAnalysis: analysis,
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true }
+    )
 
     await db.collection('projects').updateOne(
-      { _id: new ObjectId(params.id) },
+      { _id: projectIdObj },
       {
         $set: {
           analysis,
-          updatedAt: new Date()
-        }
+          updatedAt: new Date(),
+        },
       }
     )
 
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error analyzing project:', error)
+    const message = error instanceof Error ? error.message : 'Failed to analyze project'
     return NextResponse.json(
-      { error: 'Failed to analyze project' },
+      { error: message },
       { status: 500 }
     )
   }
