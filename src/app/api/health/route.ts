@@ -14,9 +14,15 @@ export async function GET() {
       { status: 200 }
     )
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     console.error('Health check failed:', error)
     return NextResponse.json(
-      { status: 'error', database: 'disconnected', timestamp: new Date().toISOString() },
+      {
+        status: 'error',
+        database: 'disconnected',
+        error: message,
+        timestamp: new Date().toISOString(),
+      },
       { status: 503 }
     )
   }
