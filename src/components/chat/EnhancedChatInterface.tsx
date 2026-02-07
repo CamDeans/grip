@@ -53,7 +53,7 @@ const ContextPanel = () => {
   } = useEnhancedChat()
 
   return (
-    <div className="h-full flex flex-col bg-background-secondary overflow-y-auto w-full">
+    <div className="h-full flex flex-col bg-background-secondary overflow-y-auto overflow-x-hidden w-full min-w-0">
       <div className="p-3 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Button 
@@ -360,7 +360,7 @@ export function EnhancedChat({ projectId, className, welcomeMessage }: EnhancedC
 
   return (
     <EnhancedChatProvider projectId={projectId}>
-      <div className={cn("flex flex-col h-full w-full max-w-full overflow-hidden", className)}>
+      <div className={cn("flex flex-col h-full w-full max-w-full min-w-0 overflow-hidden", className)}>
         <div className="flex-shrink-0 border-b border-border">
           <div className="flex items-center justify-between px-3 py-1">
             <h3 className="text-sm font-medium">G.R.I.P. Enhanced Chat</h3>
@@ -706,8 +706,8 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
   }
 
   return (
-    <div className={cn('flex flex-col w-full h-full overflow-hidden', className)}>
-      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+    <div className={cn('flex flex-col w-full h-full min-w-0 overflow-hidden', className)}>
+      <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col">
         <ScrollArea className="flex-1 p-2 w-full overflow-auto">
           <div className="pb-2 space-y-4">
             <AnimatePresence>

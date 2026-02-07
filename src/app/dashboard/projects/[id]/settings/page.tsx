@@ -28,6 +28,7 @@ interface Project {
   _id: string
   title: string
   description: string
+  status?: 'active' | 'completed' | 'archived'
   repository?: {
     owner: string
     name: string
@@ -132,20 +133,89 @@ export default function ProjectSettingsPage() {
     setFormData(prev => ({ ...prev, enableRepository: checked }))
   }
   
-  // Handle form submission
+  // Handle form submission (save project details via API)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!projectId) return
     setIsSaving(true)
-    
-    // In a real implementation, this would save to the database
-    // For now, just simulate a successful save
-    setTimeout(() => {
-      setIsSaving(false)
+    setError(null)
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formData.title,
+          description: formData.description,
+          ideation: {
+            goals: formData.goals,
+            targetAudience: formData.targetAudience,
+            keyFeatures: formData.keyFeatures,
+            technicalRequirements: formData.technicalRequirements,
+          },
+          repository: formData.enableRepository && formData.repositoryOwner && formData.repositoryName
+            ? { owner: formData.repositoryOwner, name: formData.repositoryName }
+            : undefined,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data.error || `Failed to save (${response.status})`)
+      }
+      setProject(data)
       toast({
         title: 'Settings saved',
         description: 'Your project settings have been updated successfully.',
       })
-    }, 1000)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save'
+      toast({ title: 'Error', description: message, variant: 'destructive' })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // Archive project (set status to archived)
+  const handleArchive = async () => {
+    if (!projectId) return
+    if (!confirm('Archive this project? It will become read-only.')) return
+    setIsSaving(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'archived' }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || `Failed to archive (${response.status})`)
+      setProject((prev) => (prev ? { ...prev, status: 'archived' } : null))
+      toast({ title: 'Project archived', description: 'This project is now read-only.' })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to archive'
+      toast({ title: 'Error', description: message, variant: 'destructive' })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // Delete project permanently
+  const handleDelete = async () => {
+    if (!projectId) return
+    if (!confirm('Permanently delete this project and all its data? This cannot be undone.')) return
+    setIsSaving(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || `Failed to delete (${response.status})`)
+      toast({ title: 'Project deleted', description: 'The project has been permanently removed.' })
+      router.push('/dashboard/projects')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete'
+      toast({ title: 'Error', description: message, variant: 'destructive' })
+    } finally {
+      setIsSaving(false)
+    }
   }
   
   if (isLoading) {
@@ -438,9 +508,15 @@ export default function ProjectSettingsPage() {
                       Archive this project to make it read-only
                     </p>
                   </div>
-                  <Button variant="outline" className="gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={handleArchive}
+                    disabled={isSaving || project?.status === 'archived'}
+                  >
                     <Archive className="h-4 w-4" />
-                    Archive
+                    {project?.status === 'archived' ? 'Archived' : 'Archive'}
                   </Button>
                 </div>
                 
@@ -451,7 +527,13 @@ export default function ProjectSettingsPage() {
                       Permanently delete this project and all its data
                     </p>
                   </div>
-                  <Button variant="destructive" className="gap-2">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="gap-2"
+                    onClick={handleDelete}
+                    disabled={isSaving}
+                  >
                     <Trash className="h-4 w-4" />
                     Delete
                   </Button>

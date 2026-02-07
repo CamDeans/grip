@@ -40,17 +40,18 @@ export function ProjectCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
+      className="h-full min-w-0"
     >
-      <div className="block p-6">
-        <div className="flex flex-col space-y-4">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start space-x-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/10">
+      <div className="block p-6 h-full min-w-0 overflow-hidden relative group">
+        <div className="flex flex-col space-y-4 min-w-0">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="flex items-start space-x-4 min-w-0 flex-1">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-500/10">
                 <FolderIcon className="h-5 w-5 text-primary-500" />
               </div>
-              <div>
-                <GradientTitle as="h3">{title}</GradientTitle>
-                <p className="mt-1 text-sm text-text-secondary line-clamp-2">
+              <div className="min-w-0 flex-1">
+                <GradientTitle as="h3" className="truncate">{title}</GradientTitle>
+                <p className="mt-1 text-sm text-text-secondary line-clamp-2 break-words">
                   {description}
                 </p>
               </div>
@@ -58,33 +59,34 @@ export function ProjectCard({
             {!isSampleProject && (
               <Link
                 href={`/dashboard/projects/${_id}`}
-                className="rounded-full p-2 text-text-secondary hover:bg-background-tertiary hover:text-text-primary"
+                className="rounded-full p-2 shrink-0 text-text-secondary hover:bg-background-tertiary hover:text-text-primary"
+                aria-label={`Open ${title}`}
               >
                 <ArrowRightIcon className="h-5 w-5" />
               </Link>
             )}
           </div>
 
-          <div className="mt-6 flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
               {language && (
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 shrink-0">
                   <span 
-                    className={`h-3 w-3 rounded-full language-dot-${language.toLowerCase()}`}
+                    className={`h-3 w-3 rounded-full shrink-0 language-dot-${language.toLowerCase()}`}
                     data-color={languageColor}
                   />
-                  <span className="text-sm text-text-secondary">
+                  <span className="text-sm text-text-secondary truncate">
                     {language}
                   </span>
                 </div>
               )}
-              <div className="flex items-center space-x-2 text-text-secondary">
+              <div className="flex items-center space-x-2 text-text-secondary shrink-0">
                 <ChatBubbleLeftIcon className="h-4 w-4" />
                 <span className="text-sm">{messageCount}</span>
               </div>
             </div>
 
-            <div className="flex items-center space-x-2 text-text-secondary">
+            <div className="flex items-center space-x-2 text-text-secondary shrink-0">
               <ClockIcon className="h-4 w-4" />
               <time className="text-sm">
                 {new Date(lastUpdated).toLocaleDateString()}
@@ -94,7 +96,7 @@ export function ProjectCard({
 
           {/* Activity indicator */}
           {!isSampleProject && (
-            <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-primary-500 to-accent-purple opacity-0 transition-opacity group-hover:opacity-100" />
+            <div className="absolute bottom-0 left-0 right-0 h-1 w-full bg-gradient-to-r from-primary-500 to-accent-purple opacity-0 transition-opacity group-hover:opacity-100 rounded-b-lg" />
           )}
         </div>
       </div>

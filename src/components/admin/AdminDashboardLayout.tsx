@@ -77,13 +77,13 @@ export function AdminDashboardLayout({ children }: AdminDashboardLayoutProps) {
   ]
 
   return (
-    <div className="flex flex-col space-y-6 w-full">
-      <div className="rounded-lg border border-border bg-background-secondary shadow-sm">
-        <div className="p-6 pb-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-              <p className="text-text-secondary text-sm">
+    <div className="flex flex-col space-y-6 w-full min-w-0">
+      <div className="rounded-lg border border-border bg-background-secondary shadow-sm overflow-hidden min-w-0">
+        <div className="p-6 pb-3 min-w-0">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold break-words">Admin Dashboard</h1>
+              <p className="text-text-secondary text-sm break-words">
                 Monitor, manage and control automation tasks and project resources
               </p>
             </div>
@@ -91,14 +91,15 @@ export function AdminDashboardLayout({ children }: AdminDashboardLayoutProps) {
               variant="outline" 
               size="sm"
               onClick={() => window.history.back()}
+              className="shrink-0"
             >
               Back
             </Button>
           </div>
         </div>
-        <div className="p-6 pt-0">
-          <nav className="flex overflow-x-auto pb-2">
-            <div className="flex space-x-1">
+        <div className="p-6 pt-0 min-w-0">
+          <nav className="flex overflow-x-auto pb-2 -mx-1 scrollbar-thin min-w-0" aria-label="Admin sections">
+            <div className="flex space-x-1 min-w-max px-1 shrink-0">
               {adminTabs.map((tab) => (
                 <Link 
                   key={tab.id} 

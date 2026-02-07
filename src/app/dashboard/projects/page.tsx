@@ -153,19 +153,19 @@ export default function ProjectsPage() {
 
       <div className="space-y-6">
         {/* Filters and search */}
-        <Card className="p-4">
-          <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
+        <Card className="p-4 min-w-0 overflow-hidden">
+          <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 gap-4 min-w-0">
             {/* Status filter */}
-            <Tabs value={currentTab} onValueChange={handleTabChange}>
-              <TabsList>
-                <TabsTrigger value="all">All Projects</TabsTrigger>
-                <TabsTrigger value="active">Active</TabsTrigger>
-                <TabsTrigger value="completed">Completed</TabsTrigger>
-                <TabsTrigger value="archived">Archived</TabsTrigger>
+            <Tabs value={currentTab} onValueChange={handleTabChange} className="min-w-0 w-full md:w-auto">
+              <TabsList className="flex flex-wrap w-full md:w-auto gap-1 p-1">
+                <TabsTrigger value="all" className="flex-1 min-w-0 sm:flex-initial">All Projects</TabsTrigger>
+                <TabsTrigger value="active" className="flex-1 min-w-0 sm:flex-initial">Active</TabsTrigger>
+                <TabsTrigger value="completed" className="flex-1 min-w-0 sm:flex-initial">Completed</TabsTrigger>
+                <TabsTrigger value="archived" className="flex-1 min-w-0 sm:flex-initial">Archived</TabsTrigger>
               </TabsList>
             </Tabs>
 
-            <div className="flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0">
+            <div className="flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0 flex-wrap gap-2 min-w-0">
               {/* Search */}
               <div className="relative">
                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />

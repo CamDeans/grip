@@ -62,7 +62,7 @@ export default function SupportPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 max-w-2xl">
+    <div className="container mx-auto py-8 max-w-2xl px-4 min-w-0 overflow-x-hidden">
       <PageHeader
         title="Contact & Support"
         description="Submit a ticket and we'll get back to you. Useful when you add a custom domain or need help."
@@ -142,7 +142,7 @@ export default function SupportPage() {
                 className="form-input w-full resize-y"
               />
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <Button type="submit" disabled={submitting}>
                 {submitting ? 'Submitting...' : 'Submit ticket'}
               </Button>

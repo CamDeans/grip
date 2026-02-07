@@ -4,9 +4,9 @@ const Footer: FC = () => {
   const currentYear = new Date().getFullYear()
 
   return (
-    <footer className="fixed bottom-0 left-0 right-0 border-t border-border bg-background-secondary py-2 z-50">
-      <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center">
+    <footer className="fixed bottom-0 left-0 right-0 border-t border-border bg-background-secondary py-2 z-40 min-w-0 overflow-hidden">
+      <div className="container mx-auto px-4 min-w-0">
+        <div className="flex flex-wrap justify-between items-center gap-2">
           {/* System Status */}
           <div className="flex items-center">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-2"></div>

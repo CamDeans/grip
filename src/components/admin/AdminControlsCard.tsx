@@ -212,15 +212,15 @@ export function AdminControlsCard({
       <CardContent>
         <div className="space-y-6">
           {/* System Status */}
-          <div className="flex justify-between items-center">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+            <div className="min-w-0">
               <h3 className="text-sm font-medium">System Status</h3>
               <p className="text-xs text-text-secondary mt-1">
                 {systemState.isRunning ? 'Running' : 'Paused'}
               </p>
             </div>
             
-            <div className="flex space-x-2">
+            <div className="flex flex-wrap gap-2 shrink-0">
               {systemState.isRunning ? (
                 <Button
                   variant="outline"
@@ -440,8 +440,8 @@ export function AdminControlsCard({
                 </div>
               </div>
             ) : (
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="space-y-2 min-w-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-text-secondary">Concurrent Tasks:</span>
                     <span className="ml-2">{systemState.concurrencyLimit}</span>

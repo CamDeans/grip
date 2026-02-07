@@ -137,23 +137,23 @@ export default function DashboardPage() {
                   <Skeleton className="h-16 w-full" />
                 </div>
               ) : recentProjects.length > 0 ? (
-                <div className="divide-y divide-border">
+                <div className="divide-y divide-border min-w-0">
                   {recentProjects.map((project) => (
                     <div 
                       key={project._id} 
-                      className="py-3 flex items-center justify-between cursor-pointer hover:bg-background-tertiary/50 px-3 rounded-md transition-colors"
+                      className="py-3 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-background-tertiary/50 px-3 rounded-md transition-colors min-w-0"
                       onClick={() => router.push(`/dashboard/projects/${project._id}`)}
                     >
-                      <div className="flex items-center">
-                        <div className="bg-primary/10 p-2 rounded mr-3">
+                      <div className="flex items-center min-w-0 flex-1">
+                        <div className="bg-primary/10 p-2 rounded mr-3 shrink-0">
                           <FolderIcon className="h-5 w-5 text-primary" />
                         </div>
-                        <div>
-                          <p className="font-medium text-text-primary">{project.title}</p>
-                          <p className="text-sm text-text-secondary">{project.description}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-text-primary truncate">{project.title}</p>
+                          <p className="text-sm text-text-secondary line-clamp-2 break-words">{project.description}</p>
                         </div>
                       </div>
-                      <div className="flex items-center text-sm text-text-secondary">
+                      <div className="flex items-center text-sm text-text-secondary shrink-0">
                         <ClockIcon className="h-4 w-4 mr-1" />
                         <span>
                           {new Date(project.updatedAt || project.createdAt).toLocaleDateString()}
@@ -287,17 +287,17 @@ function StatCard({ title, value, icon, loading, color, href }: StatCardProps) {
   
   return (
     <Card 
-      className="cursor-pointer hover:border-primary/20 transition-colors"
+      className="cursor-pointer hover:border-primary/20 transition-colors min-w-0 overflow-hidden"
       onClick={() => href && router.push(href)}
     >
-      <div className="p-6">
-        <div className="flex items-center justify-between">
-          <div className={`p-2 rounded-lg ${colorVariants[color]}`}>
+      <div className="p-6 min-w-0">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className={`p-2 rounded-lg shrink-0 ${colorVariants[color]}`}>
             {icon}
           </div>
-          <h3 className="text-text-secondary text-sm font-medium">{title}</h3>
+          <h3 className="text-text-secondary text-sm font-medium truncate">{title}</h3>
         </div>
-        <div className="mt-4">
+        <div className="mt-4 min-w-0">
           {loading ? (
             <Skeleton className="h-10 w-20" />
           ) : (

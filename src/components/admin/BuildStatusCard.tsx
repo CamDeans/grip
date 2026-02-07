@@ -177,17 +177,17 @@ export function BuildStatusCard({ projectId, refreshInterval = 10000 }: BuildSta
               </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 min-w-0">
               <div>
                 <div className="text-sm font-medium mb-2">By Status</div>
                 <div className="space-y-2">
                   {Object.entries(stats.byStatus).map(([status, count]) => (
-                    <div key={status} className="flex justify-between items-center">
-                      <div className="flex items-center space-x-2">
-                        <Badge className={`${getStatusColor(status)} text-white`}>
+                    <div key={status} className="flex flex-wrap justify-between items-center gap-2">
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <Badge className={`${getStatusColor(status)} text-white shrink-0`}>
                           {count}
                         </Badge>
-                        <span className="text-sm capitalize">{status}</span>
+                        <span className="text-sm capitalize truncate">{status}</span>
                       </div>
                       <div className="text-xs text-text-secondary">
                         {stats.total > 0 ? Math.round((count / stats.total) * 100) : 0}%
@@ -201,12 +201,12 @@ export function BuildStatusCard({ projectId, refreshInterval = 10000 }: BuildSta
                 <div className="text-sm font-medium mb-2">By Type</div>
                 <div className="space-y-2">
                   {Object.entries(stats.byType).map(([type, count]) => (
-                    <div key={type} className="flex justify-between items-center">
-                      <div className="flex items-center space-x-2">
-                        <Badge className={`${getTypeColor(type)} text-white`}>
+                    <div key={type} className="flex flex-wrap justify-between items-center gap-2">
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <Badge className={`${getTypeColor(type)} text-white shrink-0`}>
                           {count}
                         </Badge>
-                        <span className="text-sm capitalize">{type}</span>
+                        <span className="text-sm capitalize truncate">{type}</span>
                       </div>
                       <div className="text-xs text-text-secondary">
                         {stats.total > 0 ? Math.round((count / stats.total) * 100) : 0}%

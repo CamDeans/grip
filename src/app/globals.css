@@ -60,6 +60,11 @@
     disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
+  /* Safe containment for cards/containers: prevents overflow on mobile */
+  .contain-content {
+    @apply min-w-0 overflow-hidden;
+  }
+
   /* Enhanced card styles */
   .card {
     @apply rounded-lg border border-border bg-background-secondary p-6 

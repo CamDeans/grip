@@ -187,8 +187,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </div>
 
-        <main className="py-10">
-          <div className="px-4 sm:px-6 lg:px-8">
+        <main className="py-10 min-w-0 overflow-x-hidden">
+          <div className="px-4 sm:px-6 lg:px-8 min-w-0">
             {children}
           </div>
         </main>

@@ -11,7 +11,7 @@ export default async function ContactPage() {
   return (
     <div className="min-h-screen bg-background-primary">
       <header className="border-b border-border bg-background-secondary">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-2 min-w-0">
           <Link href={session ? '/dashboard' : '/'} className="text-xl font-semibold text-primary">
             G.R.I.P.
           </Link>

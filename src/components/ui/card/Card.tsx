@@ -15,7 +15,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
     <div
       ref={ref}
       className={cn(
-        'rounded-lg border border-border bg-background-secondary shadow-sm',
+        'rounded-lg border border-border bg-background-secondary shadow-sm overflow-hidden min-w-0',
         className
       )}
       {...props}
@@ -59,7 +59,7 @@ CardDescription.displayName = 'CardDescription'
 
 const CardContent = forwardRef<HTMLDivElement, CardContentProps>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />
+    <div ref={ref} className={cn('p-6 pt-0 min-w-0 overflow-auto', className)} {...props} />
   )
 )
 CardContent.displayName = 'CardContent'
@@ -68,7 +68,7 @@ const CardFooter = forwardRef<HTMLDivElement, CardFooterProps>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('flex items-center p-6 pt-0', className)}
+      className={cn('flex flex-wrap items-center gap-2 p-6 pt-0 min-w-0', className)}
       {...props}
     />
   )
