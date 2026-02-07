@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import clientPromise from '@/lib/db'
-import { ObjectId } from 'mongodb'
+import { ObjectId, type Db } from 'mongodb'
+import type { Session } from 'next-auth'
+
+type AuthAndProject = { session: Session; id: string; db: Db }
 
 async function requireAuthAndProjectId(
   params: Promise<{ id: string }>
-): Promise<{ session: NonNullable<Awaited<ReturnType<typeof getServerSession>>>; id: string; db: ReturnType<Awaited<ReturnType<typeof clientPromise>>['db'] } | NextResponse> {
+): Promise<AuthAndProject | NextResponse> {
   const session = await getServerSession(authOptions)
   if (!session || !session.user) {
     return new NextResponse(JSON.stringify({ error: 'Not authenticated' }), { status: 401 })
