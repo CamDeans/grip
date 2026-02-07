@@ -1,7 +1,17 @@
-import { MongoClient } from 'mongodb'
+import { MongoClient, type MongoClientOptions } from 'mongodb'
 
 const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017'
-const options = {}
+
+const baseOptions: MongoClientOptions = {}
+
+// Production (e.g. Vercel serverless): avoid SSL/TLS handshake issues with Atlas
+if (process.env.NODE_ENV === 'production' && uri.startsWith('mongodb+srv://')) {
+  baseOptions.serverSelectionTimeoutMS = 10000
+  baseOptions.connectTimeoutMS = 10000
+  // Minimize connection pool in serverless; new connection per invocation is OK
+  baseOptions.minPoolSize = 0
+  baseOptions.maxPoolSize = 5
+}
 
 let client: MongoClient
 let clientPromise: Promise<MongoClient>
@@ -18,13 +28,13 @@ if (process.env.NODE_ENV === 'development') {
   }
 
   if (!globalWithMongo._mongoClientPromise) {
-    client = new MongoClient(uri, options)
+    client = new MongoClient(uri, baseOptions)
     globalWithMongo._mongoClientPromise = client.connect()
   }
   clientPromise = globalWithMongo._mongoClientPromise
 } else {
   // In production mode, it's best to not use a global variable.
-  client = new MongoClient(uri, options)
+  client = new MongoClient(uri, baseOptions)
   clientPromise = client.connect()
 }
 
