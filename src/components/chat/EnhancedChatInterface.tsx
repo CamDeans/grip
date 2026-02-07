@@ -628,9 +628,11 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
       setError(null);
     } catch (err: any) {
       console.error('Error sending message:', err);
+      const status = err?.status;
+      const msg = err?.message;
       setError({
         id: Math.random().toString(),
-        message: err?.message || 'Failed to send message. Please try again.',
+        message: status === 503 ? (msg || 'G.R.I.P. AI is temporarily unavailable. Please try again later.') : (msg || 'Failed to send message. Please try again.'),
         timestamp: new Date()
       });
     }

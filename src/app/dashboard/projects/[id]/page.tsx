@@ -5,7 +5,8 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui'
-import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle } from 'lucide-react'
+import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink } from 'lucide-react'
+import { toast as sonnerToast } from 'sonner'
 import Link from 'next/link'
 import { cn } from '@/lib/client-utils'
 import { useRouter, useParams } from 'next/navigation'
@@ -14,7 +15,7 @@ interface Project {
   _id: string
   title: string
   description: string
-  repository: {
+  repository?: {
     owner: string
     name: string
   }
@@ -26,6 +27,9 @@ interface Project {
   }
   createdAt?: string
   updatedAt?: string
+  completionStatus?: 'draft' | 'ready_to_export' | 'exported' | 'deployed'
+  exportedRepoUrl?: string
+  deployedUrl?: string
 }
 
 const steps = [
@@ -63,9 +67,66 @@ export default function ProjectOverviewPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [deploying, setDeploying] = useState(false)
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const projectId = params?.id || ''
+
+  const refreshProject = () => {
+    if (!projectId) return
+    fetch(`/api/projects/${projectId}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => data && setProject(data))
+      .catch(() => {})
+  }
+
+  const handleMarkReady = async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completionStatus: 'ready_to_export' }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed')
+      setProject((p) => p ? { ...p, completionStatus: 'ready_to_export' } : null)
+      sonnerToast.success('Marked ready to export')
+    } catch (e) {
+      sonnerToast.error(e instanceof Error ? e.message : 'Failed')
+    }
+  }
+
+  const handleExport = async () => {
+    if (!projectId || exporting) return
+    setExporting(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Export failed')
+      sonnerToast.success('Exported to GitHub', { description: data.repoUrl })
+      refreshProject()
+    } catch (e) {
+      sonnerToast.error(e instanceof Error ? e.message : 'Export failed')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleDeploy = async () => {
+    if (!projectId || deploying) return
+    setDeploying(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/deploy`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Deploy failed')
+      sonnerToast.success('Deployment started', { description: data.message || data.url })
+      refreshProject()
+    } catch (e) {
+      sonnerToast.error(e instanceof Error ? e.message : 'Deploy failed')
+    } finally {
+      setDeploying(false)
+    }
+  }
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -315,6 +376,102 @@ export default function ProjectOverviewPage() {
         </CardContent>
       </Card>
       
+      {/* See it run & ship it */}
+      <Card className="border border-primary/20 bg-primary/5">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-xl font-bold">See it run & ship it</CardTitle>
+          <CardDescription>
+            Make this repo yours: explore every file, preview, export to GitHub, and deploy when ready.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {project?.completionStatus && (
+            <p className="text-sm text-text-secondary">
+              Status: <span className="font-medium capitalize">{project.completionStatus.replace(/_/g, ' ')}</span>
+              {project.exportedRepoUrl && (
+                <span className="ml-2">
+                  · <a href={project.exportedRepoUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">Repo <ExternalLink className="h-3 w-3" /></a>
+                </span>
+              )}
+              {project.deployedUrl && (
+                <span className="ml-2">
+                  · <a href={project.deployedUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">Live <ExternalLink className="h-3 w-3" /></a>
+                </span>
+              )}
+            </p>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Button
+              variant="default"
+              className="h-auto p-4 justify-start"
+              onClick={() => router.push(`/dashboard/projects/${projectId}/repo`)}
+            >
+              <div className="flex items-start">
+                <Code className="w-5 h-5 mr-3 mt-0.5" />
+                <div className="text-left">
+                  <div className="font-semibold">Repo Explorer</div>
+                  <p className="text-sm opacity-90">
+                    Browse, search, and edit every file in your linked repo
+                  </p>
+                </div>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-auto p-4 justify-start"
+              onClick={() => router.push(`/dashboard/projects/${projectId}/preview`)}
+            >
+              <div className="flex items-start">
+                <Zap className="w-5 h-5 mr-3 mt-0.5 text-amber-500" />
+                <div className="text-left">
+                  <div className="font-semibold">Preview</div>
+                  <p className="text-sm text-text-secondary">
+                    Paste a URL or open in StackBlitz to run in browser
+                  </p>
+                </div>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-auto p-4 justify-start"
+              onClick={handleExport}
+              disabled={exporting || !project?.repository}
+            >
+              <div className="flex items-start">
+                {exporting ? <Loader2 className="w-5 h-5 mr-3 mt-0.5 animate-spin" /> : <ArrowRight className="w-5 h-5 mr-3 mt-0.5" />}
+                <div className="text-left">
+                  <div className="font-semibold">Export to my GitHub</div>
+                  <p className="text-sm text-text-secondary">
+                    Create your own repo from this project
+                  </p>
+                </div>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-auto p-4 justify-start"
+              onClick={handleDeploy}
+              disabled={deploying || (!project?.repository && !project?.exportedRepoUrl)}
+            >
+              <div className="flex items-start">
+                {deploying ? <Loader2 className="w-5 h-5 mr-3 mt-0.5 animate-spin" /> : <Zap className="w-5 h-5 mr-3 mt-0.5 text-success" />}
+                <div className="text-left">
+                  <div className="font-semibold">Deploy to Vercel</div>
+                  <p className="text-sm text-text-secondary">
+                    One-click deploy (repo must be linked to Vercel)
+                  </p>
+                </div>
+              </div>
+            </Button>
+          </div>
+          {project?.completionStatus === 'draft' && (
+            <Button variant="ghost" size="sm" onClick={handleMarkReady}>
+              Mark ready to export
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Resources and Documentation */}
       <Card className="border border-border">
         <CardHeader className="pb-4">

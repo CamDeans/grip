@@ -494,26 +494,45 @@ I focus on providing technical guidance and development assistance. For question
       projectId: new ObjectId(projectId)
     })
 
-    // Get or build repo reference document (full repo analyzed and submitted to Claude at chat start)
+    // Get or build repo reference document (full repo context for G.R.I.P.)
     const repoReferenceDoc = await getOrBuildRepoContextDocument(projectId)
 
     // Build system prompt with context
     const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc)
 
-    // Initialize Anthropic service
-    await anthropicService.initialize()
+    // Production readiness: fail gracefully when AI is not configured
+    if (!process.env.ANTHROPIC_API_KEY?.trim()) {
+      return NextResponse.json(
+        { error: 'G.R.I.P. AI is not configured. Please contact your administrator or check server configuration.' },
+        { status: 503 }
+      )
+    }
 
-    // Generate response using G.R.I.P.
-    const response = await anthropicService.createMessage([
-      {
-        role: 'user',
-        content: message
-      }
-    ], {
-      system: systemPrompt
-    })
+    try {
+      await anthropicService.initialize()
+    } catch (initErr) {
+      console.error('G.R.I.P. AI initialization failed:', initErr)
+      return NextResponse.json(
+        { error: 'G.R.I.P. AI is temporarily unavailable. Please try again later.' },
+        { status: 503 }
+      )
+    }
 
-    const aiMessage = response.content || 'I apologize, but I could not generate a response.'
+    let response
+    try {
+      response = await anthropicService.createMessage(
+        [{ role: 'user', content: message }],
+        { system: systemPrompt }
+      )
+    } catch (apiErr) {
+      console.error('G.R.I.P. AI request failed:', apiErr)
+      return NextResponse.json(
+        { error: 'G.R.I.P. AI is temporarily unavailable. Please try again in a moment.' },
+        { status: 503 }
+      )
+    }
+
+    const aiMessage = response.content || 'I could not generate a response right now. Please try again.'
 
     // Save AI response
     await saveChatMessage(projectId, {
@@ -529,7 +548,7 @@ I focus on providing technical guidance and development assistance. For question
   } catch (error) {
     console.error('Error in enhanced chat:', error)
     return NextResponse.json(
-      { error: 'Failed to process chat message' },
+      { error: 'Something went wrong. Please try again.' },
       { status: 500 }
     )
   }

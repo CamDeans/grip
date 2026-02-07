@@ -239,7 +239,7 @@ export default function AIChat() {
         console.log('AIChat: Saved user message result:', saveResult)
       }
       
-      // Call Anthropic Claude API
+      // Call G.R.I.P. AI backend
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {

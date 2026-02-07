@@ -46,6 +46,9 @@ export function LoginForm() {
           <h2 className="text-xl font-semibold text-text-primary tracking-tight">
             Sign in to your account
           </h2>
+          <p className="text-sm text-text-secondary mt-1">
+            Your AI development partner for turning ideas into runnable products
+          </p>
         </div>
 
         <Card className="border-border shadow-md">

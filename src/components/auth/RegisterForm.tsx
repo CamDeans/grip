@@ -55,6 +55,9 @@ export function RegisterForm() {
           <h2 className="text-xl font-semibold text-text-primary tracking-tight">
             Create your account
           </h2>
+          <p className="text-sm text-text-secondary mt-1">
+            Get started with G.R.I.P. and build your next project
+          </p>
         </div>
         <Card className="border-border shadow-md">
           <CardHeader className="pb-4">

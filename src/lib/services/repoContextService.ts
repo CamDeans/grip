@@ -68,6 +68,14 @@ export async function buildRepoContextDocument(projectId: string): Promise<strin
     lines.push(`\n_(${filesWithContent.length - MAX_FILES_WITH_CONTENT} more files not shown)_`)
   }
 
+  const summaries = await db.collection('repoFileSummaries').find({ projectId: new ObjectId(projectId) }).toArray() as { path: string; summary: string }[]
+  if (summaries.length > 0) {
+    lines.push('\n## AI summaries (per file)\n')
+    summaries.forEach((s) => {
+      lines.push(`- **${s.path}**: ${(s.summary || '').trim()}\n`)
+    })
+  }
+
   return lines.join('\n')
 }
 

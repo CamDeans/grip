@@ -83,6 +83,15 @@ export async function PATCH(
     }
     if (body.ideation !== undefined) update.ideation = body.ideation
     if (body.repository !== undefined) update.repository = body.repository
+    if (body.completionStatus !== undefined) {
+      const allowed = ['draft', 'ready_to_export', 'exported', 'deployed']
+      if (!allowed.includes(body.completionStatus)) {
+        return new NextResponse(JSON.stringify({ error: 'Invalid completionStatus' }), { status: 400 })
+      }
+      update.completionStatus = body.completionStatus
+    }
+    if (body.exportedRepoUrl !== undefined) update.exportedRepoUrl = body.exportedRepoUrl
+    if (body.deployedUrl !== undefined) update.deployedUrl = body.deployedUrl
 
     await db.collection('projects').updateOne(
       { _id: new ObjectId(id) },

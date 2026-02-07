@@ -551,12 +551,16 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
       console.log('Client: API Response headers:', JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2))
 
       if (!response.ok) {
-        console.error('Client: API request failed')
-        const errorData = await response.json()
-        console.error('Client: Response status:', response.status)
-        console.error('Client: Response status text:', response.statusText)
-        console.error('Client: Error data:', errorData)
-        throw new Error(`Failed to send message: ${response.statusText}`)
+        let errorMessage = response.statusText
+        try {
+          const errorData = await response.json()
+          if (typeof errorData?.error === 'string') errorMessage = errorData.error
+        } catch {
+          // ignore
+        }
+        const err = new Error(errorMessage) as Error & { status?: number }
+        err.status = response.status
+        throw err
       }
 
       const data = await response.json()

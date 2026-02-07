@@ -24,6 +24,8 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const isOverviewTab = pathname === `/dashboard/projects/${projectId}`
   const isChatTab = pathname === `/dashboard/projects/${projectId}/enhanced-chat`
   const isPlanningTab = pathname === `/dashboard/projects/${projectId}/planning`
+  const isRepoTab = pathname === `/dashboard/projects/${projectId}/repo`
+  const isPreviewTab = pathname === `/dashboard/projects/${projectId}/preview`
   const isSettingsTab = pathname === `/dashboard/projects/${projectId}/settings`
 
   useEffect(() => {
@@ -77,18 +79,24 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
       </div>
       
       <div className="mb-6 border-b border-border-default">
-        <Tabs defaultValue={isOverviewTab ? 'overview' : isChatTab ? 'chat' : isPlanningTab ? 'planning' : 'settings'} className="w-full">
-          <TabsList className="w-full justify-start">
-            <Link href={`/dashboard/projects/${projectId}`} className="flex-1 max-w-[150px]">
+        <Tabs defaultValue={isOverviewTab ? 'overview' : isChatTab ? 'chat' : isPlanningTab ? 'planning' : isRepoTab ? 'repo' : isPreviewTab ? 'preview' : 'settings'} className="w-full">
+          <TabsList className="w-full justify-start flex-wrap gap-1">
+            <Link href={`/dashboard/projects/${projectId}`} className="flex-1 min-w-0 max-w-[140px]">
               <TabsTrigger value="overview" className="w-full">Overview</TabsTrigger>
             </Link>
-            <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="flex-1 max-w-[150px]">
+            <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="flex-1 min-w-0 max-w-[140px]">
               <TabsTrigger value="chat" className="w-full">Chat</TabsTrigger>
             </Link>
-            <Link href={`/dashboard/projects/${projectId}/planning`} className="flex-1 max-w-[150px]">
+            <Link href={`/dashboard/projects/${projectId}/repo`} className="flex-1 min-w-0 max-w-[140px]">
+              <TabsTrigger value="repo" className="w-full">Repo</TabsTrigger>
+            </Link>
+            <Link href={`/dashboard/projects/${projectId}/preview`} className="flex-1 min-w-0 max-w-[140px]">
+              <TabsTrigger value="preview" className="w-full">Preview</TabsTrigger>
+            </Link>
+            <Link href={`/dashboard/projects/${projectId}/planning`} className="flex-1 min-w-0 max-w-[140px]">
               <TabsTrigger value="planning" className="w-full">Planning</TabsTrigger>
             </Link>
-            <Link href={`/dashboard/projects/${projectId}/settings`} className="flex-1 max-w-[150px]">
+            <Link href={`/dashboard/projects/${projectId}/settings`} className="flex-1 min-w-0 max-w-[140px]">
               <TabsTrigger value="settings" className="w-full">Settings</TabsTrigger>
             </Link>
           </TabsList>
