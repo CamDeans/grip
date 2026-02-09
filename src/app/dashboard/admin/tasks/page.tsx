@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ITaskData } from '@/lib/models/Task'
 import { useToast } from '@/components/ui/use-toast'
-import { Dialog } from '@/components/ui/dialog'
+import { Dialog } from '@/components/ui'
 
 // Extended task interface for client-side with string IDs
 interface TaskClientData extends Omit<ITaskData, 'projectId' | '_id'> {
