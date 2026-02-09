@@ -10,12 +10,7 @@ import { toast as sonnerToast } from 'sonner'
 import Link from 'next/link'
 import { cn } from '@/lib/client-utils'
 import { useRouter, useParams } from 'next/navigation'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui'
+import { Modal } from '@/components/ui/Modal'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
 interface Project {
@@ -677,22 +672,20 @@ export default function ProjectOverviewPage() {
       </Card>
 
       {/* View generated file content */}
-      <Dialog open={!!viewingFile} onOpenChange={() => setViewingFile(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="truncate pr-8">
-              {viewingFile ? `${viewingFile.path ? `${viewingFile.path}/` : ''}${viewingFile.filename}` : ''}
-            </DialogTitle>
-          </DialogHeader>
-          {viewingFile && (
-            <ScrollArea className="flex-1 min-h-0 rounded border border-border p-3">
-              <pre className="text-xs whitespace-pre-wrap break-words font-mono">
-                {viewingFile.content || '(empty)'}
-              </pre>
-            </ScrollArea>
-          )}
-        </DialogContent>
-      </Dialog>
+      <Modal
+        isOpen={!!viewingFile}
+        onClose={() => setViewingFile(null)}
+        title={viewingFile ? `${viewingFile.path ? `${viewingFile.path}/` : ''}${viewingFile.filename}` : ''}
+        size="2xl"
+      >
+        {viewingFile && (
+          <ScrollArea className="flex-1 min-h-0 rounded border border-border p-3 max-h-[70vh]">
+            <pre className="text-xs whitespace-pre-wrap break-words font-mono">
+              {viewingFile.content || '(empty)'}
+            </pre>
+          </ScrollArea>
+        )}
+      </Modal>
     </div>
   )
 }

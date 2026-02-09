@@ -1,6 +1,5 @@
 export { Button } from './Button'
 export * from './GradientTitle'
 export * from './card'
-export * from './dialog'
 export * from './input'
 export * from './scroll-area' 
