@@ -11,6 +11,12 @@ import { Badge } from '@/components/ui/badge'
 interface TerminalProps {
   id: string
   onDelete: (id: string) => void
+  /** When terminal is opened for a project (Dashboard → Terminal?projectId=xxx), show project name */
+  projectTitle?: string
+  /** Whether this project has a folder on disk (Setup project was run); npm install runs there */
+  hasProjectPath?: boolean
+  /** When GRIP is deployed on Vercel, real npm/commands cannot run; show export-and-run-locally message */
+  isVercel?: boolean
 }
 
 interface TerminalOutput {
@@ -30,7 +36,7 @@ const COMMON_COMMANDS = [
  * Terminal Component - Part of Phase 6, Step 1 of G.R.I.P. Enhancement Plan
  * A virtual terminal interface for executing commands
  */
-export function Terminal({ id, onDelete }: TerminalProps) {
+export function Terminal({ id, onDelete, projectTitle, hasProjectPath, isVercel }: TerminalProps) {
   const [command, setCommand] = useState('')
   const [history, setHistory] = useState<TerminalOutput[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
@@ -330,7 +336,14 @@ export function Terminal({ id, onDelete }: TerminalProps) {
             <div className="h-3 w-3 rounded-full bg-success" />
           </div>
           <TerminalIcon className="h-5 w-5 mr-2 text-primary" />
-          <CardTitle className="text-md">Terminal {id.slice(0, 8)}</CardTitle>
+          <CardTitle className="text-md">
+            {projectTitle ? `G.R.I.P. Terminal — ${projectTitle}` : `Terminal ${id.slice(0, 8)}`}
+          </CardTitle>
+          {projectTitle && (
+            <Badge variant="secondary" className="ml-2 text-xs">
+              Project terminal
+            </Badge>
+          )}
           <Badge variant="outline" className="ml-2 text-xs">
             {history.length} commands
           </Badge>
@@ -351,9 +364,37 @@ export function Terminal({ id, onDelete }: TerminalProps) {
               <div className="p-3 bg-primary/10 border border-primary/20 rounded text-xs mb-4">
                 <div className="flex items-center">
                   <TerminalIcon className="h-4 w-4 mr-2 text-primary" />
-                  <p className="font-semibold text-primary">G.R.I.P. Terminal v1.0</p>
+                  <p className="font-semibold text-primary">
+                    G.R.I.P. Terminal v1.0{projectTitle ? ` — Project: ${projectTitle}` : ''}
+                  </p>
                 </div>
-                <p className="mt-1 text-text-secondary">Type <span className="text-primary font-semibold">help</span> for a list of available commands.</p>
+                <p className="mt-1 text-text-secondary">
+                  Type <span className="text-primary font-semibold">help</span> for a list of available commands.
+                </p>
+                {projectTitle && (
+                  <div className="mt-2 pt-2 border-t border-primary/20 text-text-muted">
+                    {isVercel ? (
+                      <>
+                        <p className="font-medium text-text-secondary">GRIP is running on Vercel</p>
+                        <p className="mt-0.5">
+                          <strong>Installs are saved to the project</strong> (like file saves): <code className="px-0.5 rounded bg-muted">npm install &lt;pkg&gt;</code> and <code className="px-0.5 rounded bg-muted">yarn add</code> update <code className="px-0.5 rounded bg-muted">package.json</code> in the database. Export the project to run real <code className="px-0.5 rounded bg-muted">npm install</code> and <code className="px-0.5 rounded bg-muted">npm run dev</code> locally or in CI.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-medium text-text-secondary">How this terminal links to your project</p>
+                        <p className="mt-0.5">
+                          <strong>Installs are saved to the project</strong> (like file saves): <code className="px-0.5 rounded bg-muted">npm install &lt;pkg&gt;</code> and <code className="px-0.5 rounded bg-muted">yarn add</code> update <code className="px-0.5 rounded bg-muted">package.json</code> in the database. To run real <code className="px-0.5 rounded bg-muted">npm run dev</code> / build and create <code className="px-0.5 rounded bg-muted">node_modules</code>, run <strong>Setup project</strong> (or export and run locally).
+                        </p>
+                        {hasProjectPath ? (
+                          <p className="mt-1 text-success font-medium">Project folder is set up — npm and scripts run in that folder.</p>
+                        ) : (
+                          <p className="mt-1 text-amber-600 dark:text-amber-400 font-medium">No project folder yet — run Setup project so commands run on disk.</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               
               {history.map((entry, i) => (

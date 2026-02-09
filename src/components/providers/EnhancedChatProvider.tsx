@@ -188,16 +188,17 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
     }
   }, [projectId, contextEnabled])
 
-  // Load chat history
+  // Load chat history when user returns so progress is not lost
   const loadChatHistory = async () => {
     try {
       const response = await fetch(`/api/chat/history?projectId=${projectId}`)
       
       if (response.ok) {
         const data = await response.json()
-        if (data.messages && Array.isArray(data.messages)) {
+        if (data.messages && Array.isArray(data.messages) && data.messages.length > 0) {
           setMessages(data.messages)
         }
+        // If no messages, keep current state (e.g. welcome message) instead of clearing
       } else {
         console.error('Error loading chat history:', response.statusText)
       }
@@ -533,7 +534,7 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
       // Show typing indicator
       setIsTyping(true)
 
-      // Send message to API
+      // Send message to API with conversation history so GRIP responds in context
       console.log('Client: Sending message to API')
       const response = await fetch('/api/enhanced-chat', {
         method: 'POST',
@@ -543,7 +544,8 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
         body: JSON.stringify({
           message,
           projectId,
-          context: projectContext
+          context: projectContext,
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
         }),
       })
 

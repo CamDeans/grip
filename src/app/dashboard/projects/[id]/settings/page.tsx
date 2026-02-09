@@ -75,6 +75,10 @@ export default function ProjectSettingsPage() {
     disableWebSocket: false,
     enableLogging: true
   })
+
+  const [githubToken, setGithubToken] = useState('')
+  const [hasGithubToken, setHasGithubToken] = useState(false)
+  const [githubTokenSaving, setGithubTokenSaving] = useState(false)
   
   // Fetch project details
   useEffect(() => {
@@ -116,6 +120,21 @@ export default function ProjectSettingsPage() {
     
     fetchProject()
   }, [projectId])
+
+  useEffect(() => {
+    const fetchUserSettings = async () => {
+      try {
+        const res = await fetch('/api/user/settings')
+        if (res.ok) {
+          const data = await res.json()
+          setHasGithubToken(!!data.hasGithubToken)
+        }
+      } catch {
+        // ignore
+      }
+    }
+    fetchUserSettings()
+  }, [])
   
   // Handle form input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -131,6 +150,32 @@ export default function ProjectSettingsPage() {
   // Handle repository toggle
   const handleRepositoryToggle = (checked: boolean) => {
     setFormData(prev => ({ ...prev, enableRepository: checked }))
+  }
+
+  const saveGithubToken = async () => {
+    setGithubTokenSaving(true)
+    try {
+      const res = await fetch('/api/user/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubToken })
+      })
+      if (!res.ok) throw new Error('Failed to save token')
+      setHasGithubToken(true)
+      setGithubToken('')
+      toast({
+        title: 'GitHub token saved',
+        description: 'Used for Export to GitHub from project Preview.'
+      })
+    } catch (error) {
+      toast({
+        title: 'Failed to save GitHub token',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive'
+      })
+    } finally {
+      setGithubTokenSaving(false)
+    }
   }
   
   // Handle form submission (save project details via API)
@@ -168,6 +213,33 @@ export default function ProjectSettingsPage() {
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save'
+      toast({ title: 'Error', description: message, variant: 'destructive' })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const currentStatus = (project?.status || 'active') as 'active' | 'completed' | 'archived'
+
+  const handleSetStatus = async (status: 'active' | 'completed' | 'archived') => {
+    if (!projectId || status === currentStatus) return
+    setIsSaving(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || `Failed to set status (${response.status})`)
+      setProject((prev) => (prev ? { ...prev, status } : null))
+      toast({
+        title: status === 'archived' ? 'Project archived' : status === 'completed' ? 'Marked as completed' : 'Set to active',
+        description: status === 'archived' ? 'This project is now read-only.' : status === 'completed' ? 'It will appear under Completed on the projects list.' : 'It will appear under Active again.',
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update status'
       toast({ title: 'Error', description: message, variant: 'destructive' })
     } finally {
       setIsSaving(false)
@@ -333,6 +405,45 @@ export default function ProjectSettingsPage() {
                 </div>
               </div>
             </Card>
+
+            <Card className="p-4">
+              <h2 className="text-lg font-semibold mb-2">Project status</h2>
+              <p className="text-sm text-muted-foreground mb-3">
+                Controls how this project appears on the projects list (Active / Completed / Archived). You can change this anytime.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant={currentStatus === 'active' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleSetStatus('active')}
+                  disabled={isSaving || currentStatus === 'active'}
+                >
+                  Active
+                </Button>
+                <Button
+                  type="button"
+                  variant={currentStatus === 'completed' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleSetStatus('completed')}
+                  disabled={isSaving || currentStatus === 'completed'}
+                >
+                  Completed
+                </Button>
+                <Button
+                  type="button"
+                  variant={currentStatus === 'archived' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleSetStatus('archived')}
+                  disabled={isSaving || currentStatus === 'archived'}
+                >
+                  Archived
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Active = in progress. Completed = done (still editable). Archived = read-only; use &quot;Active&quot; to unarchive.
+              </p>
+            </Card>
             
             <div className="flex justify-end gap-2">
               <Button
@@ -398,8 +509,8 @@ export default function ProjectSettingsPage() {
                   </div>
                   
                   <div className="mt-4 p-3 bg-primary/10 rounded-md border border-primary/20 text-sm">
-                    <p className="text-primary">
-                      Connected repository: 
+                    <div className="text-primary">
+                      Connected repository:{' '}
                       {formData.repositoryOwner && formData.repositoryName ? (
                         <Badge variant="outline" className="ml-2">
                           {formData.repositoryOwner}/{formData.repositoryName}
@@ -407,10 +518,38 @@ export default function ProjectSettingsPage() {
                       ) : (
                         <span className="text-muted-foreground ml-2">None</span>
                       )}
-                    </p>
+                    </div>
                   </div>
                 </div>
               )}
+            </Card>
+
+            <Card className="p-4">
+              <h2 className="text-lg font-semibold mb-2">GitHub Personal Access Token</h2>
+              <p className="text-sm text-muted-foreground mb-3">
+                One token for <strong>all your projects</strong>. Required for Export to GitHub (Preview). Create a token with <strong>repo</strong> scope at{' '}
+                <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">GitHub Settings</a>.
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="flex-1 min-w-[180px] space-y-2">
+                  <Label htmlFor="githubToken">Token</Label>
+                  <Input
+                    id="githubToken"
+                    type="password"
+                    placeholder={hasGithubToken ? '••••••••••••' : 'ghp_...'}
+                    value={githubToken}
+                    onChange={(e) => setGithubToken(e.target.value)}
+                    className="font-mono text-sm"
+                    autoComplete="off"
+                  />
+                  {hasGithubToken && (
+                    <p className="text-xs text-green-600 dark:text-green-400">Token saved. Enter a new token above to replace.</p>
+                  )}
+                </div>
+                <Button type="button" onClick={saveGithubToken} disabled={githubTokenSaving || !githubToken.trim()} variant="outline">
+                  {githubTokenSaving ? 'Saving...' : 'Save token'}
+                </Button>
+              </div>
             </Card>
             
             <div className="flex justify-end gap-2">

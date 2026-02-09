@@ -5,6 +5,11 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
+  metadata?: {
+    type?: string
+    submissionIndex?: number
+    source?: string
+  }
 }
 
 export interface AIMessage extends ChatMessage {

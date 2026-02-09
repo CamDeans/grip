@@ -280,7 +280,7 @@ export function CodeGenerator({ projectId }: CodeGeneratorProps) {
                         variant="ghost"
                         size="sm"
                       >
-                        <a href={`/projects/${projectId}/files/${file.fileId}`} target="_blank" rel="noreferrer" aria-label="View file">
+                        <a href={`/dashboard/projects/${projectId}#generated-files`} className="inline-flex items-center" aria-label="View file in project">
                           <Code className="h-4 w-4" />
                         </a>
                       </Button>

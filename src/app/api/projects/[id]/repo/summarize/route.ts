@@ -28,9 +28,10 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 })
     }
 
-    if (!process.env.ANTHROPIC_API_KEY?.trim()) {
+    const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
+    if (!getAnthropicApiKey()) {
       return NextResponse.json(
-        { error: 'G.R.I.P. AI is not configured. Cannot generate summaries.' },
+        { error: 'G.R.I.P. AI is not configured. Set ANTHROPIC_API_KEY in .env.local or environment.' },
         { status: 503 }
       )
     }

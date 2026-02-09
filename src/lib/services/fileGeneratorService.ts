@@ -138,24 +138,23 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
       imports.push(match[1])
     }
     
-    // Check if file already exists
+    const pathDir = request.filePath.includes('/') ? request.filePath.slice(0, request.filePath.lastIndexOf('/')) : ''
+
     const existingFile = await ProjectFile.findOne({
       projectId: new ObjectId(request.projectId),
-      path: request.filePath,
+      path: pathDir,
       filename
     })
     
     let file: IProjectFile
     
     if (existingFile) {
-      // Update existing file
       existingFile.content = content
       existingFile.size = Buffer.byteLength(content, 'utf8')
       existingFile.hash = hash
       existingFile.metadata.dependencies = dependencies
       existingFile.metadata.imports = imports
       
-      // Add to history if content changed
       if (existingFile.hash !== hash) {
         existingFile.history.push({
           version: existingFile.version,
@@ -163,17 +162,15 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
           timestamp: new Date(),
           changes: 'Updated via template generator'
         })
-        
         existingFile.version += 1
       }
       
       await existingFile.save()
       file = existingFile
     } else {
-      // Create new file
       file = new ProjectFile({
         projectId: new ObjectId(request.projectId),
-        path: request.filePath,
+        path: pathDir,
         filename,
         content,
         language: template.language,

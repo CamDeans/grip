@@ -67,8 +67,10 @@ const nextConfig = {
   },
   experimental: {
     externalDir: true,
+    // Allow large request bodies (e.g. paste/copy images as base64) for API routes and server actions
+    proxyClientMaxBodySize: '50mb',
     serverActions: {
-      bodySizeLimit: '2mb'
+      bodySizeLimit: '50mb'
     }
   },
   // Redirect old chat paths to new consolidated interface

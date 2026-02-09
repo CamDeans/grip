@@ -91,7 +91,8 @@ const ProjectFileSchema = new mongoose.Schema<IProjectFile>({
   },
   history: [FileHistorySchema]
 }, {
-  timestamps: true
+  timestamps: true,
+  collection: 'projectFiles'
 });
 
 // Create compound index

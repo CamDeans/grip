@@ -1,19 +1,23 @@
 'use client'
 
-import { useParams } from 'next/navigation'
-import { CodeGenerator } from '@/components/project/CodeGenerator'
-import { ProjectNavigation } from '@/components/project/ProjectNavigation'
+import { useEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { LoadingState } from '@/components/ui/LoadingState'
 
-export default function CodeGeneratorPage() {
+export default function CodeGeneratorRedirect() {
   const params = useParams<{ id: string }>()
-  
+  const router = useRouter()
+  const projectId = params?.id || ''
+
+  useEffect(() => {
+    if (projectId) {
+      router.replace(`/dashboard/projects/${projectId}/enhanced-chat`)
+    }
+  }, [projectId, router])
+
   return (
-    <div className="p-4">
-      <ProjectNavigation />
-      <h1 className="text-2xl font-bold mb-4">Code Generator</h1>
-      <div className="mb-8">
-        <CodeGenerator projectId={params.id} />
-      </div>
+    <div className="p-4 h-full flex items-center justify-center">
+      <LoadingState message="Redirecting to project..." />
     </div>
   )
-} 
+}

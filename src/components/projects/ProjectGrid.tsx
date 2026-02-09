@@ -17,6 +17,7 @@ export interface Project {
   messageCount: number
   language?: string
   languageColor?: string
+  status?: 'active' | 'completed' | 'archived'
 }
 
 const sampleProject = {

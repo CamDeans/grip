@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Terminal } from '@/components/terminal/Terminal'
 import { Button } from '@/components/ui'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
@@ -12,17 +13,27 @@ const DEFAULT_PROJECT_ID = '000000000000000000000000'
 /**
  * Terminal Manager Component - Part of Phase 6, Step 1 of G.R.I.P. Enhancement Plan
  * Manages multiple terminal instances via API only (no server-only imports on client).
+ * When projectId is in the URL (?projectId=xxx), terminals run real npm/yarn/pnpm
+ * in that project's folder (project must have been set up with a local path).
  */
 export function Manager() {
+  const searchParams = useSearchParams()
+  const projectIdFromUrl = searchParams?.get('projectId') || undefined
+  const projectId = projectIdFromUrl && projectIdFromUrl.length === 24 ? projectIdFromUrl : DEFAULT_PROJECT_ID
+  const isProjectScoped = projectId !== DEFAULT_PROJECT_ID
+
   const [terminals, setTerminals] = useState<string[]>([])
   const [activeTerminal, setActiveTerminal] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [projectTitle, setProjectTitle] = useState<string | null>(null)
+  const [hasProjectPath, setHasProjectPath] = useState(false)
+  const [isVercel, setIsVercel] = useState(false)
 
-  // Load terminal sessions from the API
+  // Load terminal sessions from the API (scoped to project when projectId in URL)
   const loadTerminals = async () => {
     setIsLoading(true)
     try {
-      const res = await fetch(`/api/terminal/session?projectId=${DEFAULT_PROJECT_ID}`)
+      const res = await fetch(`/api/terminal/session?projectId=${projectId}`)
       if (!res.ok) throw new Error('Failed to load sessions')
       const data = await res.json()
       const sessions = data.sessions || []
@@ -58,8 +69,11 @@ export function Manager() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projectId: DEFAULT_PROJECT_ID,
-          metadata: { createdBy: 'system', purpose: 'User terminal session' }
+          projectId,
+          metadata: {
+            createdBy: 'system',
+            purpose: projectId !== DEFAULT_PROJECT_ID ? 'Project terminal (real npm/commands)' : 'User terminal session'
+          }
         })
       })
       if (!res.ok) throw new Error('Failed to create session')
@@ -108,10 +122,29 @@ export function Manager() {
     localStorage.setItem('grip_active_terminal', id)
   }
 
-  // Load terminals on component mount
+  // Load terminals on mount and when projectId (from URL) changes
   useEffect(() => {
     loadTerminals()
-  }, [])
+  }, [projectId])
+
+  // When terminal is project-scoped, fetch project title and whether it has a folder path
+  useEffect(() => {
+    if (!isProjectScoped) {
+      setProjectTitle(null)
+      setHasProjectPath(false)
+      return
+    }
+    let cancelled = false
+    fetch(`/api/projects/${projectId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        setProjectTitle(data.title ?? null)
+        setHasProjectPath(Boolean(data.projectPath))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [projectId, isProjectScoped])
 
   return (
     <div className="h-full flex flex-col">
@@ -150,7 +183,9 @@ export function Manager() {
             </div>
           </div>
           <CardDescription>
-            Manage and interact with virtual terminal sessions
+            {projectId !== DEFAULT_PROJECT_ID
+              ? 'Terminal for this project — npm install and npm run dev run in the project folder.'
+              : 'Manage and interact with terminal sessions. Add ?projectId=xxx to the URL to run commands in a project folder.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-4">
@@ -197,7 +232,13 @@ export function Manager() {
 
       {activeTerminal ? (
         <div className="flex-1">
-          <Terminal id={activeTerminal} onDelete={deleteTerminal} />
+          <Terminal
+            id={activeTerminal}
+            onDelete={deleteTerminal}
+            projectTitle={projectTitle ?? undefined}
+            hasProjectPath={hasProjectPath}
+            isVercel={isVercel}
+          />
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center bg-background-tertiary rounded-lg border border-dashed border-border">

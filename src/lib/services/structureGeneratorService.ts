@@ -3,11 +3,13 @@ import { clientPromise } from '@/lib/mongodb'
 import { Anthropic } from '@anthropic-ai/sdk'
 import { analyzeAndCreateProjectStructure } from './projectAnalyzerService'
 import { IProjectStructureData, IFileNode } from '@/lib/models/ProjectStructure'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
 
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY as string,
-})
+function getAnthropicClient() {
+  const apiKey = getAnthropicApiKey()
+  if (!apiKey) return null
+  return new Anthropic({ apiKey })
+}
 
 /**
  * Structure Generator Service - Creates file hierarchy based on analysis
@@ -222,8 +224,10 @@ Return only the JSON array, no explanation.
 `
     
     // Use AI to extract features
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     const response = await anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229',
+      model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 2000,
       temperature: 0.2,
       messages: [{ role: 'user', content: prompt }]

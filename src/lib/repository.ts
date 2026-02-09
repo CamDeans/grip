@@ -1,6 +1,7 @@
-import { clientPromise } from './mongodb'
+import clientPromise from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { cloneRepository } from './github'
+import { isImagePath, validateImageContent } from './imageValidation'
 
 interface RepositoryFile {
   path: string
@@ -22,23 +23,14 @@ interface CachedRepository {
   lastAccessed: Date
 }
 
+/** File extensions that are binary; we keep base64 and do not decode to UTF-8 (which would corrupt them). */
+const BINARY_EXTENSIONS = /\.(png|jpg|jpeg|gif|ico|webp|bmp|woff|woff2|ttf|eot|otf|cur)(\?.*)?$/i
+
 function decodeBase64(base64: string): string {
   try {
-    console.log('Decoding base64 content:', {
-      inputLength: base64.length,
-      sampleInput: base64.substring(0, 50) + '...'
-    });
     const decoded = Buffer.from(base64, 'base64').toString('utf8');
-    console.log('Successfully decoded base64:', {
-      outputLength: decoded.length,
-      sampleOutput: decoded.substring(0, 50) + '...'
-    });
     return decoded;
-  } catch (error) {
-    console.error('Error decoding base64:', {
-      error: error instanceof Error ? error.message : error,
-      sampleInput: base64.substring(0, 50) + '...'
-    });
+  } catch {
     return '';
   }
 }
@@ -100,23 +92,42 @@ export async function getOrCloneRepository(owner: string, repo: string, projectI
       return [];
     }
 
-    // Map files to the correct format with proper content handling
-    console.log('Processing cloned files...');
+    // Map files to the correct format. GitHub returns content as base64.
+    // For binary files (images, fonts) keep base64 so they are not corrupted by UTF-8 decode; export/StackBlitz can use it.
+    // For image paths, validate content is actual image data (not blank/encrypted/wrong format) and normalize base64.
     const repoFiles = files.map(file => {
-      const processed = {
+      let content: string | null = null;
+      if (file.content) {
+        if (file.encoding === 'base64') {
+          const isBinary = BINARY_EXTENSIONS.test(file.path);
+          if (isBinary) {
+            if (isImagePath(file.path)) {
+              const { valid, normalized } = validateImageContent(file.content, file.path);
+              if (valid && normalized) content = normalized;
+              else if (!valid) {
+                console.warn(`[repository] Image file has invalid content (blank or not image format), skipping: ${file.path}`);
+                content = null;
+              } else {
+                content = file.content;
+              }
+            } else {
+              content = file.content;
+            }
+          } else {
+            content = decodeBase64(file.content);
+          }
+        } else if (typeof file.content === 'string') {
+          content = file.content;
+        }
+      }
+      return {
         path: file.path,
-        content: file.encoding === 'base64' && file.content ? decodeBase64(file.content) : null,
+        content,
         type: file.type || 'file',
         sha: file.sha || '',
         lastModified: new Date(),
         encoding: file.encoding || 'utf8'
       };
-      console.log(`Processed file ${file.path}:`, {
-        hasContent: !!processed.content,
-        encoding: processed.encoding,
-        type: processed.type
-      });
-      return processed;
     });
 
     // Create repository document
@@ -242,6 +253,65 @@ export async function updateRepositoryFile(
 
   console.log('File updated successfully')
   return true
+}
+
+/** Remove one file from the cached repo by path */
+export async function deleteRepositoryFile(projectId: string, filePath: string): Promise<boolean> {
+  const client = await clientPromise
+  const db = client.db('test')
+  const repository = await db.collection<CachedRepository>('repositories').findOne({
+    linkedProjects: new ObjectId(projectId),
+  })
+  if (!repository?.files) return false
+  const filtered = repository.files.filter((f: RepositoryFile) => f.path !== filePath)
+  if (filtered.length === repository.files.length) return false
+  await db.collection('repositories').updateOne(
+    { _id: repository._id },
+    { $set: { files: filtered, lastUpdated: new Date() } }
+  )
+  return true
+}
+
+/** Rename a file in the cached repo (oldPath → newPath) */
+export async function renameRepositoryFile(projectId: string, oldPath: string, newPath: string): Promise<boolean> {
+  const client = await clientPromise
+  const db = client.db('test')
+  const repository = await db.collection<CachedRepository>('repositories').findOne({
+    linkedProjects: new ObjectId(projectId),
+  })
+  if (!repository?.files) return false
+  const files = repository.files.map((f: RepositoryFile) =>
+    f.path === oldPath ? { ...f, path: newPath, lastModified: new Date() } : f
+  )
+  if (files.every((f: RepositoryFile, i: number) => f.path === repository.files[i].path)) return false
+  await db.collection('repositories').updateOne(
+    { _id: repository._id },
+    { $set: { files, lastUpdated: new Date() } }
+  )
+  return true
+}
+
+/** Remove all files under a folder path from the cached repo (folderPath and folderPath/*) */
+export async function deleteRepositoryFolder(projectId: string, folderPath: string): Promise<number> {
+  const client = await clientPromise
+  const db = client.db('test')
+  const repository = await db.collection<CachedRepository>('repositories').findOne({
+    linkedProjects: new ObjectId(projectId),
+  })
+  if (!repository?.files) return 0
+  const normalized = folderPath.replace(/^\/+|\/+$/g, '').trim() || ''
+  const prefix = normalized === '' ? '/' : normalized.endsWith('/') ? normalized : normalized + '/'
+  const before = repository.files.length
+  const filtered = repository.files.filter(
+    (f: RepositoryFile) => f.path !== normalized && f.path !== normalized + '/' && !f.path.startsWith(prefix)
+  )
+  const removed = before - filtered.length
+  if (removed === 0) return 0
+  await db.collection('repositories').updateOne(
+    { _id: repository._id },
+    { $set: { files: filtered, lastUpdated: new Date() } }
+  )
+  return removed
 }
 
 export async function getFileHistory(projectId: string, filePath: string) {

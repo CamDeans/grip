@@ -1,14 +1,16 @@
 import { Anthropic } from '@anthropic-ai/sdk'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
 
 /**
  * Language Support Service - Adds support for multiple programming languages
  * Part of Phase 4, Step 3 of the G.R.I.P. AI Assistant Enhancement Plan
  */
 
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY as string,
-})
+function getAnthropicClient() {
+  const apiKey = getAnthropicApiKey()
+  if (!apiKey) return null
+  return new Anthropic({ apiKey })
+}
 
 /**
  * Interface for language configuration
@@ -324,8 +326,10 @@ Respond ONLY with the code, without any explanation or markdown code blocks. The
 `
     
     // Use AI to generate code
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     const response = await anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229',
+      model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 2000,
       temperature: 0.2,
       messages: [{ role: 'user', content: aiPrompt }]
@@ -383,8 +387,10 @@ Respond ONLY with the converted code, without any explanation or markdown code b
 `
     
     // Use AI to convert code
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     const response = await anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229',
+      model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 2000,
       temperature: 0.2,
       messages: [{ role: 'user', content: aiPrompt }]
@@ -432,8 +438,10 @@ DO NOT include any explanation, just the JSON array.
 `
     
     // Use AI to generate imports
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     const response = await anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229',
+      model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 1000,
       temperature: 0.2,
       messages: [{ role: 'user', content: aiPrompt }]

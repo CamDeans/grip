@@ -1,10 +1,12 @@
 import { ObjectId } from 'mongodb'
+import clientPromise from '@/lib/db'
 import { IProjectStructureData, IFileNode } from '@/lib/models/ProjectStructure'
 import { analyzeProject, analyzeAndCreateProjectStructure } from './projectAnalyzerService'
 import { enhanceProjectStructure, generateStructurePlan, getOrCreateProjectStructure } from './structureGeneratorService'
 import { generateDevelopmentPlan, getOrCreateDevelopmentPlan, DevelopmentPlan } from './planGeneratorService'
 import { analyzeProjectDependencies, getProjectDependencyTree, getFileDependencies, getFileDependents } from './dependencyResolverService'
 import { storeProjectStructure, getProjectStructure, linkPlanToStructure, storeFileGenerationPlan } from './planStorageService'
+import { syncProjectStateFromPlan } from './projectStateService'
 
 /**
  * Project Planning Service - Integrates all Phase 3 components into a unified API
@@ -20,9 +22,43 @@ export interface PlanningResult {
   dependencyTree?: {
     fileCount: number;
     packageCount: number;
+    packages?: Array<{ name: string; version: string; type: string }>;
+    recommendedPackages?: string[];
   };
   structure: ProjectStructureWithId;
   plan?: DevelopmentPlan;
+}
+
+/**
+ * Derive recommended npm package names from project ideation (technical requirements, key features).
+ * Used when repo has no package.json yet so the plan still shows dependencies to install.
+ */
+function getRecommendedDependenciesFromIdeation(project: { ideation?: { technicalRequirements?: string; keyFeatures?: string } } | null): string[] {
+  if (!project?.ideation) return []
+  const text = [
+    project.ideation.technicalRequirements ?? '',
+    project.ideation.keyFeatures ?? ''
+  ].join(' ')
+  if (!text.trim()) return []
+  const knownPackages: Record<string, string> = {
+    react: 'react', typescript: 'typescript', vite: 'vite', next: 'next', node: 'node',
+    express: 'express', tailwind: 'tailwindcss', 'tailwind css': 'tailwindcss',
+    jest: 'jest', testing: '@testing-library/react', eslint: 'eslint', prettier: 'prettier',
+    expo: 'expo', 'react native': 'react-native', redux: '@reduxjs/toolkit',
+    mongoose: 'mongoose', prisma: 'prisma', graphql: 'graphql',
+    axios: 'axios', lodash: 'lodash', 'date-fns': 'date-fns', zod: 'zod'
+  }
+  const lower = text.toLowerCase()
+  const found = new Set<string>()
+  for (const [label, pkg] of Object.entries(knownPackages)) {
+    if (lower.includes(label)) found.add(pkg)
+  }
+  const regex = /(?:react|typescript|vite|next\.?js|node\.?js|express|tailwind|jest|eslint|prettier|expo|redux|mongoose|prisma|graphql|axios|lodash|zod|date-fns)/gi
+  let m
+  while ((m = regex.exec(text)) !== null) {
+    found.add(m[0].toLowerCase().replace(/\.?js$/i, ''))
+  }
+  return Array.from(found)
 }
 
 /**
@@ -69,13 +105,28 @@ export async function generateProjectPlan(projectId: string): Promise<PlanningRe
     console.log('Step 6: Analyzing dependencies')
     const dependencies = await analyzeProjectDependencies(projectId)
     
-    // Create result object
+    // Step 7: Sync project state from plan so chat and UI show same phases/steps
+    console.log('Step 7: Syncing project state from plan')
+    try {
+      await syncProjectStateFromPlan(projectId, plan)
+    } catch (syncErr) {
+      console.warn('Project state sync from plan failed (non-fatal):', syncErr)
+    }
+    
+    const client = await clientPromise
+    const db = client.db()
+    const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) })
+    const recommendedPackages = getRecommendedDependenciesFromIdeation(project as { ideation?: { technicalRequirements?: string; keyFeatures?: string } } | null)
+    
+    // Create result object (match GET shape: packages + recommendedPackages for PlanGenerator Overview)
     const result: PlanningResult = {
       structureId,
       planId: plan._id,
       dependencyTree: {
         fileCount: dependencies.files.length,
-        packageCount: dependencies.packages.length
+        packageCount: dependencies.packages.length,
+        packages: dependencies.packages.map((p: { name: string; version: string; type: string }) => ({ name: p.name, version: p.version, type: p.type })),
+        recommendedPackages
       },
       structure: {
         ...enhancedStructure,
@@ -102,26 +153,26 @@ export async function generateProjectPlan(projectId: string): Promise<PlanningRe
 export async function getProjectPlan(projectId: string): Promise<PlanningResult | null> {
   try {
     console.log(`Getting project plan for: ${projectId}`)
-    
-    // Get project structure
+
     const structure = await getProjectStructure(projectId)
-    
-    if (!structure) {
-      return null
-    }
-    
-    // Get development plan
+    if (!structure) return null
+
     const plan = await getOrCreateDevelopmentPlan(projectId)
-    
-    // Get dependencies
     const dependencies = await getProjectDependencyTree(projectId)
-    
+
+    const client = await clientPromise
+    const db = client.db()
+    const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) })
+    const recommendedPackages = getRecommendedDependenciesFromIdeation(project as { ideation?: { technicalRequirements?: string; keyFeatures?: string } } | null)
+
     return {
       structureId: structure._id,
       planId: plan._id,
       dependencyTree: {
         fileCount: dependencies.files.length,
-        packageCount: dependencies.packages.length
+        packageCount: dependencies.packages.length,
+        packages: dependencies.packages.map((p: { name: string; version: string; type: string }) => ({ name: p.name, version: p.version, type: p.type })),
+        recommendedPackages
       },
       structure,
       plan
@@ -182,9 +233,24 @@ export async function planFileGeneration(
 }
 
 /**
- * Find and return all files in a project that need to be generated
- * These are files that have generation metadata
- * 
+ * Default template ID by file extension (for files without generationMetadata)
+ */
+function defaultTemplateForPath(pathOrName: string): string {
+  const name = pathOrName.split('/').pop() || ''
+  const ext = name.split('.').pop()?.toLowerCase() || ''
+  if (name === 'page.tsx') return 'nextjs-page'
+  if (ext === 'tsx' || ext === 'jsx') return 'react-component'
+  if (ext === 'ts' || ext === 'js') return 'ts-utility'
+  if (ext === 'md' || ext === 'mdx') return 'ts-utility'
+  return 'ts-utility'
+}
+
+/**
+ * Find and return all files in a project that need to be generated.
+ * - Collects nodes with type === 'file' (with or without generationMetadata).
+ * - If the structure has no file nodes (analyzer only creates directories), derives
+ *   synthetic file entries from directories so the Files tab is never empty.
+ *
  * @param projectId The ID of the project
  * @returns Array of file nodes with generation metadata
  */
@@ -192,33 +258,68 @@ export async function getFilesToGenerate(projectId: string): Promise<Array<IFile
   try {
     console.log(`Getting files to generate for project: ${projectId}`)
     
-    // Get project structure
     const structure = await getProjectStructure(projectId)
-    
     if (!structure) {
       throw new Error(`Project structure not found: ${projectId}`)
     }
     
-    // Find all files with generation metadata
     const filesToGenerate: Array<IFileNode & { generationMetadata: any }> = []
     
-    const findFilesWithMetadata = (node: any) => {
-      if (node.type === 'file' && node.generationMetadata) {
-        filesToGenerate.push(node)
-      }
-      
-      if (node.children) {
-        for (const child of node.children) {
-          findFilesWithMetadata(child)
+    const collectFiles = (node: any) => {
+      if (node.type === 'file') {
+        const meta = node.generationMetadata || {
+          template: defaultTemplateForPath(node.path || node.name || ''),
+          variables: {},
+          priority: 0,
+          dependencies: [],
+          description: node.description || 'Generated from plan'
         }
+        filesToGenerate.push({ ...node, generationMetadata: meta })
+      }
+      if (node.children) {
+        for (const child of node.children) collectFiles(child)
       }
     }
     
-    findFilesWithMetadata(structure.fileHierarchy)
+    collectFiles(structure.fileHierarchy)
     
-    // Sort by priority
-    filesToGenerate.sort((a, b) => 
-      (b.generationMetadata.priority || 0) - (a.generationMetadata.priority || 0)
+    // If the plan has no explicit file nodes (analyzer only creates directories),
+    // derive one file per non-root directory so the Files tab has entries.
+    if (filesToGenerate.length === 0 && structure.fileHierarchy) {
+      const addSyntheticFromDirs = (node: any, depth: number) => {
+        if (node.type !== 'directory' || !node.path) return
+        const path = (node.path as string).replace(/^\/+/, '') || ''
+        const name = node.name || path.split('/').pop() || ''
+        if (!path || path === '/') return
+        const isAppOrPages = /(^|\/)(app|pages)(\/|$)/.test(path)
+        const fileName = isAppOrPages ? 'page.tsx' : 'index.tsx'
+        const filePath = path.includes(fileName) ? path : `${path}/${fileName}`
+        const meta = {
+          template: isAppOrPages ? 'nextjs-page' : defaultTemplateForPath(filePath),
+          variables: {},
+          priority: depth,
+          dependencies: [],
+          description: node.description || (isAppOrPages ? 'Page component' : 'Entry file')
+        }
+        filesToGenerate.push({
+          type: 'file',
+          name: fileName,
+          path: filePath,
+          description: meta.description,
+          generationMetadata: meta
+        } as IFileNode & { generationMetadata: any })
+        if (node.children) {
+          for (const child of node.children) addSyntheticFromDirs(child, depth + 1)
+        }
+      }
+      const root = structure.fileHierarchy
+      if (root?.children) {
+        for (const child of root.children) addSyntheticFromDirs(child, 0)
+      }
+    }
+    
+    filesToGenerate.sort((a, b) =>
+      (b.generationMetadata?.priority ?? 0) - (a.generationMetadata?.priority ?? 0)
     )
     
     return filesToGenerate

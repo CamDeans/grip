@@ -2,10 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
 import { Anthropic } from '@anthropic-ai/sdk'
 import { AIMessage } from '@/types'
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
+import { getAnthropicApiKey, ANTHROPIC_MODEL_OPUS } from '@/lib/anthropicConfig'
 
 export async function POST(request: Request) {
   try {
@@ -14,6 +11,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const apiKey = getAnthropicApiKey()
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'G.R.I.P. AI is not configured. Set ANTHROPIC_API_KEY in .env.local or environment.' },
+        { status: 503 }
+      )
+    }
+
+    const anthropic = new Anthropic({ apiKey })
     const { message, history, context } = await request.json()
 
     // Update the system prompt
@@ -41,13 +47,18 @@ ${context.analysis ? `Repository Analysis:
 - Structure: ${JSON.stringify(context.analysis.directoryStructure)}
 - Languages: ${JSON.stringify(context.analysis.mainLanguages)}` : ''}
 
+CRITICAL - Code block formatting (must follow):
+- ALL code you generate MUST be inside markdown code blocks (triple backticks, e.g. \`\`\`tsx or \`\`\`js). NEVER output code as plain text outside blocks.
+- If code is long: output the FULL code in ONE code block. Do NOT continue the code in plain text after the block. Do NOT split code across block and non-block.
+- Code outside blocks cannot be saved to project files. Keep every code snippet entirely between opening and closing triple backticks.
+
 Your role is to:
 1. Provide specific, actionable guidance for implementing the project
-2. Share relevant code examples when appropriate
+2. Share relevant code examples when appropriate (always inside code blocks)
 3. Focus on the required tech stack: ${context.project.ideation.technicalRequirements}
 4. Consider the existing codebase when suggesting implementations
 5. Break down complex tasks into manageable steps
-6. Provide clear explanations with code examples when needed`
+6. Provide clear explanations with code examples when needed (code in blocks only)`
 
     // Format messages for G.R.I.P. AI
     const formattedMessages = history
@@ -64,14 +75,14 @@ Your role is to:
     })
 
     console.log('Sending to G.R.I.P.:', {
-      model: 'claude-3-opus-20240229',
+      model: ANTHROPIC_MODEL_OPUS,
       system: systemPrompt,
       messages: formattedMessages
     })
 
     // Get AI response
     const response = await anthropic.messages.create({
-      model: 'claude-3-opus-20240229',
+      model: ANTHROPIC_MODEL_OPUS,
       max_tokens: 4000,
       system: systemPrompt,
       messages: formattedMessages,

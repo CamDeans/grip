@@ -155,6 +155,12 @@ export default function DocumentationPage() {
           title: 'MongoDB Integration',
           description: 'Store and retrieve project data with MongoDB',
           path: '/docs/integrations/mongodb',
+        },
+        {
+          id: 'deploy-vercel',
+          title: 'Deploy to Vercel & FAQs',
+          description: 'Flow, instructions, and FAQs for devs and non-devs',
+          path: '/docs/integrations/deploy-vercel',
         }
       ]
     },

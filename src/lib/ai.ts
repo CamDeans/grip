@@ -1,8 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
+function getAnthropicClient() {
+  const apiKey = getAnthropicApiKey()
+  if (!apiKey) return null
+  return new Anthropic({ apiKey })
+}
 
 // Helper function to chunk content
 function chunkContent(content: string, maxChunkSize: number = 8000): string[] {
@@ -39,8 +42,10 @@ function chunkContent(content: string, maxChunkSize: number = 8000): string[] {
 async function summarizeAnalysis(chunks: string[]): Promise<string> {
   const summaries = await Promise.all(
     chunks.map(async (chunk) => {
+      const anthropic = getAnthropicClient()
+      if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
       const response = await anthropic.messages.create({
-        model: 'claude-2.1',
+        model: ANTHROPIC_MODEL_CHAT,
         max_tokens: 1000,
         messages: [
           {
@@ -61,8 +66,10 @@ Focus on:
   )
 
   // Combine summaries
+  const anthropic = getAnthropicClient()
+  if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
   const finalResponse = await anthropic.messages.create({
-    model: 'claude-2.1',
+    model: ANTHROPIC_MODEL_CHAT,
     max_tokens: 2000,
     messages: [
       {
@@ -105,8 +112,10 @@ export async function analyzeRepository(content: string) {
 
 export async function generateCodeSuggestions(analysis: string) {
   try {
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     const response = await anthropic.messages.create({
-      model: 'claude-2.1',
+      model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 2000,
       messages: [
         {

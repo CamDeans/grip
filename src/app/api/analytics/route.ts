@@ -1,27 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth'
 import clientPromise from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession()
-    
-    if (!session || !session.user?.email) {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: 'Unauthorized' }, 
+        { error: 'Unauthorized' },
         { status: 401 }
       )
     }
-    
-    // Get timeframe from query parameters
+
     const { searchParams } = new URL(request.url)
     const timeframe = searchParams.get('timeframe') || '7d'
-    
-    // Connect to MongoDB
+
     const client = await clientPromise
     const db = client.db()
-    
-    // Calculate date range based on timeframe
+
     const now = new Date()
     const dateFrom = new Date()
     switch (timeframe) {
@@ -40,22 +38,31 @@ export async function GET(request: NextRequest) {
       default:
         dateFrom.setDate(dateFrom.getDate() - 7)
     }
-    
-    // Query collections
+
+    // Only this user's projects
+    const projects = await db.collection('projects').find({ userId: session.user.id }).toArray()
+    const projectIds = projects.map((p: { _id: unknown }) => p._id)
+
     const [
-      projects,
       buildLogs,
       terminalSessions,
       projectFiles
     ] = await Promise.all([
-      db.collection('projects').find({}).toArray(),
-      db.collection('buildLogs').find({
-        createdAt: { $gte: dateFrom.toISOString() }
-      }).toArray(),
-      db.collection('terminalSessions').find({
-        createdAt: { $gte: dateFrom.toISOString() }
-      }).toArray(),
-      db.collection('projectFiles').find({}).toArray()
+      projectIds.length > 0
+        ? db.collection('buildLogs').find({
+            projectId: { $in: projectIds },
+            createdAt: { $gte: dateFrom.toISOString() }
+          }).toArray()
+        : [],
+      projectIds.length > 0
+        ? db.collection('terminalSessions').find({
+            projectId: { $in: projectIds },
+            createdAt: { $gte: dateFrom.toISOString() }
+          }).toArray()
+        : [],
+      projectIds.length > 0
+        ? db.collection('projectFiles').find({ projectId: { $in: projectIds } }).toArray()
+        : []
     ])
     
     // Calculate project growth
@@ -124,11 +131,11 @@ export async function GET(request: NextRequest) {
       })
     }
     
-    // Generate distribution data (projects by type/status)
+    // Generate distribution data (projects by type/status; treat missing status as active)
     const distributionData = [
       {
         label: 'Active',
-        value: projects.filter((p: any) => p.status === 'active').length
+        value: projects.filter((p: any) => (p.status ?? 'active') === 'active').length
       },
       {
         label: 'Completed',
@@ -234,7 +241,18 @@ export async function GET(request: NextRequest) {
       peak: peakHour
     }
     
-    // Assemble and return analytics data
+    // Full project details for analytics page (titles, status, createdAt)
+    const projectsDetail = projects.map((p: { _id: unknown; title?: string; description?: string; status?: string; createdAt?: string }) => ({
+      id: p._id,
+      title: p.title,
+      description: p.description,
+      status: p.status ?? 'active',
+      createdAt: p.createdAt
+    }))
+
+    // Code generated = project files saved (from Plan or Develop), not build count
+    const filesGenerated = projectFiles.length
+
     const analyticsData = {
       totalProjects: projects.length,
       projectGrowth,
@@ -242,9 +260,11 @@ export async function GET(request: NextRequest) {
       distributionData,
       buildData,
       languageData,
-      timeData
+      timeData,
+      projectsDetail,
+      filesGenerated,
     }
-    
+
     return NextResponse.json(analyticsData)
   } catch (error) {
     console.error('Error fetching analytics:', error)

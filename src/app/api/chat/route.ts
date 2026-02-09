@@ -2,15 +2,18 @@ import { Server as SocketIOServer } from 'socket.io'
 import { NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
 import Anthropic from '@anthropic-ai/sdk'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_OPUS } from '@/lib/anthropicConfig'
 
 // Singleton instance management
 let io: SocketIOServer | null = null
 let serverInitialized = false
 
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+// Anthropic client created per-request when key is present (see POST)
+function getAnthropicClient() {
+  const apiKey = getAnthropicApiKey()
+  if (!apiKey) return null
+  return new Anthropic({ apiKey })
+}
 
 function initializeSocketServer() {
   if (serverInitialized) {
@@ -107,6 +110,14 @@ export async function GET(_req: Request) {
 
 export async function POST(request: Request) {
   try {
+    const anthropic = getAnthropicClient()
+    if (!anthropic) {
+      return NextResponse.json(
+        { error: 'G.R.I.P. AI is not configured. Set ANTHROPIC_API_KEY in .env.local or environment.' },
+        { status: 503 }
+      )
+    }
+
     const body = await request.json()
     const { projectId, message, currentPhase, phases } = body
 
@@ -135,7 +146,7 @@ Always maintain a professional but friendly tone, and provide specific, actionab
 
       // Call G.R.I.P. AI
       const response = await anthropic.messages.create({
-        model: 'claude-3-opus-20240229',
+        model: ANTHROPIC_MODEL_OPUS,
         max_tokens: 4096,
         temperature: 0.7,
         system: context,

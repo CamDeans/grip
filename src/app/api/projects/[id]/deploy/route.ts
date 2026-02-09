@@ -7,6 +7,17 @@ import { ObjectId } from 'mongodb'
 const VERCEL_API = 'https://api.vercel.com'
 
 /**
+ * Sanitize a name for Vercel project: up to 100 chars, lowercase; letters, digits, '.', '_', '-'; no sequence '---'.
+ */
+function sanitizeVercelProjectName(name: string): string {
+  if (typeof name !== 'string' || !name.trim()) return 'grip-project'
+  let s = name.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '-')
+  s = s.replace(/-+/g, '-').replace(/^[-.]|[-.]$/g, '') // collapse dashes, trim leading/trailing - or .
+  s = s.slice(0, 100)
+  return s || 'grip-project'
+}
+
+/**
  * POST /api/projects/[id]/deploy
  * Trigger a Vercel deployment from the project's GitHub repo (linked or exported).
  * Requires VERCEL_TOKEN. Optionally VERCEL_TEAM_ID.
@@ -30,7 +41,7 @@ export async function POST(
     const token = process.env.VERCEL_TOKEN
     if (!token?.trim()) {
       return NextResponse.json(
-        { error: 'Vercel is not configured. Add VERCEL_TOKEN in server environment.' },
+        { error: 'Vercel is not configured. An admin must add VERCEL_TOKEN to the server environment. See docs (Deploy to Vercel & FAQs) for details.' },
         { status: 503 }
       )
     }
@@ -76,7 +87,8 @@ export async function POST(
       )
     }
 
-    const projectName = (project.title || repo).replace(/[^a-zA-Z0-9-_]/g, '-').slice(0, 100) || 'grip-project'
+    // Vercel: project names up to 100 chars, lowercase; letters, digits, '.', '_', '-'; cannot contain '---'
+    const projectName = sanitizeVercelProjectName(project.title || repo)
     const teamId = process.env.VERCEL_TEAM_ID
 
     const url = new URL('/v13/deployments', VERCEL_API)

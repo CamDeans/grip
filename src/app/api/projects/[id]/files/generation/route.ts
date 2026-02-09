@@ -1,25 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerAuthSession } from '@/lib/auth'
 import { planFileGeneration, getFilesToGenerate } from '@/lib/services/projectPlanningService'
 import { ObjectId } from 'mongodb'
 
 /**
  * GET /api/projects/[id]/files/generation
- * Get files that are planned for generation
+ * Get files that are planned for generation (includes file nodes with or without generationMetadata).
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const session = await getServerAuthSession()
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
 
     // Validate id
     if (!id || !ObjectId.isValid(id)) {
@@ -45,18 +43,16 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const session = await getServerAuthSession()
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
 
-    // Validate id
     if (!id || !ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 })
     }

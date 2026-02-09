@@ -1,4 +1,5 @@
 import { Anthropic } from '@anthropic-ai/sdk'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_OPUS } from '@/lib/anthropicConfig'
 
 // Don't use NEXT_PUBLIC_ for API keys to avoid exposing them to the client
 // Instead, we'll create an API endpoint to handle this server-side
@@ -32,12 +33,12 @@ export async function generateKeywords(title: string, description: string): Prom
 // Server-side helper function for use in API routes
 export async function generateKeywordsServer(title: string, description: string): Promise<string[]> {
   try {
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
+    const apiKey = getAnthropicApiKey()
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set')
+    const anthropic = new Anthropic({ apiKey })
 
     const response = await anthropic.messages.create({
-      model: 'claude-3-opus-20240229',
+      model: ANTHROPIC_MODEL_OPUS,
       max_tokens: 300,
       temperature: 0.7,
       messages: [{

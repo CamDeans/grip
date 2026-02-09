@@ -2,6 +2,7 @@ import { clientPromise } from '../mongodb'
 import { ObjectId } from 'mongodb'
 import { AIMessage } from '@/types/chat'
 import type { IProjectStateData } from '../models/ProjectState'
+import type { DevelopmentPlan } from './planGeneratorService'
 
 // Check if we're on the client side
 const isClient = typeof window !== 'undefined'
@@ -286,6 +287,35 @@ export async function getProjectState(projectId: string): Promise<IProjectStateD
     }
     return null
   }
+}
+
+/**
+ * Sync project state phases and steps from a development plan.
+ * Called after generating a plan so chat and UI show the same phases/steps.
+ */
+export async function syncProjectStateFromPlan(projectId: string, plan: DevelopmentPlan): Promise<boolean> {
+  if (isClient) {
+    console.warn('Cannot sync project state from client-side')
+    return false
+  }
+  const phases = plan.phases?.map((phase, phaseIndex) => ({
+    name: phase.name,
+    status: (phaseIndex === 0 ? 'in_progress' : phase.status === 'completed' ? 'completed' : phase.status === 'in_progress' ? 'in_progress' : 'pending') as 'pending' | 'in_progress' | 'completed',
+    steps: (phase.tasks || []).map((task, stepIndex) => ({
+      id: stepIndex + 1,
+      title: task.title,
+      status: (task.status === 'completed' ? 'completed' : task.status === 'in_progress' ? 'in_progress' : 'pending') as 'pending' | 'in_progress' | 'completed',
+      action: task.description || task.title,
+      dependencies: [] as string[],
+      progress: task.status === 'completed' ? '100%' : '0%'
+    }))
+  }))
+  if (!phases?.length) return false
+  const existing = await getProjectState(projectId)
+  if (existing) {
+    return updateProjectState(projectId, { phases, currentPhase: phases[0].name })
+  }
+  return ensureProjectState(projectId, phases)
 }
 
 export async function ensureProjectState(projectId: string, phases: IProjectStateData['phases']): Promise<boolean> {

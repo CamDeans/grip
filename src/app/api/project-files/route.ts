@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerAuthSession } from '@/lib/auth'
 import { ObjectId } from 'mongodb'
 import clientPromise from '@/lib/db'
 
@@ -8,9 +7,8 @@ import clientPromise from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions)
-    if (!session || !session.user) {
+    const session = await getServerAuthSession()
+    if (!session?.user) {
       return new NextResponse(
         JSON.stringify({ error: 'Not authenticated' }),
         { status: 401 }

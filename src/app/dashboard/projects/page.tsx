@@ -82,13 +82,21 @@ export default function ProjectsPage() {
     fetchProjects()
   }, [])
 
+  // Count by status (for tab labels)
+  const statusCounts = {
+    all: projects.length,
+    active: projects.filter(p => (p.status || 'active') === 'active').length,
+    completed: projects.filter(p => p.status === 'completed').length,
+    archived: projects.filter(p => p.status === 'archived').length,
+  }
+
   // Filter projects
   useEffect(() => {
     let result = [...projects]
     
-    // Filter by status
+    // Filter by status (treat missing status as 'active')
     if (currentTab !== 'all') {
-      result = result.filter(project => project.status === currentTab)
+      result = result.filter(project => (project.status || 'active') === currentTab)
     }
 
     // Filter by search term
@@ -158,10 +166,10 @@ export default function ProjectsPage() {
             {/* Status filter */}
             <Tabs value={currentTab} onValueChange={handleTabChange} className="min-w-0 w-full md:w-auto">
               <TabsList className="flex flex-wrap w-full md:w-auto gap-1 p-1">
-                <TabsTrigger value="all" className="flex-1 min-w-0 sm:flex-initial">All Projects</TabsTrigger>
-                <TabsTrigger value="active" className="flex-1 min-w-0 sm:flex-initial">Active</TabsTrigger>
-                <TabsTrigger value="completed" className="flex-1 min-w-0 sm:flex-initial">Completed</TabsTrigger>
-                <TabsTrigger value="archived" className="flex-1 min-w-0 sm:flex-initial">Archived</TabsTrigger>
+                <TabsTrigger value="all" className="flex-1 min-w-0 sm:flex-initial">All ({statusCounts.all})</TabsTrigger>
+                <TabsTrigger value="active" className="flex-1 min-w-0 sm:flex-initial">Active ({statusCounts.active})</TabsTrigger>
+                <TabsTrigger value="completed" className="flex-1 min-w-0 sm:flex-initial">Completed ({statusCounts.completed})</TabsTrigger>
+                <TabsTrigger value="archived" className="flex-1 min-w-0 sm:flex-initial">Archived ({statusCounts.archived})</TabsTrigger>
               </TabsList>
             </Tabs>
 
@@ -213,7 +221,8 @@ export default function ProjectsPage() {
               lastUpdated: project.updatedAt || project.createdAt,
               messageCount: project.messageCount || 0,
               language: project.language || 'TypeScript',
-              languageColor: project.languageColor || '#3178c6'
+              languageColor: project.languageColor || '#3178c6',
+              status: (project.status || 'active') as 'active' | 'completed' | 'archived',
             } as ProjectGridProject))} 
           />
         ) : (
@@ -222,19 +231,34 @@ export default function ProjectsPage() {
               <FolderIcon className="h-6 w-6 text-text-secondary" />
             </div>
             <h3 className="mt-4 text-lg font-medium">No projects found</h3>
-            <p className="mt-1 text-text-secondary">
-              {searchTerm 
-                ? "No projects match your search criteria" 
-                : "Get started by creating your first project"}
+            <p className="mt-1 text-text-secondary max-w-md">
+              {searchTerm
+                ? 'No projects match your search criteria.'
+                : currentTab === 'completed'
+                  ? 'No completed projects yet. Open a project and mark it as Completed from Overview or Settings.'
+                  : currentTab === 'archived'
+                    ? 'No archived projects yet. Open a project and Archive it from Settings.'
+                    : currentTab === 'active' && statusCounts.all > 0
+                      ? 'No active projects. Mark a project as Active from its Overview or Settings.'
+                      : 'Get started by creating your first project.'}
             </p>
-            <Button
-              variant="default"
-              className="mt-6"
-              onClick={() => router.push('/dashboard/projects/new')}
-              icon={<PlusIcon className="h-5 w-5" />}
-            >
-              New Project
-            </Button>
+            <div className="mt-6 flex flex-wrap gap-3 justify-center">
+              {currentTab !== 'all' && (
+                <Button
+                  variant="outline"
+                  onClick={() => handleTabChange('all')}
+                >
+                  View all projects
+                </Button>
+              )}
+              <Button
+                variant="default"
+                onClick={() => router.push('/dashboard/projects/new')}
+                icon={<PlusIcon className="h-5 w-5" />}
+              >
+                New Project
+              </Button>
+            </div>
           </Card>
         )}
       </div>

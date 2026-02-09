@@ -1,6 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { getAnthropicApiKey } from '@/lib/anthropicConfig'
 
-// This file will only be imported on the server side
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+// Server-side only: use central config so all callers use latest model options
+export function getAnthropicClient() {
+  const apiKey = getAnthropicApiKey()
+  if (!apiKey) return null
+  return new Anthropic({ apiKey })
+}

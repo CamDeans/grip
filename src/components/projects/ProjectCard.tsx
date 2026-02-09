@@ -22,6 +22,13 @@ interface ProjectCardProps {
   messageCount: number
   language?: string
   languageColor?: string
+  status?: 'active' | 'completed' | 'archived'
+}
+
+const statusStyles: Record<string, string> = {
+  active: 'bg-primary/10 text-primary border-primary/20',
+  completed: 'bg-accent-teal/10 text-accent-teal border-accent-teal/20',
+  archived: 'bg-text-muted/10 text-text-muted border-border',
 }
 
 export function ProjectCard({
@@ -31,7 +38,8 @@ export function ProjectCard({
   lastUpdated,
   messageCount,
   language,
-  languageColor = '#4c6ef5'
+  languageColor = '#4c6ef5',
+  status = 'active',
 }: ProjectCardProps) {
   const isSampleProject = _id === 'sample'
   
@@ -50,7 +58,14 @@ export function ProjectCard({
                 <FolderIcon className="h-5 w-5 text-primary-500" />
               </div>
               <div className="min-w-0 flex-1">
-                <GradientTitle as="h3" className="truncate">{title}</GradientTitle>
+                <div className="flex flex-wrap items-center gap-2">
+                  <GradientTitle as="h3" className="truncate">{title}</GradientTitle>
+                  {!isSampleProject && (
+                    <span className={['text-xs font-medium rounded-full px-2 py-0.5 border shrink-0 capitalize', statusStyles[status] || statusStyles.active].join(' ')}>
+                      {status}
+                    </span>
+                  )}
+                </div>
                 <p className="mt-1 text-sm text-text-secondary line-clamp-2 break-words">
                   {description}
                 </p>

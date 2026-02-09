@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-
-const execAsync = promisify(exec)
-
-const ALLOWED_COMMANDS = ['mkdir', 'cd', 'ls', 'pwd']
+import { isProjectCommandAllowed, runCommandInPath } from '@/lib/projectCommand'
 
 export async function POST(request: Request) {
   try {
@@ -24,48 +19,27 @@ export async function POST(request: Request) {
       )
     }
 
-    // Validate command
-    const commandBase = command.split(' ')[0]
-    if (!ALLOWED_COMMANDS.includes(commandBase)) {
+    const { allowed } = isProjectCommandAllowed(command)
+    if (!allowed) {
       return NextResponse.json(
-        { error: 'Command not allowed' },
+        { error: 'Command not allowed. Allowed: mkdir, cd, ls, pwd, and npm/yarn/pnpm install, run, start, test, build, etc.' },
         { status: 403 }
       )
     }
 
-    try {
-      const { stdout, stderr } = await execAsync(command, {
-        cwd: basePath,
-        timeout: 5000 // 5 second timeout
-      })
+    const result = await runCommandInPath(basePath, command)
 
-      if (stderr) {
-        return NextResponse.json({
-          success: false,
-          error: stderr
-        })
-      }
-
+    if (result.exitCode !== 0) {
       return NextResponse.json({
-        success: true,
-        output: stdout
+        success: false,
+        error: result.output
       })
-
-    } catch (execError: any) {
-      // Handle timeout
-      if (execError.code === 'ETIMEDOUT') {
-        return NextResponse.json(
-          { error: 'Command timed out' },
-          { status: 408 }
-        )
-      }
-
-      // Handle other execution errors
-      return NextResponse.json(
-        { error: execError.message || 'Command execution failed' },
-        { status: 500 }
-      )
     }
+
+    return NextResponse.json({
+      success: true,
+      output: result.output
+    })
 
   } catch (error: any) {
     console.error('Error in execute-command:', error)

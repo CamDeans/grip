@@ -4,6 +4,7 @@ import type { Document } from 'mongoose'
 export interface IProject extends Document {
   title: string;
   description: string;
+  status?: 'active' | 'completed' | 'archived';
   repository?: {
     owner: string;
     name: string;
@@ -94,6 +95,11 @@ const IdeationSchema = new mongoose.Schema({
 const ProjectSchema = new mongoose.Schema<IProject>({
   title: { type: String, required: true, trim: true },
   description: { type: String, required: true, trim: true },
+  status: {
+    type: String,
+    enum: ['active', 'completed', 'archived'],
+    default: 'active',
+  },
   repository: { 
     type: RepositorySchema,
     required: false,

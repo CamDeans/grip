@@ -3,16 +3,18 @@ import { clientPromise } from '@/lib/mongodb'
 import { Anthropic } from '@anthropic-ai/sdk'
 import { getOrCreateProjectStructure } from './structureGeneratorService'
 import { IProjectStructureData } from '@/lib/models/ProjectStructure'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
 
 /**
  * Plan Generator Service - Creates development plan with tasks
  * Part of Phase 3, Step 3 of the G.R.I.P. AI Assistant Enhancement Plan
  */
 
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY as string,
-})
+function getAnthropicClient() {
+  const apiKey = getAnthropicApiKey()
+  if (!apiKey) return null
+  return new Anthropic({ apiKey })
+}
 
 interface TaskDependency {
   taskId: string
@@ -266,8 +268,10 @@ For dependencies, use task IDs (e.g., "1.1", "2.3") to reference tasks that must
 `
     
     // Call Anthropic API
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     const response = await anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229',
+      model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 4000,
       temperature: 0.2,
       messages: [{ role: 'user', content: prompt }]
@@ -763,7 +767,7 @@ async function addResourceRequirements(plan: DevelopmentPlan): Promise<void> {
       })
       
       // Add QA resource for testing tasks
-      if (task.tags.includes('testing')) {
+      if ((task.tags || []).includes('testing')) {
         resources.push({
           type: 'qa',
           level: 'mid',
@@ -786,7 +790,8 @@ async function addRiskAssessments(plan: DevelopmentPlan): Promise<void> {
       const risks: RiskAssessment[] = []
       
       // Add technical risks
-      if (task.tags.includes('architecture') || task.tags.includes('integration')) {
+      const tags = task.tags || []
+      if (tags.includes('architecture') || tags.includes('integration')) {
         risks.push({
           level: 'high',
           description: 'Technical complexity may impact timeline',
@@ -794,9 +799,10 @@ async function addRiskAssessments(plan: DevelopmentPlan): Promise<void> {
           impact: 'Schedule delay'
         })
       }
-      
+
       // Add dependency risks
-      if (task.dependencies.length > 0) {
+      const deps = task.dependencies || []
+      if (deps.length > 0) {
         risks.push({
           level: 'medium',
           description: 'Dependent tasks may delay progress',
@@ -855,10 +861,11 @@ async function generateTimelineEstimates(plan: DevelopmentPlan): Promise<void> {
 async function addTaskMetrics(plan: DevelopmentPlan): Promise<void> {
   for (const phase of plan.phases) {
     for (const task of phase.tasks) {
+      const deps = task.dependencies || []
       const metrics: TaskMetrics = {
         estimatedHours: calculateEstimatedHours(task),
         complexity: calculateTaskComplexity(task),
-        dependencies: task.dependencies.map(d => d.taskId),
+        dependencies: deps.map((d: { taskId?: string } | string) => typeof d === 'object' && d && 'taskId' in d ? (d as { taskId: string }).taskId : String(d)),
         blockers: [],
         progress: 0,
         statusHistory: [{
@@ -892,18 +899,19 @@ async function addValidationCriteria(plan: DevelopmentPlan): Promise<void> {
 // Helper functions
 function getRequiredSkills(task: Task): string[] {
   const skills = new Set<string>()
-  
-  if (task.tags.includes('frontend')) {
+  const tags = task.tags || []
+
+  if (tags.includes('frontend')) {
     skills.add('react')
     skills.add('typescript')
   }
-  
-  if (task.tags.includes('backend')) {
+
+  if (tags.includes('backend')) {
     skills.add('nodejs')
     skills.add('mongodb')
   }
-  
-  if (task.tags.includes('testing')) {
+
+  if (tags.includes('testing')) {
     skills.add('jest')
     skills.add('cypress')
   }
@@ -924,9 +932,9 @@ function calculateTaskComplexity(task: Task): number {
   
   if (task.priority === 'critical') complexity += 2
   if (task.priority === 'high') complexity += 1
-  
-  complexity += task.dependencies.length
-  
+
+  complexity += (task.dependencies || []).length
+
   return complexity
 }
 
@@ -939,7 +947,7 @@ function generateRequirements(task: Task): string[] {
   requirements.push('Include proper documentation')
   
   // Add specific requirements based on task type
-  if (task.tags.includes('testing')) {
+  if ((task.tags || []).includes('testing')) {
     requirements.push('Include unit tests')
     requirements.push('Include integration tests')
   }
@@ -956,7 +964,7 @@ function generateAcceptanceCriteria(task: Task): string[] {
   criteria.push('Code is reviewed and approved')
   
   // Add specific criteria based on task type
-  if (task.tags.includes('performance')) {
+  if ((task.tags || []).includes('performance')) {
     criteria.push('Performance metrics meet targets')
   }
   
@@ -972,7 +980,7 @@ function generateTestCases(task: Task): string[] {
   testCases.push('Verify edge cases')
   
   // Add specific test cases based on task type
-  if (task.tags.includes('api')) {
+  if ((task.tags || []).includes('api')) {
     testCases.push('Verify API endpoints')
     testCases.push('Verify request/response formats')
   }

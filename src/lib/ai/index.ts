@@ -2,10 +2,13 @@ import { Anthropic } from '@anthropic-ai/sdk'
 import { ObjectId } from 'mongodb'
 import clientPromise from '../db'
 import { serializeDocument } from '../utils'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+function getAnthropicClient() {
+  const apiKey = getAnthropicApiKey()
+  if (!apiKey) return null
+  return new Anthropic({ apiKey })
+}
 
 export interface AIAnalysisResult {
   projectId: string
@@ -42,8 +45,10 @@ export async function analyzeProject(projectId: string): Promise<AIAnalysisResul
     }
 
     // Get AI analysis
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     const response = await anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229',
+      model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 4096,
       messages: [{
         role: 'user',
@@ -108,8 +113,10 @@ export async function getProjectSuggestions(projectId: string) {
 
 export async function generateCode(prompt: string, context: any) {
   try {
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     const response = await anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229',
+      model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 4096,
       messages: [{
         role: 'user',

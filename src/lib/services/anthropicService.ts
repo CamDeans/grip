@@ -3,6 +3,7 @@ import { EventEmitter } from 'events'
 import { RateLimiter } from 'limiter'
 import { MongoClient } from 'mongodb'
 import { mongoService } from './mongoService'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT, ANTHROPIC_MODEL_FAST } from '@/lib/anthropicConfig'
 
 // Constants
 const MAX_RETRIES = 3
@@ -85,16 +86,18 @@ class AnthropicService extends EventEmitter {
     }
   }
 
-  // Validate API key
+  // Validate API key (use a stable model for the ping so deprecated main model doesn't break init)
   private async validateApiKey(): Promise<void> {
     try {
       await this.client.messages.create({
-        model: this.config.model,
+        model: ANTHROPIC_MODEL_FAST,
         max_tokens: 1,
         messages: [{ role: 'user', content: 'test' }]
       })
     } catch (error) {
-      throw new Error('Invalid API key')
+      const msg = error instanceof Error ? error.message : String(error)
+      console.error('Anthropic API key validation failed:', msg)
+      throw new Error(`Anthropic API key invalid or unreachable: ${msg}`)
     }
   }
 
@@ -166,7 +169,7 @@ class AnthropicService extends EventEmitter {
     return this.withRetry(async () => {
       const response = await this.client.messages.create({
         model: this.config.model,
-        max_tokens: this.config.maxTokens || 4096,
+        max_tokens: this.config.maxTokens ?? 8192,
         temperature: this.config.temperature || 0.7,
         top_p: this.config.topP,
         top_k: this.config.topK,
@@ -178,12 +181,22 @@ class AnthropicService extends EventEmitter {
       })
 
       // Validate response
-      if (!response.content || !response.usage) {
+      if (!response.content || !Array.isArray(response.content) || response.content.length === 0 || !response.usage) {
         throw new Error('Invalid response from Anthropic API')
       }
 
+      // Concatenate all text blocks (API can return multiple blocks)
+      const content = response.content
+        .filter((block: { type?: string; text?: string }) => block?.type === 'text' && typeof block?.text === 'string')
+        .map((block: { text: string }) => block.text)
+        .join('')
+        .trim()
+
+      if (!content) {
+        throw new Error('Empty response from Anthropic API')
+      }
+
       // Validate GRIP identity in response
-      const content = response.content[0].text;
       if (content.toLowerCase().includes('claude') || content.toLowerCase().includes('anthropic')) {
         throw new Error('Response contains unauthorized identity references')
       }
@@ -235,12 +248,16 @@ class AnthropicService extends EventEmitter {
   }
 }
 
-// Create singleton instance
-const anthropicService = new AnthropicService({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
-  model: 'claude-3-sonnet-20240229',
-  maxTokens: 4096,
-  temperature: 0.7
-})
+// Create singleton instance (key read at runtime so env is available)
+function createAnthropicService() {
+  const apiKey = getAnthropicApiKey() || ''
+  return new AnthropicService({
+    apiKey,
+    model: ANTHROPIC_MODEL_CHAT,
+    maxTokens: 8192,
+    temperature: 0.7
+  })
+}
+const anthropicService = createAnthropicService()
 
 export { anthropicService, AnthropicService } 

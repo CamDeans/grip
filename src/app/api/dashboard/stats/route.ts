@@ -1,61 +1,46 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import clientPromise from '@/lib/db'
-import { Document, WithId } from 'mongodb'
-
-interface Project {
-  _id: string;
-  title: string;
-  description: string;
-  status: 'active' | 'completed' | 'archived';
-  createdAt: string;
-  updatedAt?: string;
-}
-
-interface BuildLog {
-  _id: string;
-  projectId: string;
-  status: string;
-  timestamp: string;
-}
-
-interface TerminalSession {
-  _id: string;
-  projectId: string;
-  createdAt: string;
-}
+import { ObjectId } from 'mongodb'
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     const client = await clientPromise
     const db = client.db()
-    
-    // Query the collections in parallel for better performance
-    const [
-      projects,
-      buildLogs,
-      terminalSessions
-    ] = await Promise.all([
-      db.collection('projects').find({}).toArray(),
-      db.collection('buildLogs').find({}).toArray(),
-      db.collection('terminalSessions').find({}).toArray()
-    ])
-    
-    // Calculate dashboard statistics using a safer approach
-    const activeProjects = projects.filter(p => (p as any).status === 'active').length
-    const completedProjects = projects.filter(p => (p as any).status === 'completed').length
+
+    // Only count projects owned by the current user
+    const projects = await db.collection('projects').find({ userId: session.user.id }).toArray()
+    const projectObjectIds = projects.map((p: { _id: ObjectId }) => p._id)
+
+    const activeProjects = projects.filter((p: { status?: string }) => (p.status ?? 'active') === 'active').length
+    const completedProjects = projects.filter((p: { status?: string }) => p.status === 'completed').length
     const totalProjects = projects.length
-    const totalBuilds = buildLogs.length
-    const terminalSessionCount = terminalSessions.length
-    
-    // If there are no projects yet, provide default values for a better user experience
+
+    // Build sessions and terminal sessions for this user's projects only (support both ObjectId and string projectId)
+    const buildLogs = projectObjectIds.length > 0
+      ? await db.collection('buildLogs').find({ projectId: { $in: projectObjectIds } }).toArray()
+      : []
+    const terminalSessions = projectObjectIds.length > 0
+      ? await db.collection('terminalSessions').find({ projectId: { $in: projectObjectIds } }).toArray()
+      : []
+
     const stats = {
       activeProjects: activeProjects || 0,
       completedProjects: completedProjects || 0,
       totalProjects: totalProjects || 0,
-      totalBuilds: totalBuilds || 0,
-      terminalSessions: terminalSessionCount || 0,
+      totalBuilds: buildLogs.length || 0,
+      terminalSessions: terminalSessions.length || 0,
     }
-    
+
     return NextResponse.json(stats, { status: 200 })
   } catch (error) {
     console.error('Error fetching dashboard stats:', error)

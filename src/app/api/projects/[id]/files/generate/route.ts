@@ -1,29 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerAuthSession } from '@/lib/auth'
 import { getFilesToGenerate } from '@/lib/services/projectPlanningService'
 import { generateFile, FileGenerationRequest } from '@/lib/services/fileGeneratorService'
-import { renderTemplate, getTemplateById } from '@/lib/services/templateEngineService'
-import { createFile } from '@/lib/services/fileStorageService'
 import { ObjectId } from 'mongodb'
 
 /**
  * POST /api/projects/[id]/files/generate
- * Generate files based on project plan
+ * Generate files based on project plan. Writes to projectFiles so files appear in Repo and Generated files.
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const session = await getServerAuthSession()
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get project ID
-    const { id } = params
+    const { id } = await params
 
     // Validate ID
     if (!id || !ObjectId.isValid(id)) {
@@ -52,18 +47,20 @@ export async function POST(
     
     for (const file of filesToGenerate) {
       try {
-        // Create request for file generator
-        const request: FileGenerationRequest = {
+        const meta = file.generationMetadata || {}
+        const filePath = file.path || ''
+        const fileName = file.name || filePath.split('/').pop() || 'file.txt'
+        const fullPath = filePath && !filePath.endsWith(fileName) ? `${filePath.replace(/\/$/, '')}/${fileName}` : (filePath || fileName)
+        const genRequest: FileGenerationRequest = {
           projectId: id,
-          filePath: file.path,
-          filename: file.name,
-          templateId: file.generationMetadata.template,
-          variables: file.generationMetadata.variables || {},
-          description: file.generationMetadata.description
+          filePath: fullPath,
+          filename: fileName,
+          templateId: meta.template || 'ts-utility',
+          variables: meta.variables || {},
+          description: meta.description || 'Generated from plan'
         }
         
-        // Generate file
-        const result = await generateFile(request)
+        const result = await generateFile(genRequest)
         
         if (result.success) {
           generatedFiles.push({

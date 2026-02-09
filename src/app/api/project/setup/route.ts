@@ -6,6 +6,16 @@ import path from 'path'
 
 export async function POST(request: Request) {
   try {
+    // On Vercel there is no persistent filesystem; Setup cannot create a project folder.
+    if (process.env.VERCEL === '1') {
+      return NextResponse.json(
+        {
+          error: 'Setup project is not available on Vercel. There is no persistent filesystem. Export your project (project overview) and run npm install and npm run dev in your local terminal or CI.',
+        },
+        { status: 503 }
+      )
+    }
+
     // Get session
     const session = await getServerAuthSession()
     if (!session) {

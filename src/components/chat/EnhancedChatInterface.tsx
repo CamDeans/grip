@@ -6,14 +6,13 @@ import { useEnhancedChat } from '@/components/providers/EnhancedChatProvider'
 import { ChatMessage, AIMessage, ErrorState } from '@/types/chat'
 import { Button } from '@/components/ui'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { validateMessage } from '@/lib/validation'
 import { EnhancedChatProvider } from '@/components/providers/EnhancedChatProvider'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { XCircleIcon, FileIcon, GitForkIcon, TerminalIcon, CodeIcon, RefreshCwIcon } from 'lucide-react'
+import { XCircleIcon, FileIcon, GitForkIcon, TerminalIcon, CodeIcon, RefreshCwIcon, ChevronDownIcon, ChevronUpIcon, PlayIcon, SendIcon, Loader2Icon } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
 import { ProjectContextDisplay } from '@/components/chat/ProjectContextDisplay'
@@ -36,9 +35,9 @@ const ContextPanel = () => {
   const pathname = usePathname() || ''
   
   // Determine which tab is active
-  const isHomePage = pathname === `/projects/${projectId}`
-  const isSettings = pathname === `/projects/${projectId}/settings`
-  const isEnhancedChat = pathname === `/projects/${projectId}/enhanced-chat`
+  const isHomePage = pathname === `/dashboard/projects/${projectId}`
+  const isSettings = pathname === `/dashboard/projects/${projectId}/settings`
+  const isEnhancedChat = pathname === `/dashboard/projects/${projectId}/enhanced-chat`
   
   const { 
     projectContext, 
@@ -86,10 +85,14 @@ const ContextPanel = () => {
 
       {!loadingContext && contextEnabled && (
         <Tabs defaultValue="project" className="w-full px-3">
-          <TabsList className="w-full bg-background-tertiary mb-2 flex">
-            <TabsTrigger value="project" className="flex-1 text-xs">Project</TabsTrigger>
-            <TabsTrigger value="analysis" className="flex-1 text-xs">Analysis</TabsTrigger>
-            <TabsTrigger value="code" className="flex-1 text-xs">Code</TabsTrigger>
+          <TabsList className="w-full bg-background-tertiary mb-2 flex flex-wrap">
+            <TabsTrigger value="project" className="flex-1 min-w-0 text-xs">Project</TabsTrigger>
+            <TabsTrigger value="analysis" className="flex-1 min-w-0 text-xs">Analysis</TabsTrigger>
+            <TabsTrigger value="code" className="flex-1 min-w-0 text-xs">Code</TabsTrigger>
+            <TabsTrigger value="terminal" className="flex-1 min-w-0 text-xs flex items-center gap-1">
+              <TerminalIcon className="h-3 w-3 shrink-0" />
+              Terminal
+            </TabsTrigger>
           </TabsList>
           
           <TabsContent value="project" className="space-y-4 mt-2">
@@ -292,6 +295,26 @@ const ContextPanel = () => {
               </div>
             )}
           </TabsContent>
+
+          <TabsContent value="terminal" className="mt-2">
+            <div className="space-y-3 text-xs">
+              <h4 className="text-sm font-medium flex items-center gap-1">
+                <TerminalIcon className="h-3.5 w-3.5" />
+                Running commands in the app
+              </h4>
+              <p className="text-muted-foreground">
+                Run <code className="px-1 rounded bg-muted">npm install</code>, <code className="px-1 rounded bg-muted">npm run dev</code>, and other CLI commands in the <strong>in-app terminal</strong>.
+              </p>
+              <ol className="list-decimal list-inside space-y-2 text-muted-foreground">
+                <li>Go to <strong>Dashboard → Terminal</strong> (or use the terminal in this project when available).</li>
+                <li>Copy shell commands from GRIP&apos;s chat (use Copy on bash/shell blocks).</li>
+                <li>Paste and run them in the app terminal. Everything stays local to the app.</li>
+              </ol>
+              <p className="text-muted-foreground">
+                GRIP suggests commands in shell code blocks; copy and run them in the GRIP terminal so all work stays within the app.
+              </p>
+            </div>
+          </TabsContent>
         </Tabs>
       )}
 
@@ -307,25 +330,25 @@ const ContextPanel = () => {
       {/* Navigation buttons */}
       <div className="mt-auto p-3">
         <div className="flex justify-between gap-2">
-          <Link href={`/projects/${projectId}`} className="flex-1">
+          <Link href={`/dashboard/projects/${projectId}`} className="flex-1">
             <Button 
               variant={isHomePage ? "default" : "outline"} 
               size="sm"
               className="w-full text-xs py-1 h-7"
             >
-              Standard
+              Overview
             </Button>
           </Link>
-          <Link href={`/projects/${projectId}/enhanced-chat`} className="flex-1">
+          <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="flex-1">
             <Button 
               variant={isEnhancedChat ? "default" : "outline"} 
               size="sm"
               className="w-full text-xs py-1 h-7"
             >
-              Enhanced
+              Develop
             </Button>
           </Link>
-          <Link href={`/projects/${projectId}/settings`} className="flex-1">
+          <Link href={`/dashboard/projects/${projectId}/settings`} className="flex-1">
             <Button 
               variant={isSettings ? "default" : "outline"} 
               size="sm"
@@ -421,6 +444,7 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     sendMessage, 
     addMessage, 
     projectContext,
+    projectId,
     isTyping,
     errors,
     clearErrors,
@@ -429,12 +453,38 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     setProjectContext
   } = useEnhancedChat()
   
-  const [input, setInput] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<ErrorState | null>(null)
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false)
   const [showWebSocketError, setShowWebSocketError] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const params = useParams()
+  const prevMessagesLengthRef = useRef(0)
+
+  // When user returns to chat or messages load/update, scroll to last message so they see the latest GRIP response
+  useEffect(() => {
+    if (messages.length === 0) return
+    const isInitialLoadOrReturn = prevMessagesLengthRef.current === 0 && messages.length > 0
+    prevMessagesLengthRef.current = messages.length
+    const scrollToLast = () => {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: isInitialLoadOrReturn ? 'auto' : 'smooth',
+        block: 'end'
+      })
+    }
+    const t = requestAnimationFrame(() => scrollToLast())
+    return () => cancelAnimationFrame(t)
+  }, [messages.length, messages])
+
+  // When GRIP finishes streaming, scroll to show the full last message
+  useEffect(() => {
+    if (messages.length > 0 && !isTyping) {
+      const t = requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      })
+      return () => cancelAnimationFrame(t)
+    }
+  }, [isTyping, messages.length])
 
   // Add rate limiting and request size limits
   const MAX_MESSAGE_SIZE = 5000; // 5KB
@@ -454,6 +504,79 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
 
   // Add caching state
   const [messageCache, setMessageCache] = useState<Map<string, AIMessage>>(new Map());
+  const [projectFiles, setProjectFiles] = useState<Array<{ id: string; path: string; filename: string }>>([])
+
+  // Run & Debug: run project commands and send output to GRIP
+  const [runDebugOpen, setRunDebugOpen] = useState(false)
+  const [lastRunOutput, setLastRunOutput] = useState<{ command: string; output: string; exitCode: number; duration?: number; timestamp?: string } | null>(null)
+  const [canRun, setCanRun] = useState(false)
+  const [running, setRunning] = useState(false)
+  const [runCommand, setRunCommand] = useState('npm install && npm run build')
+
+  // Fetch project files so we can show "Saved" on code blocks after refresh and pass to FormattedMessage
+  useEffect(() => {
+    if (!projectId) {
+      setProjectFiles([])
+      return
+    }
+    fetch(`/api/project-files?projectId=${projectId}&limit=500`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((files: Array<{ id: string; path: string; filename: string }>) => setProjectFiles(files))
+      .catch(() => setProjectFiles([]))
+  }, [projectId])
+
+  // Fetch last run output and canRun for Run & Debug panel
+  useEffect(() => {
+    if (!projectId) return
+    fetch(`/api/projects/${projectId}/last-run-output`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { canRun?: boolean; lastRunOutput?: typeof lastRunOutput } | null) => {
+        if (data) {
+          setCanRun(Boolean(data.canRun))
+          setLastRunOutput(data.lastRunOutput ?? null)
+        }
+      })
+      .catch(() => {})
+  }, [projectId])
+
+  const handleRunCommand = async (commandOverride?: string) => {
+    if (!projectId || running) return
+    const cmd = commandOverride ?? runCommand
+    setRunning(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/run-command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 501) {
+        setLastRunOutput({ command: cmd, output: data.hint ?? data.error ?? 'Run requires a local project path.', exitCode: 1 })
+        return
+      }
+      if (res.ok && data.output !== undefined) {
+        setLastRunOutput({ command: cmd, output: data.output, exitCode: data.exitCode ?? 0, duration: data.duration })
+      } else {
+        setLastRunOutput({ command: cmd, output: data.error ?? 'Run failed.', exitCode: 1 })
+      }
+    } catch (err) {
+      setLastRunOutput({ command: cmd, output: err instanceof Error ? err.message : 'Run failed.', exitCode: 1 })
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const handleSendOutputToGrip = (andSend = false) => {
+    if (!lastRunOutput?.output) return
+    const msg = `Here is the build/run output (exit code ${lastRunOutput.exitCode}):\n\n\`\`\`\n${lastRunOutput.output.slice(0, 8000)}${lastRunOutput.output.length > 8000 ? '\n...(truncated)' : ''}\n\`\`\`\nPlease fix any errors and suggest next steps.`
+    if (andSend) {
+      sendMessage(msg)
+      setRunDebugOpen(false)
+    } else {
+      if (inputRef.current) inputRef.current.value = msg
+      setRunDebugOpen(false)
+    }
+  }
 
   // Implement message cache checking
   const checkMessageCache = async (message: string): Promise<string | null> => {
@@ -483,9 +606,8 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     }
   };
 
-  // Handle WebSocket connection for real-time updates
+  // WebSocket only when NEXT_PUBLIC_ENABLE_WEBSOCKET and NEXT_PUBLIC_WEBSOCKET_URL are set (no Socket.IO server at /api/ws)
   useWebSocket({
-    url: '/api/ws',
     onOpen: () => {
       setIsWebSocketConnected(true)
       setShowWebSocketError(false)
@@ -558,10 +680,11 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     }
   }, [welcomeMessage, messages, addMessage])
 
-  // Enhanced message handling with rate limiting
+  // Enhanced message handling with rate limiting (uncontrolled input to avoid lag on keystroke)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmedInput = input.trim();
+    const raw = inputRef.current?.value ?? '';
+    const trimmedInput = raw.trim();
     if (!trimmedInput) return;
 
     try {
@@ -609,7 +732,7 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
           content: cachedMessage,
           timestamp: new Date()
         });
-        setInput('');
+        if (inputRef.current) inputRef.current.value = '';
         setError(null);
         return;
       }
@@ -624,7 +747,7 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
         lastUpdateTime: now
       }));
 
-      setInput('');
+      if (inputRef.current) inputRef.current.value = '';
       setError(null);
     } catch (err: any) {
       console.error('Error sending message:', err);
@@ -638,24 +761,38 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     }
   };
 
-  // Add performance monitoring
+  // Performance monitoring: observe long tasks without spamming console (optional: send to monitoring service)
   useEffect(() => {
     const observer = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        if (entry.entryType === 'longtask') {
-          console.warn('Long task detected:', entry);
-          // Log to monitoring service
+        if (entry.entryType === 'longtask' && entry.duration > 500) {
+          // Only log in dev when explicitly needed; avoid console spam
+          if (process.env.NODE_ENV === 'development' && typeof (window as any).__GRIP_DEBUG_LONGTASK === 'boolean' && (window as any).__GRIP_DEBUG_LONGTASK) {
+            console.warn('Long task detected:', entry);
+          }
+          // TODO: send to monitoring service in production
         }
       }
     });
-
     observer.observe({ entryTypes: ['longtask'] });
     return () => observer.disconnect();
   }, []);
 
+  const RUN_ERRORS_SUBMISSION_COLORS = [
+    'bg-blue-500/25 text-blue-900 dark:text-blue-100 border-blue-400/50',
+    'bg-emerald-500/25 text-emerald-900 dark:text-emerald-100 border-emerald-400/50',
+    'bg-amber-500/25 text-amber-900 dark:text-amber-100 border-amber-400/50',
+    'bg-violet-500/25 text-violet-900 dark:text-violet-100 border-violet-400/50',
+    'bg-teal-500/25 text-teal-900 dark:text-teal-100 border-teal-400/50',
+    'bg-pink-500/25 text-pink-900 dark:text-pink-100 border-pink-400/50',
+  ]
+
   const renderMessage = (message: ChatMessage) => {
     const isUser = message.role === 'user'
     const isAIMessage = message.role === 'assistant' && 'stepContext' in message
+    const isRunErrorsSubmission = message.metadata?.type === 'run_errors_submission'
+    const submissionIndex = message.metadata?.submissionIndex ?? 0
+    const submissionColor = RUN_ERRORS_SUBMISSION_COLORS[(submissionIndex - 1) % RUN_ERRORS_SUBMISSION_COLORS.length]
 
     return (
       <motion.div
@@ -664,19 +801,43 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
         className={cn(
-          'flex w-full',
+          'flex w-full max-w-full min-w-0',
           isUser ? 'justify-end' : 'justify-start'
         )}
       >
         <div
           className={cn(
-            'max-w-[85%] md:max-w-[75%] rounded-lg p-2 overflow-hidden',
+            'min-w-0 max-w-[85%] md:max-w-[75%] rounded-lg p-2 overflow-hidden break-words',
             isUser
               ? 'bg-primary text-primary-foreground'
               : 'bg-muted text-foreground'
           )}
         >
-          <FormattedMessage message={message} />
+          {isRunErrorsSubmission && (
+            <div
+              className={cn(
+                'mb-2 shrink-0 rounded border px-2 py-1 text-xs font-medium whitespace-nowrap',
+                submissionColor
+              )}
+              title={`StackBlitz errors submission #${submissionIndex}`}
+            >
+              StackBlitz errors #{submissionIndex}
+            </div>
+          )}
+          <FormattedMessage
+              message={message}
+              projectId={projectId ?? ''}
+              projectFiles={message.role === 'assistant' ? projectFiles : undefined}
+              onFileSaved={
+                projectId
+                  ? () =>
+                      fetch(`/api/project-files?projectId=${projectId}&limit=500`)
+                        .then((r) => (r.ok ? r.json() : []))
+                        .then((files: Array<{ id: string; path: string; filename: string }>) => setProjectFiles(files))
+                        .catch(() => setProjectFiles([]))
+                  : undefined
+              }
+            />
           
           {!isUser && projectContext?.id && (
             <ActionButtons 
@@ -709,34 +870,33 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
 
   return (
     <div className={cn('flex flex-col w-full h-full min-w-0 overflow-hidden', className)}>
-      <div className="flex-1 min-h-0 min-w-0 overflow-hidden flex flex-col">
-        <ScrollArea className="flex-1 p-2 w-full overflow-auto">
-          <div className="pb-2 space-y-4">
-            <AnimatePresence>
-              {messages.map((message) => renderMessage(message))}
-            </AnimatePresence>
-            {isTyping && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="flex w-full justify-start"
-              >
-                <div className="max-w-[85%] md:max-w-[75%] rounded-lg p-2 bg-muted text-foreground">
-                  <div className="flex items-center space-x-2">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:0ms]" />
-                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:150ms]" />
-                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:300ms]" />
-                    </div>
-                    <span className="text-sm text-muted-foreground">GRIP is thinking...</span>
+      {/* Plain scroll container: no Radix viewport so width stays bounded and bubbles stay visible */}
+      <div className="flex-1 min-h-0 w-full max-w-full min-w-0 overflow-x-hidden overflow-y-auto p-2">
+        <div className="pb-2 space-y-4 w-full max-w-full min-w-0 overflow-x-hidden box-border">
+          <AnimatePresence>
+            {messages.map((message) => renderMessage(message))}
+          </AnimatePresence>
+          {isTyping && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="flex w-full max-w-full min-w-0 justify-start"
+            >
+              <div className="min-w-0 max-w-[85%] md:max-w-[75%] rounded-lg p-2 overflow-hidden break-words bg-muted text-foreground">
+                <div className="flex items-center space-x-2">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:0ms]" />
+                    <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:150ms]" />
+                    <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:300ms]" />
                   </div>
+                  <span className="text-sm text-muted-foreground">GRIP is thinking...</span>
                 </div>
-              </motion.div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
+              </div>
+            </motion.div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       <div className="flex-shrink-0">
@@ -758,12 +918,100 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
           </div>
         )}
 
+        {/* Run & Debug - run project commands and send output to GRIP */}
+        <div className="flex-shrink-0 border-t border-border">
+          <button
+            type="button"
+            onClick={() => setRunDebugOpen(!runDebugOpen)}
+            aria-expanded={runDebugOpen}
+            aria-controls="run-debug-panel"
+            id="run-debug-toggle"
+            className="w-full flex items-center justify-between px-4 py-2.5 text-left text-sm font-medium text-text-primary hover:bg-background-tertiary/50 transition-colors rounded-b-none"
+          >
+            <span className="flex items-center gap-2">
+              <TerminalIcon className="h-4 w-4 text-primary shrink-0" />
+              Run & Debug
+              {canRun ? (
+                <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0">Ready</Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] font-normal px-1.5 py-0 text-muted-foreground">Paste errors in chat</Badge>
+              )}
+            </span>
+            {runDebugOpen ? <ChevronUpIcon className="h-4 w-4 shrink-0" /> : <ChevronDownIcon className="h-4 w-4 shrink-0" />}
+          </button>
+          {runDebugOpen && (
+            <div id="run-debug-panel" role="region" aria-labelledby="run-debug-toggle" className="px-4 pb-4 pt-3 space-y-3 border-t border-border bg-background-secondary/30">
+              <p className="text-xs text-text-secondary">
+                Run build/install here → send output to GRIP → get fixes in chat. {!canRun && 'No local path? Paste build or run errors in the chat below and GRIP will fix them.'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => handleRunCommand('npm install')} disabled={running} className="font-mono text-xs">
+                  {running ? <Loader2Icon className="h-3 w-3 animate-spin shrink-0" /> : null}
+                  npm install
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => handleRunCommand('npm run build')} disabled={running} className="font-mono text-xs">
+                  npm run build
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => handleRunCommand('npm run dev')} disabled={running} className="font-mono text-xs">
+                  npm run dev
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={runCommand}
+                  onChange={(e) => setRunCommand(e.target.value)}
+                  placeholder="npm install && npm run build"
+                  className="flex-1 font-mono text-sm min-w-0"
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleRunCommand())}
+                  disabled={running}
+                />
+                <Button type="button" onClick={() => handleRunCommand()} disabled={running} size="icon" title="Run command">
+                  {running ? <Loader2Icon className="h-4 w-4 animate-spin" /> : <PlayIcon className="h-4 w-4" />}
+                </Button>
+              </div>
+              {lastRunOutput && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground flex items-center gap-2">
+                      Last: <code className="font-mono bg-background-tertiary px-1 rounded">{lastRunOutput.command}</code>
+                      <span className={cn(lastRunOutput.exitCode === 0 ? 'text-success' : 'text-destructive')}>
+                        exit {lastRunOutput.exitCode}
+                      </span>
+                      {lastRunOutput.duration != null && lastRunOutput.duration > 0 && (
+                        <span>· {(lastRunOutput.duration / 1000).toFixed(1)}s</span>
+                      )}
+                    </span>
+                    <div className="flex gap-1">
+                      {lastRunOutput.exitCode !== 0 && (
+                        <Button type="button" variant="outline" size="sm" onClick={() => handleRunCommand(lastRunOutput.command)} disabled={running} title="Run same command again">
+                          <RefreshCwIcon className="h-3 w-3 mr-1" />
+                          Run again
+                        </Button>
+                      )}
+                      <Button type="button" variant="secondary" size="sm" onClick={() => handleSendOutputToGrip(true)} title="Put output in chat and send to GRIP">
+                        <SendIcon className="h-3 w-3 mr-1" />
+                        Send to GRIP
+                      </Button>
+                    </div>
+                  </div>
+                  <pre className={cn(
+                    'max-h-48 overflow-auto rounded-md p-2 text-xs font-mono whitespace-pre-wrap break-words border',
+                    lastRunOutput.exitCode === 0 ? 'bg-success/10 border-success/30 text-success-foreground' : 'bg-destructive/10 border-destructive/30 text-destructive'
+                  )}>
+                    {lastRunOutput.output.slice(0, 4000)}{lastRunOutput.output.length > 4000 ? '\n...(truncated)' : ''}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Chat Input */}
         <div className="flex-shrink-0 border-t p-4">
           <form onSubmit={handleSubmit} className="flex gap-2">
             <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
+              ref={inputRef}
+              defaultValue=""
               placeholder={isTyping ? "GRIP is thinking..." : "Type your message..."}
               disabled={isLoading || isTyping}
               className="flex-1"

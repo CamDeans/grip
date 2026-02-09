@@ -5,7 +5,6 @@ import { useParams, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Info } from 'lucide-react'
 
 interface Project {
   _id: string
@@ -20,11 +19,11 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const [project, setProject] = useState<Project | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Determine active tab
+  // Determine active tab (order: Overview → Repo → Plan → Develop → Preview → Settings)
   const isOverviewTab = pathname === `/dashboard/projects/${projectId}`
-  const isChatTab = pathname === `/dashboard/projects/${projectId}/enhanced-chat`
-  const isPlanningTab = pathname === `/dashboard/projects/${projectId}/planning`
   const isRepoTab = pathname === `/dashboard/projects/${projectId}/repo`
+  const isPlanningTab = pathname === `/dashboard/projects/${projectId}/planning`
+  const isDevelopTab = pathname === `/dashboard/projects/${projectId}/enhanced-chat`
   const isPreviewTab = pathname === `/dashboard/projects/${projectId}/preview`
   const isSettingsTab = pathname === `/dashboard/projects/${projectId}/settings`
 
@@ -66,44 +65,36 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
         description={isLoading ? 'Loading project details...' : project?.description || 'No description available'}
       />
 
-      <div className="mb-6 p-4 border rounded-md bg-primary/10 text-primary border-border">
-        <div className="flex items-start">
-          <Info className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
-          <div>
-            <h4 className="font-semibold text-sm">Enhanced Chat Interface</h4>
-            <p className="text-sm mt-1">
-              The chat interface has been upgraded with context-aware features. All project chats now use the enhanced G.R.I.P. AI system with repository analysis.
-            </p>
-          </div>
-        </div>
-      </div>
+      <p className="mb-4 text-sm text-text-secondary">
+        GRIP is your AI partner for this project. Start in <strong>Develop</strong> to build with chat, or explore <strong>Repo</strong> and <strong>Plan</strong> first.
+      </p>
       
       <div className="mb-6 border-b border-border-default">
-        <Tabs defaultValue={isOverviewTab ? 'overview' : isChatTab ? 'chat' : isPlanningTab ? 'planning' : isRepoTab ? 'repo' : isPreviewTab ? 'preview' : 'settings'} className="w-full">
+        <Tabs defaultValue={isOverviewTab ? 'overview' : isRepoTab ? 'repo' : isPlanningTab ? 'planning' : isDevelopTab ? 'develop' : isPreviewTab ? 'preview' : 'settings'} className="w-full">
           <TabsList className="w-full justify-start flex-wrap gap-1">
-            <Link href={`/dashboard/projects/${projectId}`} className="flex-1 min-w-0 max-w-[140px]">
+            <Link href={`/dashboard/projects/${projectId}`} className="flex-1 min-w-0 max-w-[120px]">
               <TabsTrigger value="overview" className="w-full">Overview</TabsTrigger>
             </Link>
-            <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="flex-1 min-w-0 max-w-[140px]">
-              <TabsTrigger value="chat" className="w-full">Chat</TabsTrigger>
-            </Link>
-            <Link href={`/dashboard/projects/${projectId}/repo`} className="flex-1 min-w-0 max-w-[140px]">
+            <Link href={`/dashboard/projects/${projectId}/repo`} className="flex-1 min-w-0 max-w-[120px]">
               <TabsTrigger value="repo" className="w-full">Repo</TabsTrigger>
             </Link>
-            <Link href={`/dashboard/projects/${projectId}/preview`} className="flex-1 min-w-0 max-w-[140px]">
+            <Link href={`/dashboard/projects/${projectId}/planning`} className="flex-1 min-w-0 max-w-[120px]">
+              <TabsTrigger value="planning" className="w-full">Plan</TabsTrigger>
+            </Link>
+            <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="flex-1 min-w-0 max-w-[120px]">
+              <TabsTrigger value="develop" className="w-full">Develop</TabsTrigger>
+            </Link>
+            <Link href={`/dashboard/projects/${projectId}/preview`} className="flex-1 min-w-0 max-w-[120px]">
               <TabsTrigger value="preview" className="w-full">Preview</TabsTrigger>
             </Link>
-            <Link href={`/dashboard/projects/${projectId}/planning`} className="flex-1 min-w-0 max-w-[140px]">
-              <TabsTrigger value="planning" className="w-full">Planning</TabsTrigger>
-            </Link>
-            <Link href={`/dashboard/projects/${projectId}/settings`} className="flex-1 min-w-0 max-w-[140px]">
+            <Link href={`/dashboard/projects/${projectId}/settings`} className="flex-1 min-w-0 max-w-[120px]">
               <TabsTrigger value="settings" className="w-full">Settings</TabsTrigger>
             </Link>
           </TabsList>
         </Tabs>
       </div>
 
-      <div className="pb-20">
+      <div className="pb-20 min-w-0 overflow-x-hidden w-full max-w-full">
         {children}
       </div>
     </div>

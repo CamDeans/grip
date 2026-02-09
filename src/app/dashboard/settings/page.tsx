@@ -56,6 +56,9 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<UserSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [githubToken, setGithubToken] = useState('')
+  const [hasGithubToken, setHasGithubToken] = useState(false)
+  const [githubTokenSaving, setGithubTokenSaving] = useState(false)
   const router = useRouter()
 
   // Prevent hydration mismatch
@@ -87,6 +90,22 @@ export default function SettingsPage() {
     }
   }, [session])
 
+  // Fetch user-level settings (GitHub token) from /api/user/settings (API does not return raw token)
+  useEffect(() => {
+    const fetchUserSettings = async () => {
+      try {
+        const res = await fetch('/api/user/settings')
+        if (res.ok) {
+          const data = await res.json()
+          setHasGithubToken(!!data.hasGithubToken)
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (session?.user) fetchUserSettings()
+  }, [session])
+
   const updateSettings = async (updates: UserSettingsUpdate) => {
     setSaving(true)
     try {
@@ -110,6 +129,32 @@ export default function SettingsPage() {
       })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const saveGithubToken = async () => {
+    setGithubTokenSaving(true)
+    try {
+      const res = await fetch('/api/user/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ githubToken })
+      })
+      if (!res.ok) throw new Error('Failed to save token')
+      setHasGithubToken(true)
+      setGithubToken('')
+      toast({
+        title: 'GitHub token saved',
+        description: 'Your token is used for Export to GitHub from project Preview.'
+      })
+    } catch (error) {
+      toast({
+        title: 'Failed to save GitHub token',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive'
+      })
+    } finally {
+      setGithubTokenSaving(false)
     }
   }
 
@@ -557,12 +602,46 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div>
-              <GradientTitle as="h4">GitHub Integration</GradientTitle>
-              <p className="text-sm text-text-secondary">
-                Connected via NextAuth GitHub Provider
+              <GradientTitle as="h4">GitHub Personal Access Token</GradientTitle>
+              <p className="text-sm text-text-secondary mt-1 mb-2">
+                One token for <strong>all your projects</strong>. Required for Export to GitHub (project Preview). Create a token with <strong>repo</strong> scope at{' '}
+                <a
+                  href="https://github.com/settings/tokens"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  GitHub Settings → Developer settings → Personal access tokens
+                </a>
+                .
               </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="flex-1 min-w-[200px] space-y-2">
+                  <Label htmlFor="githubToken">Token</Label>
+                  <Input
+                    id="githubToken"
+                    type="password"
+                    placeholder={hasGithubToken ? '••••••••••••' : 'ghp_...'}
+                    value={githubToken}
+                    onChange={(e) => setGithubToken(e.target.value)}
+                    className="bg-black text-white border border-input hover:border-accent focus:border-ring focus:ring-ring focus:ring-offset-0 font-mono text-sm"
+                    autoComplete="off"
+                  />
+                  {hasGithubToken && (
+                    <p className="text-xs text-success">Token saved. Enter a new token above to replace.</p>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  onClick={saveGithubToken}
+                  disabled={githubTokenSaving || !githubToken.trim()}
+                  className="shrink-0"
+                >
+                  {githubTokenSaving ? 'Saving...' : githubToken.trim() ? 'Save token' : 'Save token'}
+                </Button>
+              </div>
             </div>
             <div>
               <GradientTitle as="h4">MongoDB Integration</GradientTitle>

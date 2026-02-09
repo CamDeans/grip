@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { EnhancedChat } from '@/components/chat/EnhancedChatInterface'
@@ -70,18 +70,21 @@ export default function EnhancedChatPage() {
     )
   }
 
+  const stackblitzErrorsSubmitted = searchParams?.get('stackblitzErrorsSubmitted') === '1'
+
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)] w-full max-w-full overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-12rem)] w-full max-w-full min-w-0 overflow-hidden">
       <EnhancedChatProvider projectId={projectId}>
-        <TaskSpecificChat projectId={projectId} task={taskParam} />
+        <TaskSpecificChat projectId={projectId} task={taskParam} autoSendRunErrors={stackblitzErrorsSubmitted} />
       </EnhancedChatProvider>
     </div>
   )
 }
 
 // Component to handle task-specific messaging
-function TaskSpecificChat({ projectId, task }: { projectId: string, task: string | null }) {
-  const { sendInitialTaskMessage, contextEnabled, projectContext, messages } = useEnhancedChat()
+function TaskSpecificChat({ projectId, task, autoSendRunErrors }: { projectId: string, task: string | null, autoSendRunErrors?: boolean }) {
+  const { sendInitialTaskMessage, sendMessage, contextEnabled, projectContext, messages } = useEnhancedChat()
+  const runErrorsAutoSendDone = useRef(false)
   
   // Initialize taskMessageSent from sessionStorage, use a unique key based on project and task
   const storageKey = `grip-task-message-sent-${projectId}-${task || 'default'}`
@@ -134,7 +137,26 @@ function TaskSpecificChat({ projectId, task }: { projectId: string, task: string
       }
     }
   }, [task, taskMessageSent, hasExistingTaskMessage, sendInitialTaskMessage, projectContext, contextEnabled])
-  
+
+  // When arriving from "Send to GRIP and open Develop" (StackBlitz errors), auto-send one message so GRIP processes lastRunErrors and responds.
+  // Prefer sending once history includes the run_errors_submission message; otherwise send after a fallback delay so the API still gets lastRunErrors from project context.
+  useEffect(() => {
+    if (!autoSendRunErrors || !projectId || runErrorsAutoSendDone.current) return
+    const hasRunErrorsSubmission = messages.some((m) => m.metadata?.type === 'run_errors_submission')
+    const delayMs = hasRunErrorsSubmission ? 1200 : 3000
+    const timer = setTimeout(() => {
+      if (runErrorsAutoSendDone.current) return
+      runErrorsAutoSendDone.current = true
+      sendMessage('I just submitted StackBlitz errors. Please help fix them.')
+      if (typeof window !== 'undefined' && window.history.replaceState) {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('stackblitzErrorsSubmitted')
+        window.history.replaceState({}, '', url.pathname + url.search)
+      }
+    }, delayMs)
+    return () => clearTimeout(timer)
+  }, [autoSendRunErrors, projectId, messages, sendMessage])
+
   // Determine if we should show the default welcome message
   // Only show default welcome if:
   // 1. We don't have a task, or

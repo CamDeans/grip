@@ -42,6 +42,14 @@ interface Analytics {
     average: number
     peak: string
   }
+  projectsDetail?: Array<{
+    id: unknown
+    title?: string
+    description?: string
+    status?: string
+    createdAt?: string
+  }>
+  filesGenerated?: number
 }
 
 export default function AnalyticsPage() {
@@ -107,7 +115,7 @@ export default function AnalyticsPage() {
         />
         <StatCard
           title="Code Generated"
-          value={analytics?.buildData?.reduce((acc, curr) => acc + curr.count, 0)}
+          value={analytics?.filesGenerated ?? 0}
           suffix="files"
           icon={<CodeBracketIcon className="h-5 w-5 text-success" />}
           loading={isLoading}
@@ -115,7 +123,7 @@ export default function AnalyticsPage() {
         />
         <StatCard
           title="Terminal Sessions"
-          value={analytics?.activityData?.reduce((acc, curr) => acc + curr.count, 0)}
+          value={analytics?.activityData?.reduce((acc, curr) => acc + curr.count, 0) ?? 0}
           icon={<CommandLineIcon className="h-5 w-5 text-accent-amber" />}
           loading={isLoading}
           color="orange"
@@ -130,17 +138,26 @@ export default function AnalyticsPage() {
             {isLoading ? (
               <Skeleton className="h-64 w-full" />
             ) : (
-              <div className="h-64 flex items-end space-x-2">
-                {analytics?.activityData.map((item, index) => (
-                  <div key={index} className="flex-1 flex flex-col items-center">
-                    <div
-                      className={`w-full bg-primary rounded-t ${styles.activityBar}`}
-                      style={{ ['--bar-height' as string]: `${(item.count / Math.max(...analytics.activityData.map(d => d.count)) * 200) || 4}px` }}
-                    />
-                    <span className="text-xs text-text-secondary mt-2">{formatDate(item.date)}</span>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="h-64 flex items-end space-x-2">
+                  {analytics?.activityData.map((item, index) => {
+                    const maxCount = Math.max(1, ...(analytics?.activityData?.map(d => d.count) ?? [0]))
+                    const heightPx = Math.max(4, (item.count / maxCount) * 200)
+                    return (
+                      <div key={index} className="flex-1 flex flex-col items-center">
+                        <div
+                          className={`w-full bg-primary rounded-t ${styles.activityBar}`}
+                          style={{ ['--bar-height' as string]: `${heightPx}px` }}
+                        />
+                        <span className="text-xs text-text-secondary mt-2">{formatDate(item.date)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                {analytics?.activityData?.every(d => d.count === 0) && (
+                  <p className="text-sm text-text-secondary mt-2 text-center">No terminal sessions in this period. Use the Terminal in a project to see activity.</p>
+                )}
+              </>
             )}
           </div>
         </Card>
@@ -179,6 +196,29 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
+      {/* Your Projects - full details */}
+      {analytics?.projectsDetail && analytics.projectsDetail.length > 0 && (
+        <Card>
+          <div className="p-6">
+            <h3 className="text-lg font-medium mb-4">Your Projects</h3>
+            <ul className="space-y-3">
+              {analytics.projectsDetail.map((p) => (
+                <li key={String(p.id)} className="flex items-center justify-between gap-4 py-2 border-b border-border last:border-0">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">{p.title ?? 'Untitled'}</p>
+                    {p.description && <p className="text-sm text-text-secondary truncate">{p.description}</p>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs capitalize text-muted-foreground">{p.status ?? 'active'}</span>
+                    <a href={`/dashboard/projects/${p.id}`} className="text-sm text-primary hover:underline">View</a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Card>
+      )}
+
       {/* Build Status */}
       <Card>
         <div className="p-6">
@@ -213,24 +253,29 @@ export default function AnalyticsPage() {
           
           {/* Legend */}
           {!isLoading && (
-            <div className="mt-4 flex items-center justify-center space-x-6">
-              {analytics?.buildData.map((item, index) => {
-                const colors: Record<string, string> = {
-                  success: 'bg-success',
-                  failed: 'bg-destructive',
-                  pending: 'bg-yellow-500',
-                  canceled: 'bg-text-muted',
-                }
-                
-                return (
-                  <div key={index} className="flex items-center space-x-2">
-                    <div className={`h-3 w-3 rounded-full ${colors[item.status] || 'bg-primary'}`} />
-                    <span className="text-sm capitalize">{item.status}</span>
-                    <span className="text-sm text-text-secondary">({item.count})</span>
-                  </div>
-                )
-              })}
-            </div>
+            <>
+              <div className="mt-4 flex items-center justify-center space-x-6">
+                {analytics?.buildData.map((item, index) => {
+                  const colors: Record<string, string> = {
+                    success: 'bg-success',
+                    failed: 'bg-destructive',
+                    pending: 'bg-yellow-500',
+                    canceled: 'bg-text-muted',
+                  }
+                  
+                  return (
+                    <div key={index} className="flex items-center space-x-2">
+                      <div className={`h-3 w-3 rounded-full ${colors[item.status] || 'bg-primary'}`} />
+                      <span className="text-sm capitalize">{item.status}</span>
+                      <span className="text-sm text-text-secondary">({item.count})</span>
+                    </div>
+                  )
+                })}
+              </div>
+              {analytics?.buildData?.every(b => b.count === 0) && (
+                <p className="text-sm text-text-secondary mt-3 text-center">No builds in this period. Run builds from your project to see status here.</p>
+              )}
+            </>
           )}
         </div>
       </Card>
@@ -242,20 +287,25 @@ export default function AnalyticsPage() {
           {isLoading ? (
             <Skeleton className="h-20 w-full" />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="flex flex-col items-center justify-center">
-                <h4 className="text-sm text-text-secondary mb-2">Total Hours</h4>
-                <p className="text-3xl font-semibold">{analytics?.timeData?.total || 0}</p>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="flex flex-col items-center justify-center">
+                  <h4 className="text-sm text-text-secondary mb-2">Total Hours</h4>
+                  <p className="text-3xl font-semibold">{analytics?.timeData?.total ?? 0}</p>
+                </div>
+                <div className="flex flex-col items-center justify-center">
+                  <h4 className="text-sm text-text-secondary mb-2">Daily Average</h4>
+                  <p className="text-3xl font-semibold">{analytics?.timeData?.average?.toFixed(1) ?? '0.0'}</p>
+                </div>
+                <div className="flex flex-col items-center justify-center">
+                  <h4 className="text-sm text-text-secondary mb-2">Peak Activity</h4>
+                  <p className="text-3xl font-semibold">{analytics?.timeData?.peak ?? '--'}</p>
+                </div>
               </div>
-              <div className="flex flex-col items-center justify-center">
-                <h4 className="text-sm text-text-secondary mb-2">Daily Average</h4>
-                <p className="text-3xl font-semibold">{analytics?.timeData?.average.toFixed(1) || 0}</p>
-              </div>
-              <div className="flex flex-col items-center justify-center">
-                <h4 className="text-sm text-text-secondary mb-2">Peak Activity</h4>
-                <p className="text-3xl font-semibold">{analytics?.timeData?.peak || '--'}</p>
-              </div>
-            </div>
+              {(analytics?.timeData?.total ?? 0) === 0 && (
+                <p className="text-sm text-text-secondary mt-3 text-center">Development time is tracked from terminal sessions. Use the Terminal in a project to see hours here.</p>
+              )}
+            </>
           )}
         </div>
       </Card>

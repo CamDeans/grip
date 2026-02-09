@@ -3,6 +3,7 @@ import { anthropicService } from '../../lib/services/anthropicService';
 import { MongoClient } from 'mongodb';
 import { mongoService } from '../../lib/services/mongoService';
 import { AnthropicResponse } from '../../lib/services/anthropicService';
+import { ANTHROPIC_MODEL_CHAT } from '../../lib/anthropicConfig';
 
 describe('AnthropicService', () => {
   let client: MongoClient;
@@ -41,7 +42,7 @@ describe('AnthropicService', () => {
       expect(response.usage.promptTokens).toBeGreaterThan(0);
       expect(response.usage.completionTokens).toBeGreaterThan(0);
       expect(response.usage.totalTokens).toBeGreaterThan(0);
-      expect(response.model).toBe('claude-3-sonnet-20240229');
+      expect(response.model).toBe(ANTHROPIC_MODEL_CHAT);
       expect(response.stopReason).toBeDefined();
     });
 
@@ -74,7 +75,7 @@ describe('AnthropicService', () => {
       if (usage) {
         expect(usage.timestamp).toBeInstanceOf(Date);
         expect(usage.usage).toBeDefined();
-        expect(usage.model).toBe('claude-3-sonnet-20240229');
+        expect(usage.model).toBe(ANTHROPIC_MODEL_CHAT);
       }
     });
   });

@@ -1,9 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { getRepositoryContentServer } from './github'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_OPUS } from '@/lib/anthropicConfig'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-})
+function getAnthropicClient() {
+  const apiKey = getAnthropicApiKey()
+  if (!apiKey) return null
+  return new Anthropic({ apiKey })
+}
 
 interface FileAnalysis {
   path: string
@@ -114,8 +117,10 @@ function getLanguageStats(files: GitHubContent[]) {
 
 async function analyzeFile(content: string, path: string) {
   try {
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     return await anthropic.messages.create({
-      model: 'claude-3-opus-20240229',
+      model: ANTHROPIC_MODEL_OPUS,
       max_tokens: 1500,
       messages: [{
         role: 'user',
@@ -147,8 +152,10 @@ async function generateProjectAnalysis(analyses: FileAnalysis[]) {
       Analysis: ${a.analysis}
     `).join('\n\n')
 
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     return await anthropic.messages.create({
-      model: 'claude-3-opus-20240229',
+      model: ANTHROPIC_MODEL_OPUS,
       max_tokens: 2000,
       messages: [{
         role: 'user',
@@ -187,8 +194,10 @@ function extractTextFromResponse(response: Anthropic.Message) {
 
 export async function generateCodeSuggestions(analysis: string) {
   try {
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     const response = await anthropic.messages.create({
-      model: 'claude-3-opus-20240229',
+      model: ANTHROPIC_MODEL_OPUS,
       max_tokens: 2000,
       messages: [{
         role: 'user',

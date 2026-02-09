@@ -17,7 +17,10 @@ export function useWebSocket(projectIdOrOptions: string | WebSocketOptions) {
   const socketRef = useRef<Socket | null>(null)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const hasLoggedDisabled = useRef<boolean>(false)
-  const shouldTryToConnect = useRef<boolean>(process.env.NEXT_PUBLIC_ENABLE_WEBSOCKET === 'true')
+  // Only connect when a WebSocket server URL is explicitly set (no Socket.IO server on Next/Vercel by default)
+  const shouldTryToConnect = useRef<boolean>(
+    process.env.NEXT_PUBLIC_ENABLE_WEBSOCKET === 'true' && !!process.env.NEXT_PUBLIC_WEBSOCKET_URL
+  )
 
   // Extract options based on input type
   const isStringProjectId = typeof projectIdOrOptions === 'string'

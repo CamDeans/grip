@@ -5,11 +5,18 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui'
-import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink } from 'lucide-react'
+import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal } from 'lucide-react'
 import { toast as sonnerToast } from 'sonner'
 import Link from 'next/link'
 import { cn } from '@/lib/client-utils'
 import { useRouter, useParams } from 'next/navigation'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 interface Project {
   _id: string
@@ -27,40 +34,18 @@ interface Project {
   }
   createdAt?: string
   updatedAt?: string
+  status?: 'active' | 'completed' | 'archived'
   completionStatus?: 'draft' | 'ready_to_export' | 'exported' | 'deployed'
   exportedRepoUrl?: string
   deployedUrl?: string
 }
 
 const steps = [
-  {
-    id: 1,
-    title: "Ideate",
-    description: "Define your project goals and requirements clearly",
-    icon: Lightbulb,
-    href: "#ideation"
-  },
-  {
-    id: 2,
-    title: "Plan & Design",
-    description: "Structure your project and create a development plan",
-    icon: PenTool,
-    href: "/dashboard/projects/{id}/planning"
-  },
-  {
-    id: 3,
-    title: "Develop",
-    description: "Build features with G.R.I.P.'s AI assistance",
-    icon: Code,
-    href: "/dashboard/projects/{id}/enhanced-chat"
-  },
-  {
-    id: 4,
-    title: "Test & Refine",
-    description: "Validate functionality and enhance your project",
-    icon: PuzzleIcon,
-    href: "/dashboard/projects/{id}/enhanced-chat"
-  }
+  { id: 1, title: "Ideate", description: "Define goals and requirements (set when you created the project)", icon: Lightbulb, href: "#ideation" },
+  { id: 2, title: "Repo", description: "Explore every file and make the codebase yours", icon: Code, href: "/dashboard/projects/{id}/repo" },
+  { id: 3, title: "Plan", description: "Structure tasks and milestones", icon: PenTool, href: "/dashboard/projects/{id}/planning" },
+  { id: 4, title: "Develop", description: "Build with GRIP — chat, code, and run commands", icon: MessageSquare, href: "/dashboard/projects/{id}/enhanced-chat" },
+  { id: 5, title: "Preview & Ship", description: "See it run, export to GitHub, deploy to production", icon: PuzzleIcon, href: "#see-it-run" },
 ];
 
 export default function ProjectOverviewPage() {
@@ -69,6 +54,9 @@ export default function ProjectOverviewPage() {
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [deploying, setDeploying] = useState(false)
+  const [loadingFiles, setLoadingFiles] = useState(false)
+  const [generatedFiles, setGeneratedFiles] = useState<Array<{ id: string; path: string; filename: string; size?: number; content?: string; language?: string }>>([])
+  const [viewingFile, setViewingFile] = useState<{ path: string; filename: string; content?: string } | null>(null)
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const projectId = params?.id || ''
@@ -128,6 +116,21 @@ export default function ProjectOverviewPage() {
     }
   }
 
+  const handleSetStatus = async (status: 'active' | 'completed' | 'archived') => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed')
+      setProject((p) => (p ? { ...p, status } : null))
+      sonnerToast.success('Status updated')
+    } catch (e) {
+      sonnerToast.error(e instanceof Error ? e.message : 'Failed')
+    }
+  }
+
   useEffect(() => {
     const fetchProject = async () => {
       try {
@@ -144,6 +147,25 @@ export default function ProjectOverviewPage() {
       }
     }
     fetchProject()
+  }, [projectId])
+
+  const refreshGeneratedFiles = () => {
+    if (!projectId) return
+    setLoadingFiles(true)
+    fetch(`/api/project-files?projectId=${projectId}&limit=100`)
+      .then(async (r) => {
+        if (!r.ok) return []
+        const data = await r.json()
+        return Array.isArray(data) ? data : []
+      })
+      .then((list: Array<{ id: string; path: string; filename: string; size?: number; content?: string; language?: string }>) => setGeneratedFiles(list))
+      .catch(() => setGeneratedFiles([]))
+      .finally(() => setLoadingFiles(false))
+  }
+
+  useEffect(() => {
+    if (!projectId) return
+    refreshGeneratedFiles()
   }, [projectId])
 
   if (isLoading) {
@@ -177,6 +199,9 @@ export default function ProjectOverviewPage() {
         </CardHeader>
         
         <CardContent>
+          <p className="text-sm text-text-secondary mb-4">
+            Chat history and task progress are saved. When you return, open <strong>Develop</strong> to continue the conversation; the task area there shows active and recent tasks.
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <h3 className="text-lg font-semibold mb-2 text-primary">Project Details</h3>
@@ -199,13 +224,22 @@ export default function ProjectOverviewPage() {
             </div>
             
             <div>
-              <h3 className="text-lg font-semibold mb-2 text-primary">Quick Actions</h3>
+              <h3 className="text-lg font-semibold mb-2 text-primary">Next step</h3>
               <div className="flex flex-col space-y-2">
                 <Link href={`/dashboard/projects/${projectId}/enhanced-chat`}>
                   <Button className="w-full justify-between">
                     <span className="flex items-center">
                       <MessageSquare className="w-4 h-4 mr-2" />
-                      Open Chat Console
+                      Continue with GRIP — Develop
+                    </span>
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </Link>
+                <Link href={`/dashboard/projects/${projectId}/repo`}>
+                  <Button variant="outline" className="w-full justify-between">
+                    <span className="flex items-center">
+                      <Code className="w-4 h-4 mr-2" />
+                      Explore Repo
                     </span>
                     <ChevronRight className="w-4 h-4" />
                   </Button>
@@ -214,7 +248,16 @@ export default function ProjectOverviewPage() {
                   <Button variant="outline" className="w-full justify-between">
                     <span className="flex items-center">
                       <PenTool className="w-4 h-4 mr-2" />
-                      View Project Plan
+                      View plan
+                    </span>
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </Link>
+                <Link href={`/dashboard/terminal?projectId=${projectId}`}>
+                  <Button variant="outline" className="w-full justify-between">
+                    <span className="flex items-center">
+                      <Terminal className="w-4 h-4 mr-2" />
+                      Open terminal for this project
                     </span>
                     <ChevronRight className="w-4 h-4" />
                   </Button>
@@ -282,16 +325,9 @@ export default function ProjectOverviewPage() {
                   let href = "";
                   
                   // Determine the appropriate URL based on step title
-                  if (step.title === "Ideate") {
-                    href = `#ideation`; // Internal anchor link
-                  } else if (step.title === "Plan & Design") {
-                    href = `/dashboard/projects/${projectId}/planning`;
-                  } else if (step.title === "Develop") {
-                    href = `/dashboard/projects/${projectId}/enhanced-chat?task=develop`;
-                  } else if (step.title === "Test & Refine") {
-                    href = `/dashboard/projects/${projectId}/enhanced-chat?task=test`;
+                  if (step.href.startsWith('#')) {
+                    href = step.href;
                   } else {
-                    // Fallback: replace {id} in the href pattern with the actual ID
                     href = step.href.replace('{id}', projectId);
                   }
                   
@@ -312,7 +348,7 @@ export default function ProjectOverviewPage() {
                         </div>
                         <p className="text-text-secondary">{step.description}</p>
                         <Link href={href} className="inline-flex items-center text-primary hover:text-primary-hover">
-                          {step.title === "Ideate" ? "Jump to Ideation" : "Start this step"}
+                          {step.title === "Ideate" ? "Jump to ideation" : step.href === "#see-it-run" ? "See it run & ship it" : "Go"}
                           <ArrowRight className="w-4 h-4 ml-1" />
                         </Link>
                       </div>
@@ -325,6 +361,67 @@ export default function ProjectOverviewPage() {
         </CardContent>
       </Card>
       
+      {/* Generated files (saved to DB from Plan → Generate or save-from-chat) */}
+      <Card id="generated-files" className="border border-border scroll-mt-4">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-xl font-bold flex items-center gap-2">
+                <FileCode className="w-5 h-5 text-primary" />
+                Generated files
+              </CardTitle>
+              <CardDescription>
+                Files created by GRIP (e.g. from Plan → Generate files). Code in chat is stored in chat history only; these are files saved to the project.
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" disabled={loadingFiles} onClick={refreshGeneratedFiles}>
+              {loadingFiles ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Refresh
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loadingFiles ? (
+            <p className="text-sm text-text-secondary">Loading...</p>
+          ) : generatedFiles.length === 0 ? (
+            <p className="text-sm text-text-secondary">
+              No generated files yet. Generate files from the <Link href={`/dashboard/projects/${projectId}/planning`} className="text-primary hover:underline">Plan</Link> tab, or get code from <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="text-primary hover:underline">Develop</Link> (code in chat is in message history).
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {generatedFiles.slice(0, 15).map((f) => (
+                <li key={f.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-border/50 last:border-0">
+                  <span className="text-sm truncate min-w-0">
+                    {f.path ? `${f.path}/` : ''}{f.filename}
+                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {typeof f.size === 'number' && (
+                      <span className="text-xs text-text-secondary">{Math.round(f.size / 1024 * 10) / 10} KB</span>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setViewingFile({
+                        path: f.path || '',
+                        filename: f.filename,
+                        content: typeof f.content === 'string' ? f.content : '',
+                        language: f.language,
+                      })}
+                    >
+                      View
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {generatedFiles.length > 15 && (
+            <p className="text-xs text-text-secondary mt-2">Showing 15 of {generatedFiles.length} files.</p>
+          )}
+        </CardContent>
+      </Card>
+
       {/* How to Use G.R.I.P. */}
       <Card className="border border-border">
         <CardHeader className="pb-4">
@@ -377,7 +474,7 @@ export default function ProjectOverviewPage() {
       </Card>
       
       {/* See it run & ship it */}
-      <Card className="border border-primary/20 bg-primary/5">
+      <Card id="see-it-run" className="border border-primary/20 bg-primary/5">
         <CardHeader className="pb-4">
           <CardTitle className="text-xl font-bold">See it run & ship it</CardTitle>
           <CardDescription>
@@ -435,7 +532,7 @@ export default function ProjectOverviewPage() {
               variant="outline"
               className="h-auto p-4 justify-start"
               onClick={handleExport}
-              disabled={exporting || !project?.repository}
+              disabled={exporting || (!project?.repository && generatedFiles.length === 0)}
             >
               <div className="flex items-start">
                 {exporting ? <Loader2 className="w-5 h-5 mr-3 mt-0.5 animate-spin" /> : <ArrowRight className="w-5 h-5 mr-3 mt-0.5" />}
@@ -469,6 +566,36 @@ export default function ProjectOverviewPage() {
               Mark ready to export
             </Button>
           )}
+          <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-border">
+            <span className="text-xs text-text-secondary">Project status:</span>
+            <Button
+              variant={(project?.status ?? 'active') === 'active' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => handleSetStatus('active')}
+              disabled={(project?.status ?? 'active') === 'active'}
+            >
+              Active
+            </Button>
+            <Button
+              variant={(project?.status ?? 'active') === 'completed' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => handleSetStatus('completed')}
+              disabled={(project?.status ?? 'active') === 'completed'}
+            >
+              Completed
+            </Button>
+            <Button
+              variant={(project?.status ?? 'active') === 'archived' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => handleSetStatus('archived')}
+              disabled={(project?.status ?? 'active') === 'archived'}
+            >
+              Archived
+            </Button>
+            <span className="text-xs text-text-muted">
+              (Also in Settings → General. Active = in progress; Completed = done; Archived = read-only.)
+            </span>
+          </div>
         </CardContent>
       </Card>
 
@@ -501,7 +628,7 @@ export default function ProjectOverviewPage() {
             <Button 
               variant="outline" 
               className="h-auto p-4 justify-start"
-              onClick={() => router.push('/docs/best-practices')}
+              onClick={() => router.push('/docs')}
             >
               <div className="flex items-start">
                 <Book className="w-5 h-5 mr-3 mt-0.5 text-primary" />
@@ -548,6 +675,24 @@ export default function ProjectOverviewPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* View generated file content */}
+      <Dialog open={!!viewingFile} onOpenChange={() => setViewingFile(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="truncate pr-8">
+              {viewingFile ? `${viewingFile.path ? `${viewingFile.path}/` : ''}${viewingFile.filename}` : ''}
+            </DialogTitle>
+          </DialogHeader>
+          {viewingFile && (
+            <ScrollArea className="flex-1 min-h-0 rounded border border-border p-3">
+              <pre className="text-xs whitespace-pre-wrap break-words font-mono">
+                {viewingFile.content || '(empty)'}
+              </pre>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

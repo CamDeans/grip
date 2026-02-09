@@ -30,6 +30,25 @@ core_rules:
   - always keep G.R.I.P. fully connected to Anthropic via src/lib/services/anthropicService.ts so the enhanced chat never stops working
   - reuse all files and code in the codebase unless they are not readily available; do not duplicate chat, task, build, or file-generation logic
 
+# Full GRIP Build — 100% Functioning App (No Future Deferrals)
+# Master Cameron has directed that GRIP be a complete, shipping product that creates and deploys full projects. Implement and verify; do not defer to "future" builds.
+full_grip_build:
+  mandate:
+    - "GRIP MUST be a 100% functioning app that creates and deploys full projects. We are building the full build now; there are no 'future builds' to defer to."
+    - "Every feature in docs/GRIP-VISION-AND-ROADMAP.md and docs/FULL-BUILD-REQUIREMENTS.md must be implemented, tested, and working—or explicitly scoped out with Master Cameron's approval."
+    - "Do not leave capabilities as 'planned' or 'later'; implement export, deploy, preview, full repo analysis, and chat-to-file persistence so the end-to-end flow works."
+  required_capabilities:
+    - "Export to GitHub: POST /api/projects/[id]/export must create a repo and push the full project (repo files + generated projectFiles). User sees repo URL and can clone/push."
+    - "Deploy to Vercel: POST /api/projects/[id]/deploy must trigger deploy from the project's GitHub repo (linked or exported). User sees live URL."
+    - "Preview: Project Preview tab must show the running app (URL iframe or Open in StackBlitz) so the user can see the product before export/deploy."
+    - "Full repo: Repo tab must show every folder and file from the cloned repo (tree + view/edit). Full repo analysis (tree + summaries) must be available for chat context."
+    - "Chat-to-files: When GRIP generates code for a file in chat, that code must be savable to projectFiles (create/update) so it appears in Generated files and in export."
+    - "Project completion flow: Status (Draft → Ready to export → Exported/Deployed), with clear actions: Run preview | Export to my GitHub | Deploy to Vercel."
+  implementation_rules:
+    - "When implementing any of the above: reuse existing APIs and services (repository, fileStorageService, export route, deploy route); extend them rather than duplicate."
+    - "Remove or replace mock data and placeholder responses with real DB and real integrations so production readiness is maintained."
+    - "Verify each capability: export creates a real repo with content; deploy returns a real Vercel URL; preview loads a URL or StackBlitz; Repo shows full tree; chat can save code to projectFiles."
+
 # G.R.I.P. AI Assistant Enhancement Plan
 # The plan is divided into small, manageable phases with granular steps
 # All new code must include detailed comments for better readability

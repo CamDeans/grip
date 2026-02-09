@@ -3,12 +3,21 @@ import { getServerAuthSession } from '@/lib/auth'
 import { clientPromise } from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
 import { AIMessage, ProjectState, ChatResponse, ChatError, StepContext } from '@/types'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
 
 export async function POST(request: Request) {
   try {
     const session = await getServerAuthSession()
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const apiKey = getAnthropicApiKey()
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'G.R.I.P. AI is not configured. Set ANTHROPIC_API_KEY in .env.local or environment.' },
+        { status: 503 }
+      )
     }
 
     const { messages, projectId } = await request.json()
@@ -38,10 +47,10 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY || ''
+        'x-api-key': apiKey
       },
       body: JSON.stringify({
-        model: 'claude-3-sonnet-20240229',
+        model: ANTHROPIC_MODEL_CHAT,
         max_tokens: 1000,
         messages: [
           {

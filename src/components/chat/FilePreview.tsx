@@ -99,8 +99,11 @@ export function FilePreview({
     setMounted(true)
   }, [fileId, projectId, path, filename, content])
   
-  // Copy content to clipboard
+  // Copy content to clipboard (graceful when unsupported)
   const copyToClipboard = async () => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+      return
+    }
     try {
       await navigator.clipboard.writeText(fileContent)
       setCopied(true)

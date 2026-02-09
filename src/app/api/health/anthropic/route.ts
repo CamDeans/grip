@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { Anthropic } from '@anthropic-ai/sdk'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_FAST } from '@/lib/anthropicConfig'
 
 /**
  * Test Anthropic API connection.
@@ -7,8 +8,8 @@ import { Anthropic } from '@anthropic-ai/sdk'
  * Use this to verify the app can reach Anthropic (chat, enhanced chat, AI features).
  */
 export async function GET() {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey || apiKey.trim() === '') {
+  const apiKey = getAnthropicApiKey()
+  if (!apiKey) {
     return NextResponse.json(
       {
         status: 'error',
@@ -25,7 +26,7 @@ export async function GET() {
     const anthropic = new Anthropic({ apiKey })
     // Minimal request to validate key and connectivity (1 token response)
     await anthropic.messages.create({
-      model: 'claude-3-haiku-20240307',
+      model: ANTHROPIC_MODEL_FAST,
       max_tokens: 10,
       messages: [{ role: 'user', content: 'Say OK in one word.' }],
     })

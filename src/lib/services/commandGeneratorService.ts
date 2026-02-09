@@ -5,16 +5,18 @@ import { IProjectStructure } from '@/lib/models/ProjectStructure'
 import { getProjectStructure } from '@/lib/services/planStorageService'
 import { ITaskData } from '@/lib/models/Task'
 import { createTask } from '@/lib/services/taskQueueService'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
 
 /**
  * Command Generator Service - Creates service to generate build commands from project plan
  * Part of Phase 5, Step 2 of the G.R.I.P. AI Assistant Enhancement Plan
  */
 
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY as string,
-});
+function getAnthropicClient() {
+  const apiKey = getAnthropicApiKey()
+  if (!apiKey) return null
+  return new Anthropic({ apiKey })
+}
 
 // Command types
 export type CommandType = 'install' | 'build' | 'test' | 'lint' | 'deploy' | 'custom';
@@ -615,8 +617,10 @@ Please generate a command that would achieve the requested task. Return your ans
 Only respond with the JSON, nothing else.`;
     
     // Call Claude to generate the command
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     const response = await anthropic.messages.create({
-      model: "claude-3-sonnet-20240229",
+      model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 1000,
       system: "You are a helpful AI assistant who is an expert in build systems, package managers, and command line tools for software development.",
       messages: [

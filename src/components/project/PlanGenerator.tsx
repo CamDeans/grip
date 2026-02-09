@@ -28,11 +28,19 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
   const [plan, setPlan] = useState<any | null>(null)
   const [filesToGenerate, setFilesToGenerate] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState<string>('overview')
+  const [syncingState, setSyncingState] = useState(false)
 
   // Load existing plan when component mounts
   useEffect(() => {
     fetchPlan()
   }, [projectId])
+
+  // When user switches to Files tab and we have a plan, ensure files list is loaded
+  useEffect(() => {
+    if (activeTab === 'files' && plan && filesToGenerate.length === 0) {
+      fetchFilesToGenerate()
+    }
+  }, [activeTab, plan])
 
   const generatePlan = async () => {
     try {
@@ -79,7 +87,7 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
       if (!response.ok) {
         if (response.status === 404) {
           setPlan(null)
-          setError('No plan exists for this project yet')
+          setError(null)
           return
         }
         
@@ -97,6 +105,31 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const syncStateFromPlan = async () => {
+    try {
+      setSyncingState(true)
+      const response = await fetch(`/api/projects/${projectId}/plan/sync-state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Sync failed')
+      toast({
+        title: 'Build steps synced',
+        description: data.message || 'Project state now matches the plan. Chat will use the same phases.',
+      })
+    } catch (err) {
+      console.error('Error syncing state from plan:', err)
+      toast({
+        title: 'Sync failed',
+        description: err instanceof Error ? err.message : 'Could not sync build steps from plan',
+        variant: 'destructive',
+      })
+    } finally {
+      setSyncingState(false)
     }
   }
 
@@ -136,12 +169,14 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
         throw new Error(errorData.error || 'Failed to generate files')
       }
       
+      const data = await response.json()
+      const successCount = data.successCount ?? data.generatedFiles?.filter((f: { success?: boolean }) => f.success).length ?? 0
+      const total = data.fileCount ?? data.generatedFiles?.length ?? 0
       toast({
         title: 'Files Generated',
-        description: 'Project files have been created based on the plan',
+        description: data.message || (total ? `Created ${successCount} of ${total} file(s). They appear in Repo and Generated files.` : 'Project files have been created based on the plan'),
       })
       
-      // Update the list of files to generate
       fetchFilesToGenerate()
     } catch (err) {
       console.error('Error generating files:', err)
@@ -198,6 +233,22 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
             </Button>
           )}
           
+          {plan && (
+            <Button
+              onClick={syncStateFromPlan}
+              variant="outline"
+              disabled={loading || generatingFiles || syncingState}
+              className="flex items-center gap-2"
+              title="Sync build steps from this plan (for projects created before plan sync was added)"
+            >
+              {syncingState ? (
+                <Loader2Icon className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {syncingState ? 'Syncing…' : 'Sync build steps'}
+            </Button>
+          )}
           <Button 
             onClick={fetchPlan} 
             variant="outline" 
@@ -209,7 +260,7 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
           </Button>
         </div>
 
-        {/* Error Display */}
+        {/* Error Display - only for real errors */}
         {error && (
           <div className="p-4 mb-4 border-l-4 border-destructive bg-destructive/10 text-destructive">
             <div className="flex items-center gap-2">
@@ -217,6 +268,15 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
               <h4 className="text-sm font-medium">Error</h4>
             </div>
             <p className="text-sm mt-1">{error}</p>
+          </div>
+        )}
+
+        {/* Empty state - no plan yet (not an error) */}
+        {!loading && !plan && !error && (
+          <div className="p-4 mb-4 border border-border rounded-lg bg-muted/50 text-text-secondary">
+            <p className="text-sm">
+              No plan has been created yet. Click <strong>Generate Plan</strong> to analyze your project and create a development plan.
+            </p>
           </div>
         )}
 
@@ -267,6 +327,26 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
                     <h4 className="font-medium">Dependencies</h4>
                     <p><strong>File Dependencies:</strong> {plan.dependencyTree.fileCount}</p>
                     <p><strong>Package Dependencies:</strong> {plan.dependencyTree.packageCount}</p>
+                    {Array.isArray(plan.dependencyTree.packages) && plan.dependencyTree.packages.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs font-medium text-muted-foreground mb-1">From repo / package.json:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {plan.dependencyTree.packages.map((pkg: { name: string; version?: string; type?: string }, i: number) => (
+                            <Badge key={i} variant="outline" className="text-xs">{pkg.name}{pkg.version ? `@${pkg.version}` : ''}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {Array.isArray(plan.dependencyTree.recommendedPackages) && plan.dependencyTree.recommendedPackages.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs font-medium text-muted-foreground mb-1">Recommended (from project ideation — install when running locally):</p>
+                        <div className="flex flex-wrap gap-1">
+                          {plan.dependencyTree.recommendedPackages.map((name: string, i: number) => (
+                            <Badge key={i} variant="secondary" className="text-xs">{name}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 
@@ -300,7 +380,9 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
                         <div className="flex items-center gap-2">
                           <FileIcon className="h-4 w-4 text-primary" />
                           <div>
-                            <p className="font-medium text-sm">{file.path}/{file.name}</p>
+                            <p className="font-medium text-sm">
+                              {file.path && (file.path.endsWith(file.name) || !file.name) ? file.path : [file.path, file.name].filter(Boolean).join('/')}
+                            </p>
                             <p className="text-xs text-muted-foreground">
                               {file.generationMetadata?.description || 'No description'}
                             </p>
@@ -357,7 +439,7 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
                                   className="flex items-center gap-1 text-xs"
                                 >
                                   {task.status === 'completed' && <Check className="h-3 w-3" />}
-                                  {task.name}
+                                  {task.title ?? (task as { name?: string }).name}
                                 </Badge>
                               ))}
                             </div>

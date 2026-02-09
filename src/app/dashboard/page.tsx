@@ -238,7 +238,7 @@ export default function DashboardPage() {
                 <Button 
                   variant="link"
                   className="flex items-center w-full justify-start p-0 h-auto text-text-secondary hover:text-primary"
-                  onClick={() => router.push('/docs/getting-started')}
+                  onClick={() => router.push('/docs')}
                 >
                   <BookOpenIcon className="h-4 w-4 mr-2" />
                   <span className="text-sm">Getting Started Guide</span>

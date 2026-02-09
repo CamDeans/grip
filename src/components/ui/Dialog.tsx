@@ -1,11 +1,106 @@
 'use client'
 
-import { Fragment } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { Dialog as HeadlessDialog, Transition } from '@headlessui/react'
 import { ExclamationTriangleIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
 import { Button } from '.'
+import { cn } from '@/lib/utils'
 
-interface DialogProps {
+/** Composable Dialog (Radix-style): open, onOpenChange, children with DialogContent/DialogHeader/DialogTitle. Accepts open or isOpen for compatibility. */
+export function Dialog({
+  open,
+  isOpen,
+  onOpenChange,
+  onClose,
+  children,
+}: {
+  open?: boolean
+  isOpen?: boolean
+  onOpenChange?: (open: boolean) => void
+  onClose?: () => void
+  children: ReactNode
+}) {
+  const isVisible = open ?? isOpen ?? false
+  const show = Boolean(isVisible)
+  const handleClose = () => {
+    onOpenChange?.(false)
+    onClose?.()
+  }
+  return (
+    <Transition.Root show={show} as={Fragment}>
+      <HeadlessDialog
+        as="div"
+        className="relative z-50"
+        onClose={handleClose}
+      >
+        <Transition.Child
+          as={Fragment}
+          enter="ease-out duration-300"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="ease-in duration-200"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" />
+        </Transition.Child>
+        <div className="fixed inset-0 z-10 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+              enterTo="opacity-100 translate-y-0 sm:scale-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100 translate-y-0 sm:scale-100"
+              leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+            >
+              {children}
+            </Transition.Child>
+          </div>
+        </div>
+      </HeadlessDialog>
+    </Transition.Root>
+  )
+}
+
+export function DialogContent({
+  className,
+  children,
+  ...props
+}: { className?: string; children?: ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <HeadlessDialog.Panel
+      className={cn(
+        'relative w-full transform rounded-lg bg-background border border-border p-6 text-left shadow-xl transition-all',
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </HeadlessDialog.Panel>
+  )
+}
+
+export function DialogHeader({ className, children, ...props }: { className?: string; children?: ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={cn('flex flex-col space-y-1.5 text-center sm:text-left mb-4', className)} {...props}>
+      {children}
+    </div>
+  )
+}
+
+export function DialogTitle({ className, children, ...props }: { className?: string; children?: ReactNode } & React.HTMLAttributes<HTMLHeadingElement>) {
+  return (
+    <HeadlessDialog.Title as={Fragment}>
+      <h2 className={cn('text-lg font-semibold leading-none tracking-tight text-text-primary', className)} {...props}>
+        {children}
+      </h2>
+    </HeadlessDialog.Title>
+  )
+}
+
+interface AlertDialogProps {
   isOpen: boolean
   onClose: () => void
   title: string
@@ -22,7 +117,7 @@ interface DialogProps {
   }
 }
 
-export function Dialog({
+export function AlertDialog({
   isOpen,
   onClose,
   title,
@@ -30,7 +125,7 @@ export function Dialog({
   type = 'info',
   primaryAction,
   secondaryAction,
-}: DialogProps) {
+}: AlertDialogProps) {
   const icons = {
     info: InformationCircleIcon,
     warning: ExclamationTriangleIcon,
@@ -44,8 +139,9 @@ export function Dialog({
     error: 'text-destructive',
   }
 
+  const show = Boolean(isOpen)
   return (
-    <Transition.Root show={isOpen} as={Fragment}>
+    <Transition.Root show={show} as={Fragment}>
       <HeadlessDialog
         as="div"
         className="relative z-50"

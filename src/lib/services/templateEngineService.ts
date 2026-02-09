@@ -2,6 +2,7 @@ import { Anthropic } from '@anthropic-ai/sdk'
 import * as fs from 'fs'
 import * as path from 'path'
 import { ObjectId } from 'mongodb'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
 
 // Mock imports until we can properly access the project structure
 // These will be replaced with proper imports when integrating into the main codebase
@@ -70,10 +71,11 @@ export interface TemplateGenerationOptions {
   customVariables?: Record<string, any>;
 }
 
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY as string,
-})
+function getAnthropicClient() {
+  const apiKey = getAnthropicApiKey()
+  if (!apiKey) return null
+  return new Anthropic({ apiKey })
+}
 
 // Define template interface
 export interface ITemplate {
@@ -488,9 +490,10 @@ Project Description: ${projectContext.description || 'Not provided'}
 Please generate appropriate values for these variables that would make sense in the context 
 of this template and file path. Return the values in JSON format.
 `
-    
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     const response = await anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229',
+      model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 1000,
       temperature: 0.2,
       messages: [{ role: 'user', content: prompt }]
@@ -584,8 +587,10 @@ Format the response as a JSON object with the following structure:
 }`;
 
     // Use Anthropic AI to generate template
+    const anthropic = getAnthropicClient()
+    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     const response = await anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229',
+      model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 4000,
       temperature: 0.2,
       messages: [{ role: 'user', content: prompt }]

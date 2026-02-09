@@ -29,9 +29,9 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Parse limit parameter
-    const limit = limitParam ? parseInt(limitParam, 10) : 50
-    
+    // Parse limit parameter (cap at 100 for response size)
+    const messageLimit = limitParam ? Math.min(parseInt(limitParam, 10) || 50, 100) : 50
+
     // Fetch chat history using the existing function
     const history = await getChatHistory(projectId)
     
@@ -39,19 +39,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ messages: [] })
     }
 
-    // Format the history data
+    // Normalize messages so each has id, role, content, timestamp (for EnhancedChatProvider)
+    const rawMessages = history.messages || []
+    const limited = rawMessages.slice(-messageLimit)
+    const messages = limited.map((m: any) => ({
+      id: m.id || m._id?.toString?.() || String(Date.now() + Math.random()),
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: typeof m.content === 'string' ? m.content : '',
+      timestamp: m.timestamp ? new Date(m.timestamp).toISOString() : new Date().toISOString(),
+      ...(m.metadata && typeof m.metadata === 'object' ? { metadata: m.metadata } : {}),
+    }))
+
     const formattedHistory = {
       projectId: history.projectId,
-      messages: history.messages || [],
+      messages,
       currentPhase: history.currentPhase,
       currentStep: history.currentStep,
       status: history.status,
       updatedAt: history.updatedAt
-    }
-
-    // If there's a limit parameter, only return that many messages
-    if (limitParam && history.messages) {
-      formattedHistory.messages = history.messages.slice(-limit)
     }
 
     return NextResponse.json(formattedHistory)
