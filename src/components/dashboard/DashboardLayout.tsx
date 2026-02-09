@@ -163,18 +163,18 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <Button 
             variant="ghost" 
             size="icon" 
-            className="rounded-full"
+            className="rounded-full h-10 w-10 shrink-0 aspect-square p-0"
             aria-label="User menu"
           >
             {session?.user?.image ? (
               <img 
                 src={session.user.image} 
                 alt={session.user.name || 'User'} 
-                className="h-8 w-8 rounded-full"
+                className="h-8 w-8 rounded-full object-cover shrink-0"
               />
             ) : (
-              <div className="user-avatar">
-                <UserCircleIcon className="h-6 w-6 text-white" />
+              <div className="user-avatar shrink-0 aspect-square flex items-center justify-center">
+                <UserCircleIcon className="h-6 w-6 text-white shrink-0" />
               </div>
             )}
           </Button>

@@ -148,6 +148,7 @@ export function ActionButtons({ projectId, onActionTriggered, className }: Actio
           trackingStep={1}
           trackingContext={action.trackingContext}
           title={action.description}
+          className="font-medium border-primary/50 text-primary bg-primary/10 hover:bg-primary/20"
         >
           {action.icon}
           {action.label}

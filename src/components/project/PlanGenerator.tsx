@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { 
@@ -69,6 +70,7 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
         title: 'Plan Generated',
         description: 'Your project plan was created successfully',
       })
+      router.refresh()
     } catch (err) {
       console.error('Error generating plan:', err)
       setError(err instanceof Error ? err.message : 'An unknown error occurred')
@@ -121,6 +123,7 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
         title: 'Build steps synced',
         description: data.message || 'Project state now matches the plan. Chat will use the same phases.',
       })
+      router.refresh()
     } catch (err) {
       console.error('Error syncing state from plan:', err)
       toast({
@@ -176,7 +179,7 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
         title: 'Files Generated',
         description: data.message || (total ? `Created ${successCount} of ${total} file(s). They appear in Repo and Generated files.` : 'Project files have been created based on the plan'),
       })
-      
+      router.refresh()
       fetchFilesToGenerate()
     } catch (err) {
       console.error('Error generating files:', err)

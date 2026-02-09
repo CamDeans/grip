@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import clientPromise from '@/lib/db'
 import { getChatHistory } from '@/lib/chat'
+import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 
 // Phase 2, Step 2: Create Chat History Fetcher
 
@@ -39,16 +40,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ messages: [] })
     }
 
-    // Normalize messages so each has id, role, content, timestamp (for EnhancedChatProvider)
+    // Normalize messages so each has id, role, content, timestamp (for EnhancedChatProvider).
+    // Merge split README blocks in assistant messages so on refresh the user sees one block per README
+    // and GRIP doesn't re-attempt another wrong formatted version.
     const rawMessages = history.messages || []
     const limited = rawMessages.slice(-messageLimit)
-    const messages = limited.map((m: any) => ({
-      id: m.id || m._id?.toString?.() || String(Date.now() + Math.random()),
-      role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: typeof m.content === 'string' ? m.content : '',
-      timestamp: m.timestamp ? new Date(m.timestamp).toISOString() : new Date().toISOString(),
-      ...(m.metadata && typeof m.metadata === 'object' ? { metadata: m.metadata } : {}),
-    }))
+    const messages = limited.map((m: any) => {
+      let content = typeof m.content === 'string' ? m.content : ''
+      if (m.role === 'assistant' && content) content = mergeReadmeBlocks(content)
+      return {
+        id: m.id || m._id?.toString?.() || String(Date.now() + Math.random()),
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content,
+        timestamp: m.timestamp ? new Date(m.timestamp).toISOString() : new Date().toISOString(),
+        ...(m.metadata && typeof m.metadata === 'object' ? { metadata: m.metadata } : {}),
+      }
+    })
 
     const formattedHistory = {
       projectId: history.projectId,

@@ -45,7 +45,7 @@ export function UserMenu() {
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            className="relative h-8 w-8 rounded-full bg-background-primary"
+            className="relative h-10 w-10 shrink-0 aspect-square rounded-full bg-background-primary p-0"
             aria-label="User menu"
           >
             {session?.user?.image ? (
@@ -56,7 +56,9 @@ export function UserMenu() {
                 className="rounded-full object-cover"
               />
             ) : (
-              <UserCircleIcon className="h-8 w-8 text-text-secondary" />
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
+                <UserCircleIcon className="h-8 w-8 text-text-secondary" />
+              </span>
             )}
           </Button>
         </DropdownMenuTrigger>

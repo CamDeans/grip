@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth'
 import { ProjectService } from '@/lib/services/projectService'
 import { getProjectPlan } from '@/lib/services/projectPlanningService'
 import { PlanGenerator } from '@/components/project/PlanGenerator'
+import { PlanningRefreshButton } from '@/components/project/PlanningRefreshButton'
 import { Button } from '@/components/ui'
 import { MessageSquare } from 'lucide-react'
 
@@ -29,7 +30,13 @@ export default async function ProjectPlanningPage({ params }: ProjectPlanningPag
 
   return (
     <div className="container mx-auto py-6">
-      <h1 className="text-2xl font-bold mb-6">Project Planning - {project.title}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <h1 className="text-2xl font-bold">Project Planning - {project.title}</h1>
+        <PlanningRefreshButton />
+      </div>
+      <p className="text-sm text-text-secondary mb-6">
+        Generate a plan, sync build steps, or create files — then use <strong>Refresh</strong> or the button below to see <strong>Go to Develop</strong> when you’re ready.
+      </p>
 
       <div className="grid grid-cols-1 gap-6">
         <div className="bg-background-secondary rounded-lg shadow p-6">

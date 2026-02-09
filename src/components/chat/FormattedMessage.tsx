@@ -7,7 +7,7 @@ import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { cn } from '@/lib/utils'
 import { AIMessage } from '@/types/chat'
 import { FilePreview } from './FilePreview'
-import { CopyIcon, CheckIcon, Save, Loader2, FileCheck, ExternalLink, FilePenLine } from 'lucide-react'
+import { CopyIcon, CheckIcon, Save, Loader2, FileCheck, ExternalLink, FilePenLine, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { Input } from '@/components/ui/input'
 import { toast as sonnerToast } from 'sonner'
@@ -23,28 +23,35 @@ interface FormattedMessageProps {
   onFileSaved?: () => void
 }
 
-/** Default filename from language when no path is parsed */
+/** Default filename from language when no path is parsed. Never use snippet.* — use file.<ext> so users don't overwrite the same file. */
 function defaultFilenameFromLanguage(lang: string): string {
   const ext: Record<string, string> = {
-    ts: 'snippet.ts', tsx: 'snippet.tsx', js: 'snippet.js', jsx: 'snippet.jsx',
-    py: 'snippet.py', css: 'snippet.css', html: 'snippet.html', json: 'snippet.json',
-    md: 'snippet.md', yaml: 'snippet.yaml', yml: 'snippet.yml',
+    ts: 'file.ts', tsx: 'file.tsx', js: 'file.js', jsx: 'file.jsx',
+    py: 'file.py', css: 'file.css', html: 'file.html', json: 'file.json',
+    md: 'file.md', yaml: 'file.yaml', yml: 'file.yml',
+    env: '.env', plaintext: 'file.txt', text: 'file.txt',
   }
-  return ext[lang?.toLowerCase()] || 'snippet.txt'
+  return ext[lang?.toLowerCase()] || 'file.txt'
 }
 
-/** Infer a better filename from content so non-devs get package.json not snippet.json when GRIP outputs package.json */
+/** Infer a better filename from content: package.json, .env, .env.local, etc. Never use snippet.txt for env or known types when inferrable. */
 function inferredFilenameForBlock(lang: string, code: string): string {
   const l = (lang || '').toLowerCase()
-  if (l === 'json' && code) {
+  const content = (code || '').trim()
+  if (l === 'json' && content) {
     try {
-      const parsed = JSON.parse(code.trim())
+      const parsed = JSON.parse(content)
       if (parsed && typeof parsed === 'object' && ('name' in parsed || 'version' in parsed) && ('dependencies' in parsed || 'scripts' in parsed || 'devDependencies' in parsed)) {
         return 'package.json'
       }
     } catch {
       // not valid JSON or not package.json shape
     }
+  }
+  // Detect .env / .env.local content: KEY=value or KEY="value" or export KEY=value
+  if (content && /^(export\s+)?[A-Z_][A-Z0-9_]*\s*=\s*(.*)$/m.test(content) && !content.includes('{') && !content.includes('import ')) {
+    if (content.includes('LOCAL') || content.toLowerCase().includes('.local')) return '.env.local'
+    return '.env'
   }
   return defaultFilenameFromLanguage(lang)
 }
@@ -126,6 +133,8 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
   const [editingBlockIndex, setEditingBlockIndex] = useState<number | null>(null)
   const [editCodeContent, setEditCodeContent] = useState('')
   const [renameState, setRenameState] = useState<{ blockIndex: number; path: string; filename: string } | null>(null)
+  // Code blocks collapsed by default so the user lands at the top of GRIP's response with less scrolling
+  const [collapsedBlocks, setCollapsedBlocks] = useState<Record<number, boolean>>({})
 
   // Extract code blocks, format content, and default path per block (from text before each block)
   const { formattedContent, codeBlocks, defaultPathByBlock } = useMemo(() => {
@@ -244,10 +253,22 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
           const showSaveForm = saveState?.blockIndex === blockIndex
           const savedInfo = savedBlocks[blockIndex]
           const isShellBlock = ['bash', 'sh', 'shell', 'zsh'].includes((block.language || '').toLowerCase())
+          const isCollapsed = collapsedBlocks[blockIndex] !== false
+          const lineCount = block.code.split(/\n/).length
           return (
             <div key={i} className="rounded-md overflow-hidden border border-border w-full max-w-full">
               <div className="bg-background-tertiary text-text-secondary px-3 py-1 text-xs flex flex-wrap justify-between items-center gap-2">
                 <span className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs px-3 -ml-1 font-semibold border-primary/60 text-primary bg-primary/15 hover:bg-primary/25 hover:border-primary shadow-sm"
+                    onClick={() => setCollapsedBlocks((prev) => ({ ...prev, [blockIndex]: prev[blockIndex] === false }))}
+                    aria-expanded={!isCollapsed}
+                  >
+                    {isCollapsed ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronUp className="h-3.5 w-3.5 shrink-0" />}
+                    <span className="ml-1">{isCollapsed ? 'Expand code' : 'Collapse code'}</span>
+                  </Button>
                   {getLanguageLabel(block.language)}
                   {updatedFileContent[blockIndex] && (
                     <span className="inline-flex items-center gap-1 rounded-md bg-success/15 text-success font-medium px-2 py-0.5" title="File was updated; see current state below">
@@ -273,17 +294,17 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                           {savedInfo.fileId && (
                             <>
                               <Button
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
-                                className="h-6 text-xs px-2"
+                                className="h-7 text-xs px-2.5 font-medium border-primary/50 text-primary bg-primary/10 hover:bg-primary/20"
                                 onClick={() => { setEditingBlockIndex(blockIndex); setEditCodeContent(block.code) }}
                               >
                                 Edit code
                               </Button>
                               <Button
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
-                                className="h-6 text-xs px-2"
+                                className="h-7 text-xs px-2.5 font-medium border-primary/50 text-primary bg-primary/10 hover:bg-primary/20 disabled:opacity-50"
                                 disabled={updatingBlockIndex === blockIndex}
                                 onClick={async () => {
                                   if (!projectId) return
@@ -319,9 +340,9 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                                 <span className="ml-1">Update file</span>
                               </Button>
                               <Button
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
-                                className="h-6 text-xs px-2"
+                                className="h-7 text-xs px-2.5 font-medium border-primary/50 text-primary bg-primary/10 hover:bg-primary/20"
                                 onClick={() => setRenameState({ blockIndex, path: savedInfo.path, filename: savedInfo.filename })}
                               >
                                 Rename
@@ -344,8 +365,9 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                             className="h-6 w-28 text-xs"
                           />
                           <Button
+                            variant="default"
                             size="sm"
-                            className="h-6 text-xs px-2"
+                            className="h-7 text-xs px-3 font-semibold shadow-sm"
                             disabled={saving || !saveState.filename.trim()}
                             onClick={async () => {
                               if (!projectId || !saveState?.filename.trim()) return
@@ -383,9 +405,9 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                             <span className="ml-1">Save</span>
                           </Button>
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
-                            className="h-6 text-xs px-2"
+                            className="h-7 text-xs px-2.5 font-medium"
                             onClick={() => setSaveState(null)}
                           >
                             Cancel
@@ -406,8 +428,9 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                             className="h-6 w-28 text-xs"
                           />
                           <Button
+                            variant="default"
                             size="sm"
-                            className="h-6 text-xs px-2"
+                            className="h-7 text-xs px-3 font-semibold shadow-sm"
                             disabled={saving || !updateFileState.filename.trim()}
                             onClick={async () => {
                               if (!projectId || !updateFileState?.filename.trim()) return
@@ -449,9 +472,9 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                             <span className="ml-1">Update and save</span>
                           </Button>
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
-                            className="h-6 text-xs px-2"
+                            className="h-7 text-xs px-2.5 font-medium"
                             onClick={() => { setUpdateFileState(null); setUpdatingBlockIndex(null) }}
                           >
                             Cancel
@@ -459,8 +482,10 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                         </>
                       ) : (
                         <>
-                          <button
-                            className="hover:text-white text-text-muted flex items-center gap-1"
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs px-2.5 font-medium border-primary/50 text-primary bg-primary/10 hover:bg-primary/20"
                             onClick={() => {
                               const def = defaultPathByBlock[blockIndex]
                               setSaveState({
@@ -471,10 +496,12 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                             }}
                           >
                             <Save className="h-3 w-3" />
-                            <span>Save to project</span>
-                          </button>
-                          <button
-                            className="hover:text-white text-text-muted flex items-center gap-1"
+                            <span className="ml-1">Save to project</span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs px-2.5 font-medium border-primary/50 text-primary bg-primary/10 hover:bg-primary/20"
                             onClick={() => {
                               const def = defaultPathByBlock[blockIndex]
                               setUpdateFileState({
@@ -486,13 +513,15 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                           >
                             <FilePenLine className="h-3 w-3" />
                             <span className="ml-1">Update file</span>
-                          </button>
+                          </Button>
                         </>
                       )}
                     </>
                   )}
-                  <button
-                    className="hover:text-white text-text-muted flex items-center gap-1"
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs px-2.5 font-medium border-primary/50 text-primary bg-primary/10 hover:bg-primary/20"
                     onClick={() => {
                       copyToClipboard(block.code, blockIndex)
                       if (isShellBlock) {
@@ -505,35 +534,41 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                     {copiedBlockIndex === blockIndex ? (
                       <>
                         <CheckIcon className="h-3 w-3" />
-                        <span>Copied!</span>
+                        <span className="ml-1">Copied!</span>
                       </>
                     ) : (
                       <>
                         <CopyIcon className="h-3 w-3" />
-                        <span>Copy</span>
+                        <span className="ml-1">Copy</span>
                       </>
                     )}
-                  </button>
+                  </Button>
                 </div>
               </div>
-              <div className="overflow-x-auto w-full max-w-full">
-                <SyntaxHighlighter
-                  language={mapLanguage(block.language)}
-                  style={tomorrow}
-                  customStyle={{
-                    margin: 0,
-                    borderRadius: 0,
-                    fontSize: '0.9rem',
-                    backgroundColor: '#1e293b', // Match your theme
-                    maxWidth: '100%',
-                    overflowX: 'auto'
-                  }}
-                  wrapLines={true}
-                  wrapLongLines={true}
-                >
-                  {block.code}
-                </SyntaxHighlighter>
-              </div>
+              {isCollapsed ? (
+                <div className="px-3 py-2 bg-muted/50 text-muted-foreground text-xs border-t border-border">
+                  Code ({lineCount} line{lineCount !== 1 ? 's' : ''}) — expand above to view
+                </div>
+              ) : (
+                <div className="overflow-x-auto w-full max-w-full">
+                  <SyntaxHighlighter
+                    language={mapLanguage(block.language)}
+                    style={tomorrow}
+                    customStyle={{
+                      margin: 0,
+                      borderRadius: 0,
+                      fontSize: '0.9rem',
+                      backgroundColor: '#1e293b', // Match your theme
+                      maxWidth: '100%',
+                      overflowX: 'auto'
+                    }}
+                    wrapLines={true}
+                    wrapLongLines={true}
+                  >
+                    {block.code}
+                  </SyntaxHighlighter>
+                </div>
+              )}
               {savedInfo && projectId && (
                 <div className="px-3 py-2 bg-success/10 border-t border-border text-xs flex flex-wrap items-center gap-2">
                   <FileCheck className="h-3.5 w-3.5 text-success shrink-0" />
@@ -570,9 +605,9 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                   <div className="px-3 py-1.5 text-xs flex items-center justify-between gap-2 border-b border-border/50">
                     <span className="font-medium text-text-secondary">Updated file (current state)</span>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="h-6 text-xs px-2"
+                      className="h-7 text-xs px-2.5 font-medium border-border hover:bg-muted/50"
                       onClick={() => setUpdatedFileContent((prev) => { const next = { ...prev }; delete next[blockIndex]; return next })}
                     >
                       Hide
@@ -610,8 +645,9 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                   />
                   <div className="flex gap-2">
                     <Button
+                      variant="default"
                       size="sm"
-                      className="h-7 text-xs"
+                      className="h-7 text-xs font-semibold shadow-sm"
                       disabled={saving}
                       onClick={async () => {
                         if (!savedInfo?.fileId) return
@@ -636,7 +672,7 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                       {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                       <span className="ml-1">Save</span>
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setEditingBlockIndex(null) }}>
+                    <Button variant="outline" size="sm" className="h-7 text-xs font-medium" onClick={() => { setEditingBlockIndex(null) }}>
                       Cancel
                     </Button>
                   </div>
@@ -658,8 +694,9 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                     className="h-7 w-32 text-xs"
                   />
                   <Button
+                    variant="default"
                     size="sm"
-                    className="h-7 text-xs"
+                    className="h-7 text-xs font-semibold shadow-sm"
                     disabled={saving || !renameState.filename.trim()}
                     onClick={async () => {
                       if (!savedInfo?.fileId || !renameState?.filename.trim()) return
@@ -694,7 +731,7 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                     {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                     <span className="ml-1">Save</span>
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setRenameState(null)}>
+                  <Button variant="outline" size="sm" className="h-7 text-xs font-medium" onClick={() => setRenameState(null)}>
                     Cancel
                   </Button>
                 </div>

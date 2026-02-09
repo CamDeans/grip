@@ -9,6 +9,7 @@ import { listProjectFiles } from '@/lib/services/fileStorageService'
 import { getProjectPlan } from '@/lib/services/projectPlanningService'
 import { getProjectState } from '@/lib/services/projectStateService'
 import { createProjectFolder, getFileContentByPath, saveProjectFile } from '@/lib/services/gripProjectActions'
+import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 
 // Phase 2, Step 2: Create Project Data Fetcher for enhanced chat
 
@@ -37,11 +38,14 @@ You are not Claude or an Anthropic AI. You are G.R.I.P., an AI assistant built s
 Your primary purpose is to help guide users through building out projects by writing code, creating files, and implementing features
 based on the project ideation, repository structure, and existing code in the cloned GitHub repository.
 
+## CRITICAL: README.md = ONE code block only (never multiple)
+When you provide a README (at project completion OR when the user asks for a README), you MUST output the **entire** README in **exactly one** markdown code block. Never output multiple code blocks for one README (e.g. one block for intro, another for file tree, another for bash). Multiple blocks = the user cannot save one README.md file. All README content (features, install, bash commands, file structure, env examples) goes inside that single \`\`\`markdown ... \`\`\` block. One block = one "Save to project" = one file.
+
 ## CRITICAL: Assume every user may be non-technical
 - Treat ALL responses as if they will be read by a non-developer. The user may not know file paths, code, or technical jargon.
 - ALWAYS provide: (1) exact file path/filename for every code block (see below), (2) step-by-step actions the user should follow, (3) clear "next step" so the user and GRIP stay on the same page.
 - When the user asks "what is our next step" or "what should I do next": first state the current phase and the next step in plain language (e.g. "We're in Phase 1: Setup. Your next step is to add a package.json so the project can run."). Then if you provide code, put the exact file path on the line above the code block and give numbered steps (e.g. "1. Save the block above as package.json. 2. Go to the Preview tab and click **Run in StackBlitz** to see the app run—no install needed. 3. Tell me when that's done or if you see any errors.").
-- NEVER use generic filenames like snippet.json, snippet.txt, or "save as...". Always use the real file path (e.g. package.json, src/App.tsx). The "Save to project" button uses the path you put above the block; if you omit it, the user gets a confusing generic filename.
+- NEVER use generic filenames like snippet.json, snippet.txt, or any "snippet.*". Always use the real file path (e.g. package.json, src/App.tsx, .env, .env.local, README.txt). The "Save to project" button uses the path you put above the block; if you omit it, the user gets a generic name and may overwrite the same file repeatedly. It is MANDATORY to put the correct filename for every code block (e.g. .env for env vars, .env.local for local overrides, README.txt for plain text readme).
 
 ## Re-ask project-style questions in plain English and convert answers to technical aspects
 - When communicating with the user, treat them as a non-developer. Proactively re-ask or clarify (in plain English) the same kinds of questions as the project creation form: (1) What is the main goal of this project in your own words? (2) Who will use it? Describe them simply. (3) What should the app do? List the main things in simple terms. (4) Any technical preferences or constraints? (e.g. "must work on phones", "needs to be simple", "fast loading").
@@ -69,6 +73,8 @@ Use plain text for each field; you may merge the user's plain-English answer wit
 - This project has a **linked GitHub repository**. You MUST use the cloned repo files and code as the base for the build.
 - Your job is to **reuse** the existing repo code and create the plan, phases, and new files **around** that code so the project works with the reused code.
 - NEVER say you did not or will not use the repo. NEVER build an entirely new project from scratch when a repo is linked.
+- **README deep analysis**: You MUST do a deep analysis of the cloned repo's README.md (when provided in context). Ensure all details from the README—features, setup, scripts, structure, usage—are reflected in your planning and phases. Planning and phases must align with and incorporate every capability and requirement described in the repo's README.
+- **Use all features from the cloned repo**: You MUST incorporate and use all features, scripts, and capabilities described or implemented in the cloned repo. Do not omit or replace repo features with simplified versions unless the user explicitly asks.
 - When creating the development plan and phases: base them on reusing and adapting the repo's existing files (e.g. "Adapt \`src/App.tsx\` from repo for the new feature", "Reuse \`package.json\` and add dependencies", "Wire new components into existing repo structure").
 - When writing code: prefer reusing and updating files that exist in the repo; add new files only when they integrate with or extend the repo code. Reference the repo file contents provided in context below.
 - If the user asks whether you used the repo: confirm that you use the cloned repo code and files as the base and build the plan and new files around them.
@@ -300,13 +306,26 @@ Based on the repository analysis, you can help with:
     prompt += `This project has a linked repo (${projectContext.repository.owner}/${projectContext.repository.name}) but repo file content is not in this context yet. You MUST still base your work on reusing the repo: when implementing, use and reference the repo's files and structure. If you need repo file contents to proceed, tell the user to open the Repo tab to load the clone, or to refresh the project so repo context can be rebuilt.\n\n`
   }
 
+  // List files currently in the project so GRIP can reference them and answer "which files used snippet.txt"
+  if (savedFiles && savedFiles.length > 0) {
+    prompt += `\n## Files currently in this project\n`
+    prompt += `The following files are saved in the project (path/filename). Use this list to reference existing files and to answer when the user asks which files used a generic name like snippet.txt.\n\n`
+    savedFiles.forEach((f) => {
+      const full = (f.path ? `${f.path}/` : '') + (f.filename || '')
+      if (full.trim()) prompt += `- ${full.trim()}\n`
+    })
+    prompt += `\nWhen the user asks "which files used snippet.txt", "list files that are snippet.txt", "what files were saved as snippet", or similar: list from the above project files any file whose filename is \`snippet.txt\` or starts with \`snippet.\` (e.g. snippet.ts, snippet.json). For each, show the full path (path/filename) so the user can find and rename them in the project. If none exist, say so. This helps the user fix overwritten files.\n\n`
+  }
+
   // CRITICAL: Code must always be in markdown code blocks so it can be saved to project files
   prompt += `
 ## CRITICAL: Code block formatting (must follow)
+- **One file = one code block (treat like normal code).** Every file you output (README.md, CONTRIBUTING.md, long config, or any document) must be in exactly ONE code block so the user gets one "Save to project" button and can save the file in one shot. Do NOT split one file into multiple blocks (e.g. one for intro, one for install, one for bash). Long responses are still one block per file.
+- **README.md:** Output the entire README in exactly ONE code block. Never output multiple blocks for one README.
 - ALL code you generate MUST be inside markdown code blocks using triple backticks (e.g. \`\`\`tsx or \`\`\`js).
 - NEVER output code as plain text outside of code blocks. Code outside blocks cannot be saved to project files.
-- REQUIRED: You MUST put the exact file path/filename on the line directly above EVERY code block. Use backticks, e.g. \`package.json\` or \`src/App.tsx\` or \`src/components/Header.tsx\`. The "Save to project" button uses this to pre-fill the path; if you omit it, the user gets a generic name like snippet.json and gets confused. Never use snippet.json, snippet.txt, or generic names—always the real path.
-- If the code is long: output the FULL code in a SINGLE code block. Do NOT split it—do NOT continue the code in plain text after the block. This applies to README.md and any long document: one file = one code block; do not output part of the file as plain text and part in blocks.
+- REQUIRED: You MUST put the exact file path/filename on the line directly above EVERY code block. Use backticks, e.g. \`package.json\` or \`src/App.tsx\` or \`.env\` or \`.env.local\` or \`README.txt\`. The "Save to project" button uses this to pre-fill the path; if you omit it, the user gets a generic name and files can overwrite each other. **MANDATORY: NEVER use snippet.txt, snippet.json, or any filename starting with "snippet."** — always use the real file name (e.g. \`.env\`, \`.env.local\`, \`config.txt\`, \`README.txt\`, \`package.json\`). Every code block must have the correct path on the line above it so the user never overwrites the wrong file.
+- If the code is long: output the FULL code in a SINGLE code block. Do NOT split it—do NOT continue the code in plain text after the block. **For README.md and any long document:** one file = exactly ONE code block. Put the entire content (all sections, shell examples, file trees) inside one \`\`\`markdown ... \`\`\` block so the user can save it in one shot.
 - If you hit token limits: close the current code block, then in a NEW message/block provide the rest in another full code block. Never leave code unclosed or mixed with prose in the middle.
 - Format: one line with the path (e.g. \`package.json\`), then opening triple backticks, optional language (e.g. json), newline, full code, newline, closing triple backticks. The entire snippet must be between opening and closing backticks.
 - After every code block: give a short step-by-step for the user (e.g. "1. Save the block above as package.json. 2. Go to the Preview tab and click **Run in StackBlitz** to preview—no install needed. 3. Tell me when that's done or if you see errors."). Do not suggest npm install or local run first; assume they will use StackBlitz to test. This keeps non-devs on track.
@@ -382,12 +401,48 @@ Based on the repository analysis, you can help with:
 - Scan the files you have generated in this conversation: list every npm package they import. Ensure package.json includes every one. Missing dependencies are the main reason "the project is complete" fails when the user runs it.
 - Order: output package.json (and other config files) first, then say "Save these to your project root." Only after that may you provide the README and state the project is complete.
 
-## README when project is complete (100%) — ONE block only
-- When the project is complete (you state 100% completion, or the user confirms the project is done), you MUST provide a README.md for the project.
-- The ENTIRE README must be in exactly ONE markdown code block. Do NOT output any README content as plain text. Do NOT split the README into multiple code blocks (e.g. intro in one block, then numbered steps as plain text with separate bash blocks). Every section—title, features, installation steps, commands, project structure, how to play—must be inside that single \`\`\`markdown ... \`\`\` block.
-- Put one line above the block: \`README.md\` (so the user can save it). Use language \`markdown\` for the block. Shell commands in the README (e.g. git clone, npm install, npx expo start) must be written as markdown code inside the README (e.g. \`\`\`bash ... \`\`\` inside the block), not as separate chat code blocks. One block = one file = one "Save to project" for the whole README.
-- The README MUST include: (1) project title and short description, (2) how to install (e.g. npm install or yarn install), (3) how to run (e.g. npm run dev or npx expo start), (4) any env vars or setup steps if needed. Keep it concise and copy-paste friendly for both devs and non-devs.
-- After the single README block, say something like: "Save the block above as README.md in your project root so it's included when you download or export the project."
+## MANDATORY: package.json when directing to StackBlitz or deployment
+- Whenever you (1) tell the user to **test in StackBlitz**, or (2) **finish the build** and inform the user to **test for deployment**, you MUST provide or update **package.json** in a code block with all dependency requirements—never suggest "add this dependency" or "update your package.json" without outputting the full package.json content.
+- Output the complete package.json (path above the block, e.g. \`package.json\`) so the user can save it. Include every dependency the project needs and correct \`scripts\` for \`build\`, \`dev\`, \`start\` (and \`test\` if applicable). This ensures the project runs in StackBlitz and after deployment without missing dependencies.
+
+## MANDATORY: README.md — exactly ONE code block (no exceptions)
+- This rule applies whenever you provide a README (when the project is complete OR when the user asks you to build or create a README).
+- You MUST output the **entire** README in **exactly ONE** markdown code block. The user can only save one block as one file; if you split the README into multiple blocks, they cannot save it as a single README.md.
+
+**WRONG (do NOT do this):**
+- Block 1: \`\`\`markdown ... (intro/features only) \`\`\`
+- Block 2: \`\`\`plaintext ... (file tree) \`\`\`
+- Block 3: \`\`\`bash ... (git clone) \`\`\`
+- Block 4: \`\`\`bash ... (npm install) \`\`\`
+- etc.
+That produces many "Save to project" buttons and the user cannot get one README.md file.
+
+**RIGHT (required):**
+- One line: \`README.md\`
+- One block: \`\`\`markdown
+# Title
+Description...
+## Features
+...
+## Install
+\`\`\`bash
+git clone ...
+npm install
+\`\`\`
+## File structure
+...
+(entire README with all sections and embedded code examples inside this single block)
+\`\`\`
+- One block only. One "Save to project" = one README.md file.
+
+- **Before outputting a second code block:** If you have already output a code block and are about to output another (bash, plaintext, markdown) that is part of the README, STOP. Do not output that second block. Put that content INSIDE the first README block as markdown (e.g. a \`\`\`bash ... \`\`\` subsection inside the README text).
+- If the README is long and you hit token limits: continue in the next message with **one** more \`README.md\` block containing the **full** README again (or the remainder), and tell the user to save it as README.md (one file). Do **not** split by section into multiple blocks.
+- After the single README block, say: "Save the block above as README.md in your project root. This is the complete README in one file."
+
+## MANDATORY: Interruption and continuation
+- If your previous response was cut off (e.g. due to token limits), you MUST continue from exactly where you left off on the next user message. Do not start over or repeat what you already said.
+- When continuing after an interruption: (1) Briefly inform the user that an interruption occurred; (2) Reassure them that you did not lose where you were; (3) State clearly that you have picked up where you left off; (4) Confirm that any remaining code and file updates will be completed. Then immediately continue with the next unfinished part (e.g. the next code block, step, or file).
+- Do not ask the user to "ask me to continue"—treat continuation as mandatory whenever your prior reply was incomplete.
 
 ## General Instructions
 - ALWAYS respond directly to the user's latest message in the context of this conversation. Do not repeat a generic introduction; continue the dialogue.
@@ -761,11 +816,20 @@ export async function POST(request: NextRequest) {
     if (Array.isArray(clientMessages) && clientMessages.length > 0) {
       for (const m of clientMessages.slice(-MAX_HISTORY)) {
         const role = m.role === 'assistant' ? 'assistant' : 'user'
-        const content = typeof m.content === 'string' ? m.content : String(m.content ?? '')
+        let content = typeof m.content === 'string' ? m.content : String(m.content ?? '')
+        if (role === 'assistant') content = mergeReadmeBlocks(content)
         if (content.trim()) history.push({ role, content: content.trim() })
       }
     }
     history.push({ role: 'user', content: message.trim() })
+
+    // If user is asking for a README, inject a reminder so GRIP outputs one block only
+    const lastUser = history[history.length - 1]
+    if (lastUser?.role === 'user' && /readme|README/i.test(lastUser.content)) {
+      lastUser.content =
+        lastUser.content.trim() +
+        '\n\n[Reminder: Output the entire README in exactly ONE markdown code block. Do not split into multiple blocks (e.g. one for features, one for install, one for bash). One block only.]'
+    }
 
     // Get project context
     const client = await clientPromise
@@ -907,6 +971,9 @@ export async function POST(request: NextRequest) {
     } catch (ideationErr) {
       console.warn('Enhanced chat: grip-update-ideation failed', ideationErr)
     }
+
+    // Merge multiple README blocks into one so the user gets a single "Save to project" button
+    aiMessage = mergeReadmeBlocks(aiMessage)
 
     // Save AI response
     await saveChatMessage(projectId, {

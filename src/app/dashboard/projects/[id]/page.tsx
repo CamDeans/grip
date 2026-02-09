@@ -222,17 +222,17 @@ export default function ProjectOverviewPage() {
       {readyForDevelop && (
         <Card className="border-2 border-primary bg-primary/10">
           <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+              <div className="space-y-2">
                 <h2 className="text-xl font-bold text-primary">Your next step: Start building with GRIP</h2>
-                <p className="text-sm text-text-secondary mt-1">
+                <p className="text-sm text-text-secondary">
                   You’ve completed planning. Open <strong>Develop</strong> to chat with GRIP and implement your phases step by step.
                 </p>
-                <p className="text-xs text-text-muted mt-2 border-l-2 border-primary/50 pl-3">
+                <p className="text-xs text-text-muted border-l-2 border-primary/50 pl-3">
                   <strong>Before you go:</strong> GRIP works only on the current phase. When that phase is done, GRIP will route you back to this Overview page for next steps and realignment so you and GRIP stay in sync. Then you can start the next phase from here.
                 </p>
               </div>
-              <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="shrink-0">
+              <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="shrink-0 mt-2 sm:mt-0">
                 <Button size="lg" className="w-full sm:w-auto">
                   <MessageSquare className="w-4 h-4 mr-2" />
                   Go to Develop (chat with GRIP)
@@ -344,7 +344,7 @@ export default function ProjectOverviewPage() {
               <p className="text-xs text-text-muted border-l-2 border-primary/50 pl-3">
                 GRIP works only on the current phase. When the phase is complete, GRIP will route you back to this Overview page for next steps and realignment; then you can start the next phase from here so you and GRIP stay in sync.
               </p>
-              <Link href={`/dashboard/projects/${projectId}/enhanced-chat`}>
+              <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="mt-5 block">
                 <Button className="w-full sm:w-auto" size="lg">
                   <MessageSquare className="w-4 h-4 mr-2" />
                   {allPreChatStepsComplete ? 'Start chat with GRIP' : 'Continue with GRIP'}
@@ -360,7 +360,7 @@ export default function ProjectOverviewPage() {
                   <p className="text-xs text-text-muted border-l-2 border-primary/50 pl-3">
                     GRIP works only on the current phase and will always route you back to this Overview page for next steps and realignment before the next phase.
                   </p>
-                  <Link href={`/dashboard/projects/${projectId}/enhanced-chat`}>
+                  <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="mt-5 block">
                     <Button size="lg">Go to Develop (chat with GRIP)</Button>
                   </Link>
                 </>

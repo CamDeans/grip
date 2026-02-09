@@ -6,6 +6,7 @@ import { useEnhancedChat } from '@/components/providers/EnhancedChatProvider'
 import { ChatMessage, AIMessage, ErrorState } from '@/types/chat'
 import { Button } from '@/components/ui'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { validateMessage } from '@/lib/validation'
@@ -14,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { XCircleIcon, FileIcon, GitForkIcon, TerminalIcon, CodeIcon, RefreshCwIcon, ChevronDownIcon, ChevronUpIcon, PlayIcon, SendIcon, Loader2Icon, CheckCircle2, Circle } from 'lucide-react'
 import Link from 'next/link'
+import { toast as sonnerToast } from 'sonner'
 import { useParams, usePathname } from 'next/navigation'
 import { ProjectContextDisplay } from '@/components/chat/ProjectContextDisplay'
 import { TaskProgressIndicator } from '@/components/chat/TaskProgressIndicator'
@@ -454,11 +456,13 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     refreshContext
   } = useEnhancedChat()
   
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const [error, setError] = useState<ErrorState | null>(null)
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false)
   const [showWebSocketError, setShowWebSocketError] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const lastAssistantMessageRef = useRef<HTMLDivElement>(null)
   const params = useParams()
   const prevMessagesLengthRef = useRef(0)
 
@@ -477,15 +481,21 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     return () => cancelAnimationFrame(t)
   }, [messages.length, messages])
 
-  // When GRIP finishes streaming, scroll to show the full last message
+  // When GRIP finishes streaming, scroll to the TOP of the last assistant message so the user sees the start of the response (code blocks are collapsed by default)
   useEffect(() => {
     if (messages.length > 0 && !isTyping) {
+      const lastMessage = messages[messages.length - 1]
+      const lastIsAssistant = lastMessage?.role === 'assistant'
       const t = requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+        if (lastIsAssistant && lastAssistantMessageRef.current) {
+          lastAssistantMessageRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        } else {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+        }
       })
       return () => cancelAnimationFrame(t)
     }
-  }, [isTyping, messages.length])
+  }, [isTyping, messages.length, messages])
 
   // Add rate limiting and request size limits
   const MAX_MESSAGE_SIZE = 5000; // 5KB
@@ -781,7 +791,10 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
           content: cachedMessage,
           timestamp: new Date()
         });
-        if (inputRef.current) inputRef.current.value = '';
+        if (inputRef.current) {
+          inputRef.current.value = ''
+          inputRef.current.style.height = 'auto'
+        }
         setError(null);
         return;
       }
@@ -796,7 +809,10 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
         lastUpdateTime: now
       }));
 
-      if (inputRef.current) inputRef.current.value = '';
+      if (inputRef.current) {
+        inputRef.current.value = ''
+        inputRef.current.style.height = 'auto'
+      }
       setError(null);
     } catch (err: any) {
       console.error('Error sending message:', err);
@@ -827,6 +843,20 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     return () => observer.disconnect();
   }, []);
 
+  /** Detect if GRIP's message tells the user to preview in StackBlitz so we can show a quick-link */
+  const messageMentionsStackBlitzPreview = (content: string | undefined): boolean => {
+    if (!content || typeof content !== 'string') return false
+    const lower = content.toLowerCase()
+    return (
+      lower.includes('stackblitz') ||
+      lower.includes('run in stackblitz') ||
+      lower.includes('preview tab') ||
+      lower.includes('preview the app') ||
+      lower.includes('test in stackblitz') ||
+      /preview.*stackblitz|stackblitz.*preview/i.test(content)
+    )
+  }
+
   const RUN_ERRORS_SUBMISSION_COLORS = [
     'bg-blue-500/25 text-blue-900 dark:text-blue-100 border-blue-400/50',
     'bg-emerald-500/25 text-emerald-900 dark:text-emerald-100 border-emerald-400/50',
@@ -836,16 +866,18 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     'bg-pink-500/25 text-pink-900 dark:text-pink-100 border-pink-400/50',
   ]
 
-  const renderMessage = (message: ChatMessage) => {
+  const renderMessage = (message: ChatMessage, index: number) => {
     const isUser = message.role === 'user'
     const isAIMessage = message.role === 'assistant' && 'stepContext' in message
     const isRunErrorsSubmission = message.metadata?.type === 'run_errors_submission'
     const submissionIndex = message.metadata?.submissionIndex ?? 0
     const submissionColor = RUN_ERRORS_SUBMISSION_COLORS[(submissionIndex - 1) % RUN_ERRORS_SUBMISSION_COLORS.length]
+    const isLastAssistantMessage = index === messages.length - 1 && message.role === 'assistant'
 
     return (
       <motion.div
         key={message.id}
+        ref={isLastAssistantMessage ? lastAssistantMessageRef : undefined}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
@@ -910,6 +942,23 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
                 <span>Step: {(message as AIMessage).stepContext.stepId}</span>
                 <span>Status: {(message as AIMessage).stepContext.action.status}</span>
               </div>
+            </div>
+          )}
+
+          {!isUser && projectId && messageMentionsStackBlitzPreview('content' in message ? message.content : undefined) && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  const url = `/dashboard/projects/${projectId}/open-stackblitz`
+                  window.open(url, '_blank', 'noopener,noreferrer')
+                  sonnerToast.success('Opening StackBlitz in new tab', { description: 'Stay here in chat — copy errors from StackBlitz and paste below to send to GRIP.' })
+                }}
+                className="inline-flex items-center gap-2 rounded-md border border-primary/50 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/20 transition-colors"
+              >
+                <CodeIcon className="h-4 w-4 shrink-0" />
+                Run in StackBlitz (opens new tab)
+              </button>
             </div>
           )}
         </div>
@@ -977,7 +1026,7 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
       <div className="flex-1 min-h-0 w-full max-w-full min-w-0 overflow-x-hidden overflow-y-auto p-2">
         <div className="pb-2 space-y-4 w-full max-w-full min-w-0 overflow-x-hidden box-border">
           <AnimatePresence>
-            {messages.map((message) => renderMessage(message))}
+            {messages.map((message, index) => renderMessage(message, index))}
           </AnimatePresence>
           {isTyping && (
             <motion.div
@@ -1029,7 +1078,7 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
             aria-expanded={runDebugOpen}
             aria-controls="run-debug-panel"
             id="run-debug-toggle"
-            className="w-full flex items-center justify-between px-4 py-2.5 text-left text-sm font-medium text-text-primary hover:bg-background-tertiary/50 transition-colors rounded-b-none"
+            className="w-full flex items-center justify-between px-4 py-3 text-left text-sm font-semibold text-primary border border-primary/40 bg-primary/10 hover:bg-primary/20 transition-colors rounded-b-none"
           >
             <span className="flex items-center gap-2">
               <TerminalIcon className="h-4 w-4 text-primary shrink-0" />
@@ -1048,14 +1097,14 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
                 Run build/install here → send output to GRIP → get fixes in chat. {!canRun && 'No local path? Paste build or run errors in the chat below and GRIP will fix them.'}
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => handleRunCommand('npm install')} disabled={running} className="font-mono text-xs">
+                <Button type="button" variant="outline" size="sm" onClick={() => handleRunCommand('npm install')} disabled={running} className="font-mono text-xs font-medium border-primary/50 text-primary bg-primary/10 hover:bg-primary/20">
                   {running ? <Loader2Icon className="h-3 w-3 animate-spin shrink-0" /> : null}
                   npm install
                 </Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => handleRunCommand('npm run build')} disabled={running} className="font-mono text-xs">
+                <Button type="button" variant="outline" size="sm" onClick={() => handleRunCommand('npm run build')} disabled={running} className="font-mono text-xs font-medium border-primary/50 text-primary bg-primary/10 hover:bg-primary/20">
                   npm run build
                 </Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => handleRunCommand('npm run dev')} disabled={running} className="font-mono text-xs">
+                <Button type="button" variant="outline" size="sm" onClick={() => handleRunCommand('npm run dev')} disabled={running} className="font-mono text-xs font-medium border-primary/50 text-primary bg-primary/10 hover:bg-primary/20">
                   npm run dev
                 </Button>
               </div>
@@ -1091,7 +1140,7 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
                           Run again
                         </Button>
                       )}
-                      <Button type="button" variant="secondary" size="sm" onClick={() => handleSendOutputToGrip(true)} title="Put output in chat and send to GRIP">
+                      <Button type="button" variant="default" size="sm" onClick={() => handleSendOutputToGrip(true)} title="Put output in chat and send to GRIP" className="font-semibold shadow-sm">
                         <SendIcon className="h-3 w-3 mr-1" />
                         Send to GRIP
                       </Button>
@@ -1109,23 +1158,37 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
           )}
         </div>
 
-        {/* Chat Input */}
+        {/* Chat Input — textarea expands with content; Enter sends, Shift+Enter new line */}
         <div className="flex-shrink-0 border-t p-4">
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <Input
+          <form ref={formRef} onSubmit={handleSubmit} className="flex gap-2 items-end">
+            <Textarea
               ref={inputRef}
+              name="message"
               defaultValue=""
-              placeholder={isTyping ? "GRIP is thinking..." : "Type your message..."}
+              placeholder={isTyping ? "GRIP is thinking..." : "Type your message... (Shift+Enter for new line)"}
               disabled={isLoading || isTyping}
-              className="flex-1"
+              className="flex-1 min-h-[40px] max-h-[200px] resize-none py-2.5"
+              rows={1}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  formRef.current?.requestSubmit()
+                }
+              }}
+              onInput={(e) => {
+                const ta = e.target as HTMLTextAreaElement
+                ta.style.height = 'auto'
+                ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`
+              }}
             />
-            <Button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={isLoading || isTyping}
-              title={isTyping ? "GRIP is thinking..." : "Send message"}
+              title={isTyping ? "GRIP is thinking..." : "Send message (Enter)"}
+              className="inline-flex items-center justify-center gap-2 shrink-0 min-w-[5rem] h-10 px-4 py-2 rounded-md text-sm font-semibold bg-primary text-primary-foreground shadow-md ring-2 ring-primary/30 hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background-primary disabled:pointer-events-none disabled:opacity-50"
             >
               {isLoading ? 'Sending...' : isTyping ? 'Thinking...' : 'Send'}
-            </Button>
+            </button>
           </form>
         </div>
       </div>

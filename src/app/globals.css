@@ -119,10 +119,11 @@
   }
 
   .user-avatar {
-    @apply h-8 w-8 rounded-full cursor-pointer ring-2 ring-background-secondary
+    @apply h-8 w-8 min-h-8 min-w-8 rounded-full cursor-pointer ring-2 ring-background-secondary
     hover:ring-primary hover:scale-105 transition-all duration-200;
     background: var(--primary);
     color: var(--primary-foreground);
+    aspect-ratio: 1;
   }
 
   .gradient-button {

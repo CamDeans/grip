@@ -13,12 +13,16 @@ import { toast } from '@/components/ui/use-toast'
 import { 
   PlusIcon, 
   ArrowPathIcon, 
-  XMarkIcon,
   BookOpenIcon,
   UserGroupIcon,
   SparklesIcon,
   WrenchScrewdriverIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  InformationCircleIcon,
+  QuestionMarkCircleIcon,
+  CheckCircleIcon,
+  ChevronDownIcon,
+  ChevronUpIcon
 } from '@heroicons/react/24/outline'
 
 interface ProjectFormData {
@@ -41,6 +45,8 @@ export default function NewProjectPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isFormValid, setIsFormValid] = useState(false)
   const [currentStep, setCurrentStep] = useState<'details' | 'context'>('details')
+  const [faqOpen, setFaqOpen] = useState(false)
+  const [githubExplanationOpen, setGithubExplanationOpen] = useState(false)
   const [formData, setFormData] = useState<ProjectFormData>({
     title: '',
     description: '',
@@ -178,7 +184,7 @@ export default function NewProjectPage() {
     <>
       <PageHeader
         title="Create New Project"
-        description="Set up a new project with G.R.I.P."
+        description="Tell G.R.I.P. your idea in plain language. You’ll fill in two short steps; no coding or technical experience required."
         actions={
           <Button
             variant="outline"
@@ -190,11 +196,40 @@ export default function NewProjectPage() {
         }
       />
 
+      {/* What you'll do — step-by-step for non-devs */}
+      <Card className="mb-6 border-primary/20 bg-primary/5">
+        <div className="px-6 py-4 border-b border-border">
+          <h2 className="text-base font-medium flex items-center gap-2">
+            <InformationCircleIcon className="h-5 w-5 text-primary shrink-0" />
+            What you’ll do
+          </h2>
+          <p className="text-sm text-text-secondary mt-1">
+            Two short steps. Then G.R.I.P. will work with you in chat to bring your idea to life.
+          </p>
+        </div>
+        <div className="px-6 py-4">
+          <ol className="space-y-2 text-sm text-text-primary">
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">1</span>
+              <span><strong>Project details</strong> — Give your project a name and a short description. If you have existing code on GitHub, you can link it here (optional).</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">2</span>
+              <span><strong>Project context</strong> — Describe your goals, who it’s for, main features, and any must-haves (e.g. “works on phones”, “simple to use”). Use plain language; G.R.I.P. will turn that into a plan.</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">3</span>
+              <span><strong>Chat with G.R.I.P.</strong> — After you create the project, open <strong>Develop</strong> and talk to G.R.I.P. in chat. It will write code, create files, and guide you step by step. You can say things like “add a login page” or “make it work on mobile.”</span>
+            </li>
+          </ol>
+        </div>
+      </Card>
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {currentStep === 'details' ? (
           <Card>
             <div className="px-6 py-5 border-b border-border">
-              <h2 className="text-lg font-medium">Project Details</h2>
+              <h2 className="text-lg font-medium">Step 1: Project Details</h2>
               <p className="text-sm text-text-secondary mt-1">Basic information about your project</p>
             </div>
             <div className="p-6 space-y-6">
@@ -205,7 +240,7 @@ export default function NewProjectPage() {
                     id="project-title"
                     value={formData.title}
                     onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                    placeholder="Enter project title"
+                    placeholder="e.g. My Recipe App"
                     className="mt-1"
                     required
                   />
@@ -219,13 +254,43 @@ export default function NewProjectPage() {
                     onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                     className="form-input mt-1 w-full"
                     rows={3}
-                    placeholder="Describe your project"
+                    placeholder="In a sentence or two: what is this project? e.g. A simple app where users can save and search their favorite recipes."
                     required
                   />
                 </div>
 
                 <div>
-                  <Label>GitHub Repository</Label>
+                  <Label>GitHub Repository (optional)</Label>
+                  <div className="mt-3 mb-2 rounded-md border border-border overflow-hidden">
+                    <button
+                      type="button"
+                      id="github-explanation-heading"
+                      onClick={() => setGithubExplanationOpen((prev) => !prev)}
+                      className="w-full px-4 pt-4 pb-3 flex items-center justify-between gap-2 text-left text-xs hover:bg-muted/50 transition-colors"
+                      aria-expanded={githubExplanationOpen ? 'true' : 'false'}
+                      aria-controls="github-explanation-content"
+                    >
+                      <span className="font-medium text-text-primary">What is GitHub? How do I find a repo?</span>
+                      <span className="flex items-center gap-1 shrink-0 text-text-secondary">
+                        {githubExplanationOpen ? 'Collapse' : 'Expand'}
+                        {githubExplanationOpen ? (
+                          <ChevronUpIcon className="h-4 w-4" aria-hidden />
+                        ) : (
+                          <ChevronDownIcon className="h-4 w-4" aria-hidden />
+                        )}
+                      </span>
+                    </button>
+                    <div
+                      id="github-explanation-content"
+                      role="region"
+                      aria-labelledby="github-explanation-heading"
+                      className={githubExplanationOpen ? 'px-4 pt-4 pb-3 text-xs text-text-secondary border-t border-border' : 'hidden'}
+                    >
+                      <p>
+                        <strong>What is GitHub?</strong> GitHub is a website where developers store and share code. A <strong>repository</strong> (or “repo”) is one project folder on GitHub (e.g. your-app, my-website). You only need this if you already have code on GitHub that you want G.R.I.P. to build on. If you’re starting from scratch with just an idea, leave this blank and click <strong>Continue</strong>. If you want to find a repo to link: fill in your project title and description above first, then click <strong>Generate Keywords</strong> to get suggested search terms based on your project; click <strong>Use Keywords</strong> to add them to the search box, then click <strong>Search</strong> to find matching repositories.
+                      </p>
+                    </div>
+                  </div>
                   <div className="mt-1">
                     <RepoSelector
                       projectTitle={formData.title}
@@ -257,8 +322,14 @@ export default function NewProjectPage() {
         ) : (
           <Card>
             <div className="px-6 py-5 border-b border-border">
-              <h2 className="text-lg font-medium">Project Context</h2>
-              <p className="text-sm text-text-secondary mt-1">Help G.R.I.P. understand your project goals</p>
+              <h2 className="text-lg font-medium">Step 2: Project Context</h2>
+              <p className="text-sm text-text-secondary mt-1">Help G.R.I.P. understand your project goals so it can plan and build with you</p>
+              <div className="mt-3 p-3 rounded-md bg-primary/10 border border-primary/20 flex gap-2">
+                <CheckCircleIcon className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                <div className="text-sm text-text-primary">
+                  <strong>Tips for the best result:</strong> Write in plain language (e.g. “I want a simple to-do list” or “It should work on phones”). The more you describe goals, audience, and features, the better G.R.I.P. can match your idea. You can always add or change details later in chat.
+                </div>
+              </div>
             </div>
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -270,6 +341,7 @@ export default function NewProjectPage() {
                     <BookOpenIcon className="h-4 w-4 mr-2 text-primary" />
                     Goals
                   </Label>
+                  <p className="text-xs text-text-secondary mt-0.5 mb-1">What do you want this project to achieve?</p>
                   <textarea
                     id="project-goals"
                     value={formData.ideation.goals}
@@ -279,7 +351,7 @@ export default function NewProjectPage() {
                     }))}
                     className="form-input mt-1 w-full"
                     rows={4}
-                    placeholder="What are the main goals of this project?"
+                    placeholder="e.g. Help users save recipes and search by ingredient. Keep it simple so anyone can use it."
                     required
                   />
                 </div>
@@ -292,6 +364,7 @@ export default function NewProjectPage() {
                     <UserGroupIcon className="h-4 w-4 mr-2 text-primary" />
                     Target Audience
                   </Label>
+                  <p className="text-xs text-text-secondary mt-0.5 mb-1">Who will use it?</p>
                   <textarea
                     id="target-audience"
                     value={formData.ideation.targetAudience}
@@ -301,7 +374,7 @@ export default function NewProjectPage() {
                     }))}
                     className="form-input mt-1 w-full"
                     rows={4}
-                    placeholder="Who is this project for?"
+                    placeholder="e.g. Home cooks who want to organize recipes. Non-technical users who need a simple interface."
                     required
                   />
                 </div>
@@ -314,6 +387,7 @@ export default function NewProjectPage() {
                     <SparklesIcon className="h-4 w-4 mr-2 text-primary" />
                     Key Features
                   </Label>
+                  <p className="text-xs text-text-secondary mt-0.5 mb-1">What should it do? List the main things.</p>
                   <textarea
                     id="key-features"
                     value={formData.ideation.keyFeatures}
@@ -323,7 +397,7 @@ export default function NewProjectPage() {
                     }))}
                     className="form-input mt-1 w-full"
                     rows={4}
-                    placeholder="What are the main features?"
+                    placeholder="e.g. Add and edit recipes. Search by name or ingredient. Save favorites. Print or share a recipe."
                     required
                   />
                 </div>
@@ -336,6 +410,7 @@ export default function NewProjectPage() {
                     <WrenchScrewdriverIcon className="h-4 w-4 mr-2 text-primary" />
                     Technical Requirements
                   </Label>
+                  <p className="text-xs text-text-secondary mt-0.5 mb-1">Any must-haves? (optional — use plain language)</p>
                   <textarea
                     id="technical-requirements"
                     value={formData.ideation.technicalRequirements}
@@ -345,7 +420,7 @@ export default function NewProjectPage() {
                     }))}
                     className="form-input mt-1 w-full"
                     rows={4}
-                    placeholder="Specific technical requirements or constraints"
+                    placeholder="e.g. Must work on phones. Fast loading. Simple design. Or leave blank if you're not sure."
                     required
                   />
                 </div>
@@ -381,6 +456,69 @@ export default function NewProjectPage() {
           </Card>
         )}
       </form>
+
+      {/* FAQ for non-devs — collapsible */}
+      <Card className="mt-8">
+        <button
+          type="button"
+          onClick={() => setFaqOpen((prev) => !prev)}
+          className="w-full px-6 py-4 flex items-center justify-between gap-2 text-left hover:bg-muted/50 transition-colors rounded-t-lg border-b border-border"
+          aria-expanded={faqOpen ? 'true' : 'false'}
+          aria-controls="faq-content"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <QuestionMarkCircleIcon className="h-5 w-5 text-primary shrink-0" />
+            <h2 className="text-base font-medium" id="faq-heading">
+              Frequently asked questions
+            </h2>
+          </div>
+          <span className="text-sm text-text-secondary shrink-0">
+            {faqOpen ? 'Collapse' : 'Expand'}
+          </span>
+          {faqOpen ? (
+            <ChevronUpIcon className="h-5 w-5 text-text-secondary shrink-0" aria-hidden />
+          ) : (
+            <ChevronDownIcon className="h-5 w-5 text-text-secondary shrink-0" aria-hidden />
+          )}
+        </button>
+        <div
+          id="faq-content"
+          role="region"
+          aria-labelledby="faq-heading"
+          className={faqOpen ? 'px-6 py-4 space-y-5 border-t border-border' : 'hidden'}
+        >
+          <div>
+            <h3 className="text-sm font-medium text-text-primary">What is GitHub and do I need it?</h3>
+            <p className="text-sm text-text-secondary mt-1">
+              GitHub is a website where people store and share code. A <strong>repository</strong> (repo) is one code project on GitHub. You <strong>do not need</strong> GitHub to use G.R.I.P. If you’re starting from an idea only, skip the GitHub step and leave it blank. Use GitHub only if you already have code there that you want G.R.I.P. to build on or improve. If you do want to link a repo: fill in your project title and description first, then use <strong>Generate Keywords</strong> to get suggested search terms based on your project; click <strong>Use Keywords</strong> to add them to the search box and <strong>Search</strong> to find repositories that match.
+            </p>
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-text-primary">What happens after I create the project?</h3>
+            <p className="text-sm text-text-secondary mt-1">
+              You’ll land on your project’s <strong>Overview</strong> page. From there, open the <strong>Develop</strong> tab to chat with G.R.I.P. Describe what you want in plain language (e.g. “add a login page”, “make it work on mobile”). G.R.I.P. will write code, create files, and guide you. You can test the app in the browser (StackBlitz) without installing anything.
+            </p>
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-text-primary">How do I get the best result from G.R.I.P.?</h3>
+            <p className="text-sm text-text-secondary mt-1">
+              <strong>Be specific in this form:</strong> The more you describe your goals, audience, and features here, the better G.R.I.P. can plan. <strong>Use plain language:</strong> Say “I want a simple to-do list” or “it should work on phones” — no technical jargon needed. <strong>In chat:</strong> Ask for one thing at a time (e.g. “add a button that saves the recipe”) and say when something isn’t right so G.R.I.P. can fix it.
+            </p>
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-text-primary">What if I don’t know technical requirements?</h3>
+            <p className="text-sm text-text-secondary mt-1">
+              You can leave that field blank or write things like “simple to use”, “works on phones”, or “loads quickly”. G.R.I.P. will suggest a sensible setup. You can always add or change requirements later in chat.
+            </p>
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-text-primary">Can I change my project details later?</h3>
+            <p className="text-sm text-text-secondary mt-1">
+              Yes. After creating the project, go to <strong>Settings</strong> to edit the title, description, goals, audience, features, and technical requirements. You can also tell G.R.I.P. in chat about new goals or features and it will update the plan with you.
+            </p>
+          </div>
+        </div>
+      </Card>
     </>
   )
 }
