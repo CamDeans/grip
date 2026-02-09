@@ -5,6 +5,7 @@ import clientPromise from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import crypto from 'crypto'
 import { isImagePath, validateImageContent } from '@/lib/imageValidation'
+import { recordFileSaveAndAdvanceStep } from '@/lib/services/projectStateService'
 
 /**
  * POST /api/projects/[id]/files/save-from-chat
@@ -88,6 +89,7 @@ export async function POST(
           },
         }
       )
+      await recordFileSaveAndAdvanceStep(projectId, path, filename)
       return NextResponse.json({
         success: true,
         action: 'updated',
@@ -121,6 +123,7 @@ export async function POST(
     }
     const result = await coll.insertOne(doc)
     const id = result.insertedId.toString()
+    await recordFileSaveAndAdvanceStep(projectId, path, filename)
     return NextResponse.json({
       success: true,
       action: 'created',

@@ -1,8 +1,12 @@
 import { MongoClient, type MongoClientOptions } from 'mongodb'
 
 const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017'
+const dbName = process.env.MONGODB_DB_NAME || 'test'
 
-const baseOptions: MongoClientOptions = {}
+const baseOptions: MongoClientOptions = {
+  // Ensure default database matches lib/mongodb (projects use Mongoose with same name)
+  dbName,
+}
 
 // Production (e.g. Vercel serverless): avoid SSL/TLS handshake issues with Atlas
 if (process.env.NODE_ENV === 'production' && uri.startsWith('mongodb+srv://')) {

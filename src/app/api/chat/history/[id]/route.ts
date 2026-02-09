@@ -5,9 +5,10 @@ import { ObjectId } from 'mongodb'
 
 export async function GET(
   _: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerAuthSession()
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -18,7 +19,7 @@ export async function GET(
 
     // Get chat history from projectState
     const projectState = await db.collection('projectState').findOne({
-      projectId: new ObjectId(params.id)
+      projectId: new ObjectId(id)
     })
 
     return NextResponse.json({ messages: projectState?.chatHistory || [] })
@@ -33,9 +34,10 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const authSession = await getServerAuthSession()
     if (!authSession?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -47,7 +49,7 @@ export async function POST(
 
     // Update only projectState with new chat history
     const result = await db.collection('projectState').updateOne(
-      { projectId: new ObjectId(params.id) },
+      { projectId: new ObjectId(id) },
       { 
         $set: { 
           chatHistory: messages,

@@ -10,22 +10,33 @@ interface Project {
   _id: string
   title: string
   description: string
+  repository?: { owner: string; name: string }
 }
+
+/** Step order: Overview → Setup → Repo → Plan → Develop → Preview. Tabs show only where user is and what is next. */
+const STEP_CONFIG = [
+  { id: 'overview', path: '', label: 'Overview', pathMatch: (base: string) => base === '' },
+  { id: 'setup', path: '/settings', label: 'Setup', pathMatch: (base: string) => base === 'settings' },
+  { id: 'repo', path: '/repo', label: 'Repo', pathMatch: (base: string) => base === 'repo' },
+  { id: 'plan', path: '/planning', label: 'Plan', pathMatch: (base: string) => base === 'planning' },
+  { id: 'develop', path: '/enhanced-chat', label: 'Develop', pathMatch: (base: string) => base === 'enhanced-chat' },
+  { id: 'preview', path: '/preview', label: 'Preview', pathMatch: (base: string) => base === 'preview' },
+] as const
 
 export default function ProjectLayout({ children }: { children: React.ReactNode }) {
   const params = useParams<{ id: string }>()
   const pathname = usePathname()
   const projectId = params?.id || ''
   const [project, setProject] = useState<Project | null>(null)
+  const [hasAnalysis, setHasAnalysis] = useState<boolean | null>(null)
+  const [hasPlan, setHasPlan] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Determine active tab (order: Overview → Repo → Plan → Develop → Preview → Settings)
-  const isOverviewTab = pathname === `/dashboard/projects/${projectId}`
-  const isRepoTab = pathname === `/dashboard/projects/${projectId}/repo`
-  const isPlanningTab = pathname === `/dashboard/projects/${projectId}/planning`
-  const isDevelopTab = pathname === `/dashboard/projects/${projectId}/enhanced-chat`
-  const isPreviewTab = pathname === `/dashboard/projects/${projectId}/preview`
-  const isSettingsTab = pathname === `/dashboard/projects/${projectId}/settings`
+  const basePath = `/dashboard/projects/${projectId}`
+  const pathSuffix = pathname?.startsWith(basePath) ? pathname.slice(basePath.length).replace(/^\//, '') : ''
+  const pathSegment = pathSuffix.split('/')[0] || ''
+
+  const hasRepo = Boolean(project?.repository?.owner && project?.repository?.name)
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -46,10 +57,59 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
     }
   }, [projectId])
 
-  // Then after all hooks are declared, add the guard
+  useEffect(() => {
+    if (!projectId) return
+    Promise.all([
+      fetch(`/api/projects/${projectId}/analysis/status`).then((r) => (r.ok ? r.json() : null)).then((d) => d?.hasAnalysis ?? d?.analysisCompleted ?? false).catch(() => false),
+      fetch(`/api/projects/${projectId}/plan`).then((r) => r.ok).catch(() => false),
+    ]).then(([analysis, plan]) => {
+      setHasAnalysis(!!analysis)
+      setHasPlan(!!plan)
+    })
+  }, [projectId])
+
+  // Which step is current (from pathname)
+  const currentStepIndex = STEP_CONFIG.findIndex((s) => {
+    if (s.id === 'overview') return pathSegment === ''
+    if (s.id === 'setup') return pathSegment === 'settings'
+    if (s.id === 'repo') return pathSegment === 'repo'
+    if (s.id === 'plan') return pathSegment === 'planning'
+    if (s.id === 'develop') return pathSegment === 'enhanced-chat'
+    if (s.id === 'preview') return pathSegment === 'preview'
+    return false
+  })
+  const currentStep = currentStepIndex >= 0 ? STEP_CONFIG[currentStepIndex] : STEP_CONFIG[0]
+
+  // Next step = where user should go (depends on progress)
+  const getNextStep = (): typeof STEP_CONFIG[number] | null => {
+    if (currentStep.id === 'preview') return null
+    if (currentStep.id === 'overview') {
+      if (!hasRepo) return STEP_CONFIG[1] // Setup
+      if (hasPlan === true) return STEP_CONFIG[4] // Develop
+      return STEP_CONFIG[2] // Repo
+    }
+    if (currentStep.id === 'setup') return STEP_CONFIG[2] // Repo
+    if (currentStep.id === 'repo') return STEP_CONFIG[3] // Plan
+    if (currentStep.id === 'plan') return hasPlan === true ? STEP_CONFIG[4] : null
+    if (currentStep.id === 'develop') return STEP_CONFIG[5] // Preview
+    return null
+  }
+  const nextStep = getNextStep()
+
+  // Visible tabs: only Overview + current + next (and immediate next steps when they make sense)
+  const visibleIds = new Set<string>(['overview'])
+  if (currentStep.id !== 'overview') visibleIds.add(currentStep.id)
+  if (nextStep) visibleIds.add(nextStep.id)
+  if (!hasRepo) visibleIds.add('setup')
+  if (hasRepo && (currentStep.id === 'overview' || currentStep.id === 'repo')) visibleIds.add('plan')
+  if (hasPlan === true && (currentStep.id === 'overview' || currentStep.id === 'plan' || currentStep.id === 'develop')) visibleIds.add('develop')
+  if (hasPlan === true && (currentStep.id === 'develop' || currentStep.id === 'preview')) visibleIds.add('preview')
+
+  const orderedVisible = STEP_CONFIG.filter((s) => visibleIds.has(s.id))
+
   if (!projectId) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex justify-center items-center min-h-screen">
         <div className="bg-destructive/10 text-destructive p-4 rounded-md">
           <h2 className="text-lg font-semibold mb-2">Error</h2>
           <p>Project ID is missing or invalid</p>
@@ -58,38 +118,42 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
     )
   }
 
+  const activeValue =
+    pathSegment === '' ? 'overview' :
+    pathSegment === 'settings' ? 'setup' :
+    pathSegment === 'repo' ? 'repo' :
+    pathSegment === 'planning' ? 'plan' :
+    pathSegment === 'enhanced-chat' ? 'develop' :
+    pathSegment === 'preview' ? 'preview' : 'overview'
+
   return (
     <div>
       <PageHeader
         title={isLoading ? 'Loading...' : project?.title || 'Project'}
-        description={isLoading ? 'Loading project details...' : project?.description || 'No description available'}
+        description={isLoading ? 'Loading project...' : project?.description || 'No description'}
       />
 
       <p className="mb-4 text-sm text-text-secondary">
-        GRIP is your AI partner for this project. Start in <strong>Develop</strong> to build with chat, or explore <strong>Repo</strong> and <strong>Plan</strong> first.
+        You are here: <strong>{currentStep.label}</strong>
+        {nextStep && (
+          <> · Next: <Link href={`${basePath}${nextStep.path}`} className="text-primary hover:underline">{nextStep.label}</Link></>
+        )}
       </p>
-      
+
       <div className="mb-6 border-b border-border-default">
-        <Tabs defaultValue={isOverviewTab ? 'overview' : isRepoTab ? 'repo' : isPlanningTab ? 'planning' : isDevelopTab ? 'develop' : isPreviewTab ? 'preview' : 'settings'} className="w-full">
+        <Tabs value={activeValue} className="w-full">
           <TabsList className="w-full justify-start flex-wrap gap-1">
-            <Link href={`/dashboard/projects/${projectId}`} className="flex-1 min-w-0 max-w-[120px]">
-              <TabsTrigger value="overview" className="w-full">Overview</TabsTrigger>
-            </Link>
-            <Link href={`/dashboard/projects/${projectId}/repo`} className="flex-1 min-w-0 max-w-[120px]">
-              <TabsTrigger value="repo" className="w-full">Repo</TabsTrigger>
-            </Link>
-            <Link href={`/dashboard/projects/${projectId}/planning`} className="flex-1 min-w-0 max-w-[120px]">
-              <TabsTrigger value="planning" className="w-full">Plan</TabsTrigger>
-            </Link>
-            <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="flex-1 min-w-0 max-w-[120px]">
-              <TabsTrigger value="develop" className="w-full">Develop</TabsTrigger>
-            </Link>
-            <Link href={`/dashboard/projects/${projectId}/preview`} className="flex-1 min-w-0 max-w-[120px]">
-              <TabsTrigger value="preview" className="w-full">Preview</TabsTrigger>
-            </Link>
-            <Link href={`/dashboard/projects/${projectId}/settings`} className="flex-1 min-w-0 max-w-[120px]">
-              <TabsTrigger value="settings" className="w-full">Settings</TabsTrigger>
-            </Link>
+            {orderedVisible.map((step) => (
+              <Link
+                key={step.id}
+                href={`${basePath}${step.path}`}
+                className="flex-1 min-w-0 max-w-[120px]"
+              >
+                <TabsTrigger value={step.id} className="w-full">
+                  {step.label}
+                </TabsTrigger>
+              </Link>
+            ))}
           </TabsList>
         </Tabs>
       </div>
@@ -99,4 +163,4 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
       </div>
     </div>
   )
-} 
+}

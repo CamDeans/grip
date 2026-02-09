@@ -13,9 +13,10 @@ interface IdeationData {
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerAuthSession()
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -25,11 +26,11 @@ export async function POST(
     const client = await clientPromise
     const db = client.db()
 
-    console.log('Saving ideation data for project:', params.id)
+    console.log('Saving ideation data for project:', id)
 
     // Update project with ideation data
     const result = await db.collection('projects').updateOne(
-      { _id: new ObjectId(params.id) },
+      { _id: new ObjectId(id) },
       {
         $set: {
           ideation: ideationData,
@@ -45,7 +46,7 @@ export async function POST(
 
     // Initialize or update chat with new ideation context
     await db.collection('chatHistory').updateOne(
-      { projectId: new ObjectId(params.id) },
+      { projectId: new ObjectId(id) },
       {
         $set: {
           context: JSON.stringify({
@@ -73,9 +74,10 @@ export async function POST(
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerAuthSession()
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -85,7 +87,7 @@ export async function GET(
     const db = client.db()
 
     const project = await db.collection('projects').findOne(
-      { _id: new ObjectId(params.id) },
+      { _id: new ObjectId(id) },
       { projection: { ideation: 1 } }
     )
 
@@ -105,9 +107,10 @@ export async function GET(
 
 export async function PUT(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerAuthSession()
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -118,7 +121,7 @@ export async function PUT(
     const db = client.db()
 
     const result = await db.collection('projects').updateOne(
-      { _id: new ObjectId(params.id) },
+      { _id: new ObjectId(id) },
       {
         $set: {
           'ideation': updates,
@@ -133,7 +136,7 @@ export async function PUT(
 
     // Update chat context with new ideation data
     await db.collection('chatHistory').updateOne(
-      { projectId: new ObjectId(params.id) },
+      { projectId: new ObjectId(id) },
       {
         $set: {
           context: JSON.stringify({

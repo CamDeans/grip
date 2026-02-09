@@ -5,10 +5,9 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui'
-import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal } from 'lucide-react'
+import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks } from 'lucide-react'
 import { toast as sonnerToast } from 'sonner'
 import Link from 'next/link'
-import { cn } from '@/lib/client-utils'
 import { useRouter, useParams } from 'next/navigation'
 import { Modal } from '@/components/ui/Modal'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -35,14 +34,6 @@ interface Project {
   deployedUrl?: string
 }
 
-const steps = [
-  { id: 1, title: "Ideate", description: "Define goals and requirements (set when you created the project)", icon: Lightbulb, href: "#ideation" },
-  { id: 2, title: "Repo", description: "Explore every file and make the codebase yours", icon: Code, href: "/dashboard/projects/{id}/repo" },
-  { id: 3, title: "Plan", description: "Structure tasks and milestones", icon: PenTool, href: "/dashboard/projects/{id}/planning" },
-  { id: 4, title: "Develop", description: "Build with GRIP — chat, code, and run commands", icon: MessageSquare, href: "/dashboard/projects/{id}/enhanced-chat" },
-  { id: 5, title: "Preview & Ship", description: "See it run, export to GitHub, deploy to production", icon: PuzzleIcon, href: "#see-it-run" },
-];
-
 export default function ProjectOverviewPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -52,6 +43,16 @@ export default function ProjectOverviewPage() {
   const [loadingFiles, setLoadingFiles] = useState(false)
   const [generatedFiles, setGeneratedFiles] = useState<Array<{ id: string; path: string; filename: string; size?: number; content?: string; language?: string }>>([])
   const [viewingFile, setViewingFile] = useState<{ path: string; filename: string; content?: string } | null>(null)
+  const [projectState, setProjectState] = useState<{
+    currentPhase?: string
+    phases?: Array<{
+      name: string
+      status: string
+      steps: Array<{ id: number; title: string; status: string; action?: string; progress?: string; result?: string }>
+    }>
+  } | null>(null)
+  const [hasAnalysis, setHasAnalysis] = useState<boolean | null>(null)
+  const [hasPlan, setHasPlan] = useState<boolean | null>(null)
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const projectId = params?.id || ''
@@ -163,6 +164,23 @@ export default function ProjectOverviewPage() {
     refreshGeneratedFiles()
   }, [projectId])
 
+  // Fetch project state (phases), analysis status, and plan for Get started + Phases
+  useEffect(() => {
+    if (!projectId) return
+    const stateUrl = `/api/projects/${projectId}/state`
+    const analysisUrl = `/api/projects/${projectId}/analysis/status`
+    const planUrl = `/api/projects/${projectId}/plan`
+    Promise.all([
+      fetch(stateUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(analysisUrl).then((r) => (r.ok ? r.json() : null)).then((d) => d?.hasAnalysis ?? d?.analysisCompleted ?? false).catch(() => false),
+      fetch(planUrl).then((r) => r.ok).catch(() => false),
+    ]).then(([state, analysis, plan]) => {
+      setProjectState(state && (state.phases?.length || state.currentPhase) ? state : null)
+      setHasAnalysis(!!analysis)
+      setHasPlan(!!plan)
+    })
+  }, [projectId])
+
   if (isLoading) {
     return <LoadingState message="Loading project information..." />
   }
@@ -182,8 +200,183 @@ export default function ProjectOverviewPage() {
   const createdDate = project?.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'N/A'
   const updatedDate = project?.updatedAt ? new Date(project.updatedAt).toLocaleDateString() : 'N/A'
 
+  const ideationFilled = Boolean(
+    project?.ideation &&
+    (project.ideation.goals?.trim() || project.ideation.targetAudience?.trim() ||
+     project.ideation.keyFeatures?.trim() || project.ideation.technicalRequirements?.trim())
+  )
+  const hasRepo = Boolean(project?.repository?.owner && project?.repository?.name)
+  const stepsComplete = [
+    ideationFilled,
+    hasRepo,
+    hasAnalysis === true,
+    hasPlan === true,
+    Boolean(projectState?.phases?.length),
+  ]
+  const allPreChatStepsComplete = stepsComplete[0] && stepsComplete[1] && stepsComplete[2] && stepsComplete[3] && stepsComplete[4]
+  const readyForDevelop = hasPlan === true || (projectState?.phases?.length ?? 0) > 0
+
   return (
     <div className="space-y-8">
+      {/* Next step: Start chat with GRIP — show when plan or phases exist so user always sees what to do */}
+      {readyForDevelop && (
+        <Card className="border-2 border-primary bg-primary/10">
+          <CardContent className="pt-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-primary">Your next step: Start building with GRIP</h2>
+                <p className="text-sm text-text-secondary mt-1">
+                  You’ve completed planning. Open <strong>Develop</strong> to chat with GRIP and implement your phases step by step.
+                </p>
+                <p className="text-xs text-text-muted mt-2 border-l-2 border-primary/50 pl-3">
+                  <strong>Before you go:</strong> GRIP works only on the current phase. When that phase is done, GRIP will route you back to this Overview page for next steps and realignment so you and GRIP stay in sync. Then you can start the next phase from here.
+                </p>
+              </div>
+              <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="shrink-0">
+                <Button size="lg" className="w-full sm:w-auto">
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Go to Develop (chat with GRIP)
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Get started: follow these steps first so GRIP has full context */}
+      <Card className="border-2 border-primary/30 bg-primary/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xl font-bold flex items-center gap-2">
+            <ListChecks className="w-5 h-5 text-primary" />
+            Get started: follow these steps
+          </CardTitle>
+          <CardDescription>
+            Complete each step in order so GRIP is equipped with all data before chat and code generation. Then review the build phases and start chat with GRIP.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ol className="space-y-3">
+            <li className="flex items-start gap-3">
+              {stepsComplete[0] ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" /> : <Circle className="w-5 h-5 text-text-muted shrink-0 mt-0.5" />}
+              <div>
+                <span className="font-medium">1. Ideation</span> — Define goals, audience, features, and technical requirements (set when you created the project or in Settings).
+                {!stepsComplete[0] && (
+                  <Link href={`/dashboard/projects/${projectId}/settings`} className="ml-1 text-primary hover:underline text-sm">Complete in Settings</Link>
+                )}
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              {stepsComplete[1] ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" /> : <Circle className="w-5 h-5 text-text-muted shrink-0 mt-0.5" />}
+              <div>
+                <span className="font-medium">2. Repo</span> — Select and link a GitHub repository.
+                {!stepsComplete[1] && (
+                  <Link href={`/dashboard/projects/${projectId}/repo`} className="ml-1 text-primary hover:underline text-sm">Select repo</Link>
+                )}
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              {stepsComplete[2] ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" /> : <Circle className="w-5 h-5 text-text-muted shrink-0 mt-0.5" />}
+              <div>
+                <span className="font-medium">3. Analysis</span> — Run analysis on the repo so GRIP understands the codebase.
+                {!stepsComplete[2] && (
+                  <Link href={`/dashboard/projects/${projectId}/repo`} className="ml-1 text-primary hover:underline text-sm">Run analysis from Repo</Link>
+                )}
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              {stepsComplete[3] ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" /> : <Circle className="w-5 h-5 text-text-muted shrink-0 mt-0.5" />}
+              <div>
+                <span className="font-medium">4. Plan</span> — Generate a development plan (phases and tasks).
+                {!stepsComplete[3] && (
+                  <Link href={`/dashboard/projects/${projectId}/planning`} className="ml-1 text-primary hover:underline text-sm">Generate plan in Planning</Link>
+                )}
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              {stepsComplete[4] ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" /> : <Circle className="w-5 h-5 text-text-muted shrink-0 mt-0.5" />}
+              <div>
+                <span className="font-medium">5. Review phases</span> — Review the build phases below. When ready, start chat with GRIP; GRIP will use the current phase as the starting point.
+                {!stepsComplete[4] && (
+                  <span className="text-sm text-text-muted ml-1">Generate a plan first, then sync phases from Planning if needed.</span>
+                )}
+              </div>
+            </li>
+          </ol>
+        </CardContent>
+      </Card>
+
+      {/* Build phases — start chat with GRIP from here */}
+      <Card id="phases" className="border border-border scroll-mt-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xl font-bold">Build phases</CardTitle>
+          <CardDescription>
+            Current phase and steps. When you and GRIP agree a phase is done, return here to confirm and begin the next phase. Then start chat to continue.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {projectState?.phases?.length ? (
+            <>
+              <p className="text-sm text-text-secondary">
+                Current phase: <strong>{projectState.currentPhase || projectState.phases[0]?.name || '—'}</strong>
+              </p>
+              <div className="space-y-3">
+                {projectState.phases.map((phase, idx) => (
+                  <div key={idx} className="rounded-lg border border-border p-3">
+                    <div className="font-medium flex items-center gap-2">
+                      {phase.status === 'completed' ? <CheckCircle2 className="w-4 h-4 text-success" /> : phase.status === 'in_progress' ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <Circle className="w-4 h-4 text-text-muted" />}
+                      {phase.name}
+                      <span className="text-xs font-normal text-text-muted">({phase.status})</span>
+                    </div>
+                    {phase.steps?.length > 0 && (
+                      <ul className="mt-2 ml-6 space-y-1 text-sm text-text-secondary">
+                        {phase.steps.map((step) => (
+                          <li key={step.id} className="flex items-center gap-2">
+                            {step.status === 'completed' ? <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0" /> : <Circle className="w-3.5 h-3.5 text-text-muted shrink-0" />}
+                            {step.title}
+                            {step.result && <span className="text-xs text-text-muted">— {step.result}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-text-muted border-l-2 border-primary/50 pl-3">
+                GRIP works only on the current phase. When the phase is complete, GRIP will route you back to this Overview page for next steps and realignment; then you can start the next phase from here so you and GRIP stay in sync.
+              </p>
+              <Link href={`/dashboard/projects/${projectId}/enhanced-chat`}>
+                <Button className="w-full sm:w-auto" size="lg">
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  {allPreChatStepsComplete ? 'Start chat with GRIP' : 'Continue with GRIP'}
+                </Button>
+              </Link>
+            </>
+          ) : (
+            <div className="text-sm text-text-secondary space-y-3">
+              {hasPlan === true ? (
+                <>
+                  <p className="font-medium text-text-primary">Your next step: Start chat with GRIP.</p>
+                  <p>Plan and files are ready. Go to <strong>Develop</strong> to build with GRIP. Phases will sync as you work.</p>
+                  <p className="text-xs text-text-muted border-l-2 border-primary/50 pl-3">
+                    GRIP works only on the current phase and will always route you back to this Overview page for next steps and realignment before the next phase.
+                  </p>
+                  <Link href={`/dashboard/projects/${projectId}/enhanced-chat`}>
+                    <Button size="lg">Go to Develop (chat with GRIP)</Button>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <p>No phases yet. Generate a plan in <Link href={`/dashboard/projects/${projectId}/planning`} className="text-primary hover:underline">Planning</Link>, then return here. Sync build steps in Planning if needed so phases appear.</p>
+                  <Link href={`/dashboard/projects/${projectId}/enhanced-chat`}>
+                    <Button variant="outline">Open Develop anyway</Button>
+                  </Link>
+                </>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Project Summary Card */}
       <Card className="border border-border">
         <CardHeader className="pb-4">
@@ -195,7 +388,7 @@ export default function ProjectOverviewPage() {
         
         <CardContent>
           <p className="text-sm text-text-secondary mb-4">
-            Chat history and task progress are saved. When you return, open <strong>Develop</strong> to continue the conversation; the task area there shows active and recent tasks.
+            Use the tabs above to move through the flow: <strong>Setup</strong> → <strong>Repo</strong> → <strong>Plan</strong> → <strong>Develop</strong> → <strong>Preview</strong>. Chat and task progress are saved.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -217,47 +410,11 @@ export default function ProjectOverviewPage() {
                 )}
               </div>
             </div>
-            
             <div>
               <h3 className="text-lg font-semibold mb-2 text-primary">Next step</h3>
-              <div className="flex flex-col space-y-2">
-                <Link href={`/dashboard/projects/${projectId}/enhanced-chat`}>
-                  <Button className="w-full justify-between">
-                    <span className="flex items-center">
-                      <MessageSquare className="w-4 h-4 mr-2" />
-                      Continue with GRIP — Develop
-                    </span>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </Link>
-                <Link href={`/dashboard/projects/${projectId}/repo`}>
-                  <Button variant="outline" className="w-full justify-between">
-                    <span className="flex items-center">
-                      <Code className="w-4 h-4 mr-2" />
-                      Explore Repo
-                    </span>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </Link>
-                <Link href={`/dashboard/projects/${projectId}/planning`}>
-                  <Button variant="outline" className="w-full justify-between">
-                    <span className="flex items-center">
-                      <PenTool className="w-4 h-4 mr-2" />
-                      View plan
-                    </span>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </Link>
-                <Link href={`/dashboard/terminal?projectId=${projectId}`}>
-                  <Button variant="outline" className="w-full justify-between">
-                    <span className="flex items-center">
-                      <Terminal className="w-4 h-4 mr-2" />
-                      Open terminal for this project
-                    </span>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </Link>
-              </div>
+              <p className="text-sm text-text-secondary">
+                Use the tabs at the top to go where you need to go. After you and GRIP finish a phase, return here to confirm and start the next phase.
+              </p>
             </div>
           </div>
         </CardContent>
@@ -299,60 +456,6 @@ export default function ProjectOverviewPage() {
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
-      
-      {/* Development Process */}
-      <Card className="border border-border">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-2xl font-bold">Development Process</CardTitle>
-          <CardDescription>
-            Follow these steps to build your project with G.R.I.P.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-8">
-            <div className="relative">
-              <div className="absolute left-6 top-5 bottom-5 w-0.5 bg-border"></div>
-              <div className="space-y-8">
-                {steps.map((step, i) => {
-                  // Use a safer approach to create links with consistent patterns
-                  let href = "";
-                  
-                  // Determine the appropriate URL based on step title
-                  if (step.href.startsWith('#')) {
-                    href = step.href;
-                  } else {
-                    href = step.href.replace('{id}', projectId);
-                  }
-                  
-                  return (
-                    <div key={step.id} className="relative flex items-start">
-                      <div className={cn(
-                        "absolute left-0 rounded-full w-12 h-12 flex items-center justify-center z-10",
-                        "bg-primary/10 text-primary"
-                      )}>
-                        <step.icon className="w-6 h-6" />
-                      </div>
-                      <div className="ml-16 space-y-2">
-                        <div className="flex items-center space-x-2">
-                          <h3 className="text-lg font-semibold">{step.title}</h3>
-                          <div className="text-xs font-medium rounded-full px-2 py-0.5 bg-primary/10 text-primary">
-                            Step {step.id}
-                          </div>
-                        </div>
-                        <p className="text-text-secondary">{step.description}</p>
-                        <Link href={href} className="inline-flex items-center text-primary hover:text-primary-hover">
-                          {step.title === "Ideate" ? "Jump to ideation" : step.href === "#see-it-run" ? "See it run & ship it" : "Go"}
-                          <ArrowRight className="w-4 h-4 ml-1" />
-                        </Link>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
       

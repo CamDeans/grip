@@ -4,15 +4,14 @@ import { spawn } from 'child_process'
 
 export async function GET(
   request: Request,
-  { params }: { params: { containerId: string } }
+  { params }: { params: Promise<{ containerId: string }> }
 ) {
   try {
+    const { containerId: _containerId } = await params
     const session = await getServerAuthSession()
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-
-    const { containerId: _containerId } = params
 
     // Check if the request is a WebSocket upgrade request
     if (request.headers.get('upgrade') !== 'websocket') {

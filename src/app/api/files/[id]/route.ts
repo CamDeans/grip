@@ -7,10 +7,9 @@ import { getFileById, updateFile, deleteFile } from '@/lib/services/fileStorageS
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: fileId } = params;
-  
+  const { id: fileId } = await params
   try {
     if (!fileId) {
       return NextResponse.json(
@@ -69,10 +68,9 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: fileId } = params;
-  
+  const { id: fileId } = await params
   try {
     if (!fileId) {
       return NextResponse.json(
@@ -142,10 +140,9 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: fileId } = params;
-  
+  const { id: fileId } = await params
   try {
     if (!fileId) {
       return NextResponse.json(

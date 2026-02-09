@@ -9,11 +9,9 @@ import { connectToDatabase } from '@/lib/mongodb'
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  // Get the task ID directly from the params object
-  const taskId = params.id;
-  
+  const { id: taskId } = await params
   try {
     const session = await getServerSession()
     

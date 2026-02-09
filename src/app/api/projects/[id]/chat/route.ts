@@ -13,9 +13,9 @@ const mockChatHistory: ChatMessage[] = []
 
 export async function GET(
   _: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = params
+  const { id } = await params
   
   // If this is the demo project, return mock data (empty history to start)
   if (id === 'demo-project-123') {

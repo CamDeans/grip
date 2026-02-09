@@ -10,10 +10,9 @@ import { connectToDatabase } from '@/lib/mongodb'
  */
 export async function GET(
   _: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: taskId } = params;
-  
+  const { id: taskId } = await params
   try {
     await connectToDatabase()
     
@@ -42,10 +41,9 @@ export async function GET(
  */
 export async function DELETE(
   _: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: taskId } = params;
-  
+  const { id: taskId } = await params
   try {
     const session = await getServerSession()
     

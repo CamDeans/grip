@@ -59,10 +59,10 @@ const mockBuildsData = [
  */
 export async function GET(
   _: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const projectId = params.id
+    const { id: projectId } = await params
     
     // Special case for demo project
     if (projectId === 'demo-project-123') {

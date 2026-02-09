@@ -24,7 +24,8 @@ if (!isClient) {
   console.log('MongoDB URI configured:', maskedUri)
 }
 
-const DB_NAME = 'test'
+// Use same DB name as auth (lib/db) so projects and users are in the same database
+const DB_NAME = process.env.MONGODB_DB_NAME || 'test'
 
 // MongoDB Client Configuration
 const clientOpts = {

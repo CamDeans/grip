@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEnhancedChat } from '@/components/providers/EnhancedChatProvider'
 import { ChatMessage, AIMessage, ErrorState } from '@/types/chat'
@@ -12,7 +12,7 @@ import { validateMessage } from '@/lib/validation'
 import { EnhancedChatProvider } from '@/components/providers/EnhancedChatProvider'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { XCircleIcon, FileIcon, GitForkIcon, TerminalIcon, CodeIcon, RefreshCwIcon, ChevronDownIcon, ChevronUpIcon, PlayIcon, SendIcon, Loader2Icon } from 'lucide-react'
+import { XCircleIcon, FileIcon, GitForkIcon, TerminalIcon, CodeIcon, RefreshCwIcon, ChevronDownIcon, ChevronUpIcon, PlayIcon, SendIcon, Loader2Icon, CheckCircle2, Circle } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
 import { ProjectContextDisplay } from '@/components/chat/ProjectContextDisplay'
@@ -450,7 +450,8 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     clearErrors,
     isInitialized,
     setProjectId,
-    setProjectContext
+    setProjectContext,
+    refreshContext
   } = useEnhancedChat()
   
   const inputRef = useRef<HTMLInputElement>(null)
@@ -512,6 +513,54 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
   const [canRun, setCanRun] = useState(false)
   const [running, setRunning] = useState(false)
   const [runCommand, setRunCommand] = useState('npm install && npm run build')
+
+  // Build progress (phases/steps) — same as Overview, so user stays in sync without leaving chat
+  const [projectState, setProjectState] = useState<{
+    currentPhase?: string
+    phases?: Array<{
+      name: string
+      status: string
+      steps?: Array<{ id: number; title: string; status: string; result?: string }>
+    }>
+  } | null>(null)
+  const [progressSyncing, setProgressSyncing] = useState(false)
+  const [progressLastSynced, setProgressLastSynced] = useState<Date | null>(null)
+  const PROGRESS_POLL_MS = 45000 // 45s auto-refresh so user never falls off track
+
+  const fetchProjectState = useCallback(() => {
+    if (!projectId) return
+    setProgressSyncing(true)
+    fetch(`/api/projects/${projectId}/state`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && (data.phases?.length || data.currentPhase)) {
+          setProjectState({
+            currentPhase: data.currentPhase,
+            phases: data.phases,
+          })
+        } else {
+          setProjectState(null)
+        }
+        setProgressLastSynced(new Date())
+      })
+      .catch(() => setProjectState(null))
+      .finally(() => setProgressSyncing(false))
+  }, [projectId])
+
+  useEffect(() => {
+    fetchProjectState()
+  }, [fetchProjectState])
+
+  useEffect(() => {
+    if (!projectId) return
+    const interval = setInterval(fetchProjectState, PROGRESS_POLL_MS)
+    return () => clearInterval(interval)
+  }, [projectId, fetchProjectState])
+
+  const handleSyncWithGrip = useCallback(() => {
+    fetchProjectState()
+    refreshContext?.()
+  }, [fetchProjectState, refreshContext])
 
   // Fetch project files so we can show "Saved" on code blocks after refresh and pass to FormattedMessage
   useEffect(() => {
@@ -870,6 +919,60 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
 
   return (
     <div className={cn('flex flex-col w-full h-full min-w-0 overflow-hidden', className)}>
+      {/* Build progress (phase/steps) — same as Overview, so user stays in sync without leaving chat */}
+      <div className="flex-shrink-0 border-b border-border bg-background-secondary/50 px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <span className="text-xs font-medium text-text-secondary shrink-0">Build progress:</span>
+            {projectState?.phases?.length ? (
+              <>
+                <span className="text-xs text-primary font-medium truncate">
+                  {projectState.currentPhase || projectState.phases[0]?.name || '—'}
+                </span>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  {(projectState.phases.find((p) => p.name === projectState.currentPhase) || projectState.phases[0])?.steps?.map((step) => (
+                    <span
+                      key={step.id}
+                      className="inline-flex items-center gap-0.5 text-xs text-text-muted"
+                      title={`${step.title}${step.result ? ` — ${step.result}` : ''}`}
+                    >
+                      {step.status === 'completed' ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
+                      ) : step.status === 'in_progress' ? (
+                        <Loader2Icon className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
+                      ) : (
+                        <Circle className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                      )}
+                      <span className="truncate max-w-[100px]">{step.title}</span>
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <span className="text-xs text-text-muted">No phases yet — complete Plan on Overview</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {progressLastSynced && (
+              <span className="text-[10px] text-text-muted" title="Auto-updates every 45s">
+                Synced {progressLastSynced.toLocaleTimeString()}
+              </span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs px-2"
+              onClick={handleSyncWithGrip}
+              disabled={progressSyncing || !projectId}
+              title="Refresh phase/step progress and context so you stay in sync with GRIP"
+            >
+              {progressSyncing ? <Loader2Icon className="h-3 w-3 animate-spin" /> : <RefreshCwIcon className="h-3 w-3" />}
+              <span className="ml-1">Sync with GRIP</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {/* Plain scroll container: no Radix viewport so width stays bounded and bubbles stay visible */}
       <div className="flex-1 min-h-0 w-full max-w-full min-w-0 overflow-x-hidden overflow-y-auto p-2">
         <div className="pb-2 space-y-4 w-full max-w-full min-w-0 overflow-x-hidden box-border">

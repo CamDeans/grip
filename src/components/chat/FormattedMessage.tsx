@@ -33,6 +33,22 @@ function defaultFilenameFromLanguage(lang: string): string {
   return ext[lang?.toLowerCase()] || 'snippet.txt'
 }
 
+/** Infer a better filename from content so non-devs get package.json not snippet.json when GRIP outputs package.json */
+function inferredFilenameForBlock(lang: string, code: string): string {
+  const l = (lang || '').toLowerCase()
+  if (l === 'json' && code) {
+    try {
+      const parsed = JSON.parse(code.trim())
+      if (parsed && typeof parsed === 'object' && ('name' in parsed || 'version' in parsed) && ('dependencies' in parsed || 'scripts' in parsed || 'devDependencies' in parsed)) {
+        return 'package.json'
+      }
+    } catch {
+      // not valid JSON or not package.json shape
+    }
+  }
+  return defaultFilenameFromLanguage(lang)
+}
+
 /** Display path for saved file (path/filename or filename) */
 function savedFilePath(path: string, filename: string): string {
   return path ? `${path}/${filename}` : filename
@@ -153,8 +169,9 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
     const next: Record<number, { path: string; filename: string; fileId: string }> = {}
     for (let blockIndex = 0; blockIndex < codeBlocks.length; blockIndex++) {
       const def = defaultPathByBlock[blockIndex]
+      const block = codeBlocks[blockIndex]
       const blockPath = (def?.path ?? '').trim()
-      const blockFilename = (def?.filename ?? '').trim() || defaultFilenameFromLanguage(codeBlocks[blockIndex]?.language ?? '')
+      const blockFilename = (def?.filename ?? '').trim() || inferredFilenameForBlock(block?.language ?? '', block?.code ?? '')
       const file = projectFiles.find(
         (f) => (f.path || '').trim() === blockPath && (f.filename || '').trim() === blockFilename
       )
@@ -315,13 +332,13 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                       ) : showSaveForm ? (
                         <>
                           <Input
-                            placeholder="path (optional)"
+                            placeholder="folder path (e.g. src)"
                             value={saveState.path}
                             onChange={(e) => setSaveState((s) => s ? { ...s, path: e.target.value } : null)}
                             className="h-6 w-24 text-xs"
                           />
                           <Input
-                            placeholder="filename"
+                            placeholder="filename (e.g. package.json)"
                             value={saveState.filename}
                             onChange={(e) => setSaveState((s) => s ? { ...s, filename: e.target.value } : null)}
                             className="h-6 w-28 text-xs"
@@ -463,7 +480,7 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                               setUpdateFileState({
                                 blockIndex,
                                 path: def?.path ?? '',
-                                filename: def?.filename ?? defaultFilenameFromLanguage(block.language),
+                                filename: def?.filename ?? inferredFilenameForBlock(block.language, block.code),
                               })
                             }}
                           >

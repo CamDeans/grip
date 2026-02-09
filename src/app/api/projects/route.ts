@@ -119,7 +119,17 @@ export async function GET() {
     }
 
     await connectToDatabase()
-    const projects = await Project.find({ userId: session.user.id }).sort({ createdAt: -1 })
+    const userId = session.user.id
+    const projects = await Project.find({ userId }).sort({ createdAt: -1 })
+
+    // Dev-only: help debug "no projects locally" (same MONGODB_URI + same user id = same list)
+    if (process.env.NODE_ENV === 'development') {
+      const hint = process.env.MONGODB_URI
+        ? `${process.env.MONGODB_URI.replace(/mongodb(\+srv)?:\/\/([^:]+):([^@]+)@/, 'mongodb$1://$2:****@').slice(0, 50)}...`
+        : '(MONGODB_URI not set)'
+      console.log(`[Projects GET] userId=${userId} count=${projects.length} uri=${hint}`)
+    }
+
     return NextResponse.json({ projects })
   } catch (error: unknown) {
     console.error('Error fetching projects:', error instanceof Error ? error.message : 'Unknown error')

@@ -5,6 +5,7 @@ import clientPromise from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import crypto from 'crypto'
 import { anthropicService } from '@/lib/services/anthropicService'
+import { recordFileSaveAndAdvanceStep } from '@/lib/services/projectStateService'
 
 /**
  * POST /api/projects/[id]/files/update-from-chat
@@ -81,6 +82,7 @@ export async function POST(
         updatedAt: now,
       }
       const result = await coll.insertOne(doc)
+      await recordFileSaveAndAdvanceStep(projectId, path, filename)
       return NextResponse.json({
         success: true,
         action: 'created',
@@ -160,6 +162,7 @@ Output ONLY the complete merged file content. No explanation, no markdown code f
         },
       }
     )
+    await recordFileSaveAndAdvanceStep(projectId, path, filename)
 
     return NextResponse.json({
       success: true,

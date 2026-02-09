@@ -5,24 +5,25 @@ import { ObjectId } from 'mongodb'
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const session = await getServerAuthSession()
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('Loading analysis for project:', params.id)
+    console.log('Loading analysis for project:', id)
     const client = await clientPromise
     const db = client.db()
 
     const project = await db.collection('projects').findOne({
-      _id: new ObjectId(params.id)
+      _id: new ObjectId(id)
     })
 
     if (!project) {
-      console.log('Project not found for analysis:', params.id)
+      console.log('Project not found for analysis:', id)
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     }
 

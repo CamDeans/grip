@@ -290,6 +290,34 @@ export async function getProjectState(projectId: string): Promise<IProjectStateD
 }
 
 /**
+ * Record a file save/update from chat and advance the current step so planning stays aligned.
+ * Called after save-from-chat or update-from-chat so phases/steps reflect what the user has done.
+ */
+export async function recordFileSaveAndAdvanceStep(
+  projectId: string,
+  filePath: string,
+  filename: string
+): Promise<boolean> {
+  if (isClient) return false
+  try {
+    const state = await getProjectState(projectId)
+    if (!state?.phases?.length) return false
+    const currentPhaseName = state.currentPhase
+    const phase = state.phases.find((p: { name: string }) => p.name === currentPhaseName)
+    if (!phase?.steps?.length) return false
+    const step = phase.steps.find(
+      (s: { status: string }) => s.status === 'pending' || s.status === 'in_progress'
+    )
+    if (!step) return false
+    const resultPath = filePath ? `${filePath}/${filename}` : filename
+    return updateStepStatus(projectId, phase.name, step.id, 'completed', '100%', `Saved: ${resultPath}`)
+  } catch (e) {
+    console.warn('recordFileSaveAndAdvanceStep:', e)
+    return false
+  }
+}
+
+/**
  * Sync project state phases and steps from a development plan.
  * Called after generating a plan so chat and UI show the same phases/steps.
  */

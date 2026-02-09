@@ -8,10 +8,10 @@ function isValidObjectId(id: string): boolean {
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    const { id } = await params
     if (!isValidObjectId(id)) {
       return new Response('Invalid project ID', { status: 400 })
     }

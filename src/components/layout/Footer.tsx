@@ -1,4 +1,5 @@
 import { FC } from 'react'
+import Link from 'next/link'
 
 const Footer: FC = () => {
   const currentYear = new Date().getFullYear()
@@ -13,9 +14,10 @@ const Footer: FC = () => {
             <span className="text-xs text-text-muted">All Good</span>
           </div>
 
-          {/* Copyright */}
-          <div className="text-xs text-text-muted">
-            ©{currentYear} G.R.I.P
+          {/* Links + Copyright */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
+            <Link href="/attributions" className="hover:text-primary">Attributions</Link>
+            <span>©{currentYear} G.R.I.P</span>
           </div>
         </div>
       </div>

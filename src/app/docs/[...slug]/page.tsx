@@ -116,6 +116,8 @@ const DOC_CONTENT: Record<string, ReactNode> = {
   'integrations/mongodb': (
     <>
       <p>You can use MongoDB (or any database) in projects built with G.R.I.P.: add connection logic and models in your generated code, and use environment variables for connection strings. Store secrets in Dashboard → Settings or in your deployment platform (e.g. Vercel).</p>
+      <p className="mt-4 font-medium">Seeing the same projects locally and on Vercel</p>
+      <p className="mt-1">GRIP stores projects, users, and chat in MongoDB. If you create a project on the deployed app (Vercel) but it does not show when you run <code className="text-sm bg-muted px-1 rounded">npm run dev</code> locally, local and Vercel are using different databases. Fix: use the same <code className="text-sm bg-muted px-1 rounded">MONGODB_URI</code> in both places. Copy the value from Vercel (Project → Settings → Environment Variables) into your local <code className="text-sm bg-muted px-1 rounded">.env.local</code>, then restart <code className="text-sm bg-muted px-1 rounded">npm run dev</code>. After that, projects created on Vercel will appear locally and vice versa.</p>
       <p className="mt-4">For app structure and deployment, see <Link href="/docs/getting-started/quick-start" className="text-primary hover:underline">Quick Start</Link> and <Link href="/docs/integrations/deploy-vercel" className="text-primary hover:underline">Deploy to Vercel</Link>.</p>
       <ul className="list-disc pl-6 mt-4">
         <li><Link href="/docs" className="text-primary hover:underline">Documentation index</Link></li>

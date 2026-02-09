@@ -83,8 +83,16 @@ export function RepoSelector({
     }
   }
 
+  /** Add all suggested keywords to the search (used by "Use Keywords" button). */
   const handleUseKeywords = () => {
     setSearch(generatedKeywords.join(' '))
+    setShowKeywordsPopup(false)
+    setGeneratedKeywords([])
+  }
+
+  /** Add only the clicked keyword to the search. */
+  const handleUseKeyword = (keyword: string) => {
+    setSearch(keyword)
     setShowKeywordsPopup(false)
     setGeneratedKeywords([])
   }
@@ -151,7 +159,7 @@ export function RepoSelector({
                     key={index}
                     variant="outline"
                     size="sm"
-                    onClick={() => handleUseKeywords()}
+                    onClick={() => handleUseKeyword(keyword)}
                     aria-label={`Use keyword: ${keyword}`}
                     title={`Use keyword: ${keyword}`}
                   >

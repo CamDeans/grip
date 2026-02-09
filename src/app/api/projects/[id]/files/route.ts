@@ -8,11 +8,10 @@ import { IProjectFile } from '@/lib/models/ProjectFile'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Get project ID from URL params
-    const projectId = params.id
+    const { id: projectId } = await params
     
     if (!projectId) {
       return NextResponse.json(

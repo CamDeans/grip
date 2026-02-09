@@ -81,11 +81,37 @@ export default function EnhancedChatPage() {
   )
 }
 
+// Build the GRIP starting message: user can add extra details (plain English) or just start the build
+function buildWelcomeMessage(currentPhase: string | null): string {
+  const phaseLine = currentPhase
+    ? `We're in **${currentPhase}**. `
+    : ''
+  return `I'm G.R.I.P., your Guided Real-time Intelligence Partner. ${phaseLine}Here’s how we can start:
+
+**Option 1 — Add a few details (recommended)**  
+I may ask you in plain English about your goals, who it’s for, and what it should do. Your answers help me align the build with what you want. You can answer in your own words; I’ll turn that into the right technical choices.
+
+**Option 2 — Start the build now**  
+If you’re ready, just say **"start the build"** or **"let’s go"** and we’ll begin with the current phase. You can add or clarify details anytime later.
+
+Reply with Option 1, Option 2, or type anything you’d like to do first.`
+}
+
 // Component to handle task-specific messaging
 function TaskSpecificChat({ projectId, task, autoSendRunErrors }: { projectId: string, task: string | null, autoSendRunErrors?: boolean }) {
   const { sendInitialTaskMessage, sendMessage, contextEnabled, projectContext, messages } = useEnhancedChat()
   const runErrorsAutoSendDone = useRef(false)
-  
+  const [projectState, setProjectState] = useState<{ currentPhase?: string } | null>(null)
+
+  // Fetch project state (current phase) so welcome message can ask for context in phase
+  useEffect(() => {
+    if (!projectId) return
+    fetch(`/api/projects/${projectId}/state`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => data && setProjectState({ currentPhase: data.currentPhase }))
+      .catch(() => {})
+  }, [projectId])
+
   // Initialize taskMessageSent from sessionStorage, use a unique key based on project and task
   const storageKey = `grip-task-message-sent-${projectId}-${task || 'default'}`
   const [taskMessageSent, setTaskMessageSent] = useState<boolean>(() => {
@@ -96,23 +122,23 @@ function TaskSpecificChat({ projectId, task, autoSendRunErrors }: { projectId: s
     }
     return false
   })
-  
+
   // Update sessionStorage when taskMessageSent changes
   useEffect(() => {
     if (typeof window !== 'undefined' && task) {
       sessionStorage.setItem(storageKey, taskMessageSent ? 'true' : 'false')
     }
   }, [taskMessageSent, storageKey, task])
-  
+
   // Check for existing task messages
   const hasExistingTaskMessage = useMemo(() => {
-    return messages.some(message => 
-      message.role === 'assistant' && 
-      (message.id === 'welcome-message' || 
+    return messages.some(message =>
+      message.role === 'assistant' &&
+      (message.id === 'welcome-message' ||
        (task && message.id.startsWith(`task-${task}`)))
     )
   }, [messages, task])
-  
+
   // Send the initial task message when component mounts and context is available
   useEffect(() => {
     // Only attempt to send task messages if:
@@ -131,7 +157,7 @@ function TaskSpecificChat({ projectId, task, autoSendRunErrors }: { projectId: s
           // Fall back to the default welcome message by NOT setting taskMessageSent to true
         }
       }, 800) // Slightly longer delay for better reliability
-      
+
       return () => {
         clearTimeout(timer)
       }
@@ -162,14 +188,16 @@ function TaskSpecificChat({ projectId, task, autoSendRunErrors }: { projectId: s
   // 1. We don't have a task, or
   // 2. We failed to send the task message and there's no existing task message
   const showDefaultWelcome = !task || (task && !taskMessageSent && !hasExistingTaskMessage)
-  
+
+  const welcomeMessage = showDefaultWelcome
+    ? buildWelcomeMessage(projectState?.currentPhase ?? null)
+    : undefined
+
   return (
-    <EnhancedChat 
-      projectId={projectId} 
+    <EnhancedChat
+      projectId={projectId}
       className="flex-1 h-full"
-      welcomeMessage={showDefaultWelcome ? 
-        `Welcome to the G.R.I.P. Chat Interface! I'm here to help you build your project based on your ideation and requirements. Let me know what you'd like to build first, or ask me any questions about your project development.` : 
-        undefined}
+      welcomeMessage={welcomeMessage}
     />
   )
 } 

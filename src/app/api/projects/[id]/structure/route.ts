@@ -7,10 +7,10 @@ import { getProjectStructure } from '@/lib/services/planStorageService'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: projectId } = params;
+    const { id: projectId } = await params
     
     if (!projectId) {
       return NextResponse.json(

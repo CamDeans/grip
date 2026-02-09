@@ -8,35 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/input'
 import { ExternalLink, Loader2, Play, Download, Github, ChevronDown, ChevronUp, Zap, MessageSquare } from 'lucide-react'
 import { toast as sonnerToast } from 'sonner'
-
-// Use node (WebContainers) whenever the project has package.json so StackBlitz runs npm install + npm run dev and the preview loads.
-// EngineBlock templates (create-react-app, vue, etc.) do NOT run npm install / dev, so the preview never appears.
-function inferStackBlitzTemplate(files: Record<string, string>): string {
-  const pkg = files['package.json']
-  if (!pkg) {
-    // No package.json: use html or javascript so a single index.html can run
-    if (files['index.html'] && (files['index.js'] || files['index.ts'])) return 'javascript'
-    if (files['index.html']) return 'html'
-    return 'node'
-  }
-  // Any project with package.json uses node so WebContainers run npm install then startCommand (npm run dev)
-  return 'node'
-}
-
-// Pick a file to open so StackBlitz shows editor + preview focused on the app entry
-function inferOpenFile(files: Record<string, string>): string | undefined {
-  const keys = Object.keys(files)
-  if (keys.includes('index.html')) return 'index.html'
-  if (keys.includes('src/App.tsx')) return 'src/App.tsx'
-  if (keys.includes('src/App.jsx')) return 'src/App.jsx'
-  if (keys.includes('src/main.tsx')) return 'src/main.tsx'
-  if (keys.includes('src/main.jsx')) return 'src/main.jsx'
-  if (keys.includes('src/main.ts')) return 'src/main.ts'
-  if (keys.includes('src/main.js')) return 'src/main.js'
-  if (keys.includes('src/Index.tsx')) return 'src/Index.tsx'
-  if (keys.includes('App.tsx')) return 'App.tsx'
-  return keys.find((k) => k.endsWith('index.html')) ?? keys[0]
-}
+import { openInStackBlitz } from '@/lib/stackblitzOpen'
 
 export default function ProjectPreviewPage() {
   const params = useParams<{ id: string }>()
@@ -75,51 +47,23 @@ export default function ProjectPreviewPage() {
   }, [projectId])
 
   // Run in browser: preflight first, then send project files to StackBlitz (not the cloned repo)
-  const handleRunInBrowser = async (openInSameTab: boolean) => {
+  const handleRunInBrowser = async () => {
     if (!projectId) return
     setStackblitzLoading(true)
     setPreflightErrors(null)
     setPreflightSuggestions([])
     try {
-      const preflightRes = await fetch(`/api/projects/${projectId}/preflight?target=stackblitz&record=1`, { credentials: 'include' })
-      const preflight = await preflightRes.json()
-      if (!preflight.ok && Array.isArray(preflight.errors) && preflight.errors.length > 0) {
-        setPreflightErrors(preflight.errors)
-        setPreflightSuggestions(Array.isArray(preflight.suggestions) ? preflight.suggestions : [])
-        sonnerToast.error('Project not ready for StackBlitz', { description: preflight.errors[0] })
+      const result = await openInStackBlitz(projectId, { newWindow: false })
+      setStackblitzLoading(false)
+      if (!result.ok) {
+        if (result.preflightErrors?.length) {
+          setPreflightErrors(result.preflightErrors)
+          setPreflightSuggestions(result.preflightSuggestions ?? [])
+        }
+        sonnerToast.error(result.error)
         return
       }
-      const res = await fetch(`/api/projects/${projectId}/export-files`)
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to load project files')
-      const { files, title } = data
-      if (!files || Object.keys(files).length === 0) throw new Error('No files to run. Add generated files or link a repo.')
-      const template = inferStackBlitzTemplate(files)
-      const openFile = inferOpenFile(files)
-      const sdk = await import('@stackblitz/sdk')
-      const api = (sdk as { default?: { openProject: (payload: unknown, options?: unknown) => void } }).default ?? sdk
-      const openProject = api?.openProject
-      if (typeof openProject !== 'function') throw new Error('StackBlitz SDK openProject not available')
-      openProject(
-        {
-          files,
-          template,
-          title: title || 'GRIP Project',
-          description: 'Project from G.R.I.P. — run in browser',
-        },
-        {
-          newWindow: !openInSameTab,
-          view: 'default', // show editor and preview so user sees the app
-          ...(openFile ? { openFile } : {}),
-        }
-      )
-      if (openInSameTab) {
-        sonnerToast.success('Opening StackBlitz in this tab', { description: 'You’ll be taken to StackBlitz to run the project.' })
-      } else {
-        sonnerToast.success('Opening StackBlitz', {
-          description: 'If no new tab appeared, your browser may have blocked it—allow popups for this site, or use "Open in this tab" below.',
-        })
-      }
+      sonnerToast.success('Opening StackBlitz', { description: 'You’ll be taken to StackBlitz to run the project.' })
     } catch (e) {
       sonnerToast.error(e instanceof Error ? e.message : 'Failed to open in StackBlitz')
     } finally {
@@ -229,13 +173,12 @@ export default function ProjectPreviewPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {/* 1. Run in browser (StackBlitz from project files) — always opens in a new tab so user stays in GRIP */}
+          {/* 1. Run in browser (StackBlitz in new tab so GRIP stays open here) */}
           <Card className="border-primary/20 bg-primary/5">
             <CardHeader>
               <CardTitle className="text-base">Run in browser</CardTitle>
               <CardDescription>
-                One click. No install. We send your project files to StackBlitz and open it in a new tab so you can keep using GRIP. No terminal, no GitHub.
-                If no new tab opened, allow popups for this site or use &quot;Open in this tab&quot; below.
+                One click. No install. StackBlitz opens in a <strong>new tab</strong> so this GRIP tab stays open—no back button, and you can copy errors from StackBlitz and paste them here to send to GRIP. No terminal, no GitHub.
                 Expo/React Native: If the preview shows JSON (manifest) instead of the app, the web server may be starting—wait a moment, or in StackBlitz press <strong>w</strong> in the terminal to open the web version.
                 If you see a white screen or &quot;RuntimeError: memory access out of bounds&quot; (Metro + StackBlitz), that&apos;s a known StackBlitz/WebContainers limitation—use <strong>Download project</strong> or <strong>Export to GitHub</strong> and run locally (<code className="text-xs">npm run dev</code>) instead.
               </CardDescription>
@@ -263,35 +206,27 @@ export default function ProjectPreviewPage() {
               <Button
                 variant="default"
                 className="gap-2"
-                onClick={() => handleRunInBrowser(false)}
-                disabled={stackblitzLoading}
+                onClick={() => {
+                  const url = `/dashboard/projects/${projectId}/open-stackblitz`
+                  window.open(url, '_blank', 'noopener,noreferrer')
+                  sonnerToast.success('Opening StackBlitz in new tab', { description: 'GRIP stays open here — copy errors from StackBlitz and paste below to send to GRIP.' })
+                }}
               >
-                {stackblitzLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                Run in StackBlitz (new tab)
+                <Play className="h-4 w-4" />
+                Run in StackBlitz
               </Button>
-              <p className="text-xs text-text-muted">
-                Popup blocked?{' '}
-                <button
-                  type="button"
-                  className="underline hover:no-underline text-primary"
-                  onClick={() => handleRunInBrowser(true)}
-                  disabled={stackblitzLoading}
-                >
-                  Open in this tab instead
-                </button>
-              </p>
               <button
                 type="button"
                 onClick={() => setShowReportErrors((v) => !v)}
                 className="text-xs text-primary hover:underline flex items-center gap-1 mt-2"
               >
                 {showReportErrors ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                I saw errors in StackBlitz — send them to GRIP so it can fix the project
+                I saw errors in StackBlitz — paste them here and send to GRIP (this tab stays open)
               </button>
               {showReportErrors && (
                 <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2 mt-2">
                   <p className="text-xs text-text-secondary">
-                    Paste the terminal or build output from StackBlitz below. GRIP will see these errors in Develop and suggest file changes.
+                    This tab is GRIP—StackBlitz is in the other tab. Copy errors from StackBlitz, paste below, then send to GRIP. GRIP will see them in Develop and suggest file changes.
                   </p>
                   <textarea
                     value={runErrorsRaw}

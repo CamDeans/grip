@@ -342,6 +342,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <Link href="/docs/api" className="text-xs text-text-secondary hover:text-primary">API Reference</Link>
               <Link href="/support" className="text-xs text-text-secondary hover:text-primary">Support</Link>
               <Link href="/contact" className="text-xs text-text-secondary hover:text-primary">Contact</Link>
+              <Link href="/attributions" className="text-xs text-text-secondary hover:text-primary">Attributions</Link>
               <Link href="/privacy" className="text-xs text-text-secondary hover:text-primary">Privacy</Link>
               <Link href="/terms" className="text-xs text-text-secondary hover:text-primary">Terms</Link>
             </div>

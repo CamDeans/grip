@@ -5,9 +5,10 @@ import clientPromise from '@/lib/db'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: notificationId } = await params
     // Connect to database
     const client = await clientPromise
     const db = client.db()
@@ -22,7 +23,6 @@ export async function POST(
     }
     
     const userId = session.user.email
-    const notificationId = params.id
     
     // Validate the notification exists and belongs to the user
     const notification = await db.collection('notifications').findOne({

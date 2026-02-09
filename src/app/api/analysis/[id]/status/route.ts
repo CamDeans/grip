@@ -5,11 +5,9 @@ import clientPromise from '@/lib/db'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  // Get the ID directly from the params object
-  const id = params.id;
-  
+  const { id } = await params
   try {
     // Check authentication
     const session = await getServerSession(authOptions)

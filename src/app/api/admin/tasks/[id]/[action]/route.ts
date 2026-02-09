@@ -131,14 +131,14 @@ async function handleTaskAction(
 // Support both PUT and POST methods
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string; action: string } }
+  { params }: { params: Promise<{ id: string; action: string }> }
 ) {
-  return handleTaskAction(request, params);
+  return handleTaskAction(request, await params)
 }
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; action: string } }
+  { params }: { params: Promise<{ id: string; action: string }> }
 ) {
-  return handleTaskAction(request, params);
+  return handleTaskAction(request, await params)
 } 
