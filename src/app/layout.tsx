@@ -8,7 +8,7 @@ import Footer from '@/components/layout/Footer'
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata = {
-  title: 'G.R.I.P - Ground Running Integration Platform',
+  title: 'G.R.I.P - Guided Real-time Intellectual Partner',
   description: 'Accelerate your development workflow with AI-powered project analysis and insights.',
 }
 
