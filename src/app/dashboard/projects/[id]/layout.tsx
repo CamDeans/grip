@@ -13,12 +13,11 @@ interface Project {
   repository?: { owner: string; name: string }
 }
 
-/** Step order: Overview → Setup → Repo → Plan → Develop → Preview. Tabs show only where user is and what is next. */
+/** Step order: Overview → Setup → Repo → Develop → Preview. Plan is automated; outcomes show in Develop → Show Context. */
 const STEP_CONFIG = [
   { id: 'overview', path: '', label: 'Overview', pathMatch: (base: string) => base === '' },
   { id: 'setup', path: '/settings', label: 'Setup', pathMatch: (base: string) => base === 'settings' },
   { id: 'repo', path: '/repo', label: 'Repo', pathMatch: (base: string) => base === 'repo' },
-  { id: 'plan', path: '/planning', label: 'Plan', pathMatch: (base: string) => base === 'planning' },
   { id: 'develop', path: '/enhanced-chat', label: 'Develop', pathMatch: (base: string) => base === 'enhanced-chat' },
   { id: 'preview', path: '/preview', label: 'Preview', pathMatch: (base: string) => base === 'preview' },
 ] as const
@@ -73,7 +72,6 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
     if (s.id === 'overview') return pathSegment === ''
     if (s.id === 'setup') return pathSegment === 'settings'
     if (s.id === 'repo') return pathSegment === 'repo'
-    if (s.id === 'plan') return pathSegment === 'planning'
     if (s.id === 'develop') return pathSegment === 'enhanced-chat'
     if (s.id === 'preview') return pathSegment === 'preview'
     return false
@@ -85,13 +83,12 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
     if (currentStep.id === 'preview') return null
     if (currentStep.id === 'overview') {
       if (!hasRepo) return STEP_CONFIG[1] // Setup
-      if (hasPlan === true) return STEP_CONFIG[4] // Develop
+      if (hasPlan === true) return STEP_CONFIG[3] // Develop
       return STEP_CONFIG[2] // Repo
     }
     if (currentStep.id === 'setup') return STEP_CONFIG[2] // Repo
-    if (currentStep.id === 'repo') return STEP_CONFIG[3] // Plan
-    if (currentStep.id === 'plan') return hasPlan === true ? STEP_CONFIG[4] : null
-    if (currentStep.id === 'develop') return STEP_CONFIG[5] // Preview
+    if (currentStep.id === 'repo') return STEP_CONFIG[3] // Develop (plan is automated)
+    if (currentStep.id === 'develop') return STEP_CONFIG[4] // Preview
     return null
   }
   const nextStep = getNextStep()
@@ -101,8 +98,8 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   if (currentStep.id !== 'overview') visibleIds.add(currentStep.id)
   if (nextStep) visibleIds.add(nextStep.id)
   if (!hasRepo) visibleIds.add('setup')
-  if (hasRepo && (currentStep.id === 'overview' || currentStep.id === 'repo')) visibleIds.add('plan')
-  if (hasPlan === true && (currentStep.id === 'overview' || currentStep.id === 'plan' || currentStep.id === 'develop')) visibleIds.add('develop')
+  if (hasRepo && (currentStep.id === 'overview' || currentStep.id === 'repo')) visibleIds.add('develop')
+  if (hasPlan === true && (currentStep.id === 'overview' || currentStep.id === 'develop')) visibleIds.add('develop')
   if (hasPlan === true && (currentStep.id === 'develop' || currentStep.id === 'preview')) visibleIds.add('preview')
 
   const orderedVisible = STEP_CONFIG.filter((s) => visibleIds.has(s.id))
@@ -122,7 +119,6 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
     pathSegment === '' ? 'overview' :
     pathSegment === 'settings' ? 'setup' :
     pathSegment === 'repo' ? 'repo' :
-    pathSegment === 'planning' ? 'plan' :
     pathSegment === 'enhanced-chat' ? 'develop' :
     pathSegment === 'preview' ? 'preview' : 'overview'
 

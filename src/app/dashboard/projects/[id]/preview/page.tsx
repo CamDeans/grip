@@ -207,7 +207,7 @@ export default function ProjectPreviewPage() {
                 variant="default"
                 className="gap-2"
                 onClick={() => {
-                  const url = `/dashboard/projects/${projectId}/open-stackblitz`
+                  const url = `/dashboard/open-stackblitz/${projectId}`
                   window.open(url, '_blank', 'noopener,noreferrer')
                   sonnerToast.success('Opening StackBlitz in new tab', { description: 'GRIP stays open here — copy errors from StackBlitz and paste below to send to GRIP.' })
                 }}

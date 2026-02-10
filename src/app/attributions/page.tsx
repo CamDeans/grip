@@ -54,14 +54,19 @@ export default async function AttributionsPage() {
             each repository&apos;s license when you use or derive from open-source code.
           </p>
 
+          <h2 className="text-xl font-semibold text-text-primary mt-6">Attributions in your build</h2>
+          <p>
+            G.R.I.P. will include attributions to the cloned GitHub repo and original creators in some way, shape, or form—whether in generated READMEs, license files, or in-app credits—and we follow all licenses and legal outlines present in the cloned repository. It remains your responsibility to ensure you do not remove these attributions and to pay tribute to the original GitHub account holder. If you generate income from a project that uses or derives from their code, the original author may have concerns; respecting their license and giving credit helps avoid legal or ethical issues.
+          </p>
+
           <h2 className="text-xl font-semibold text-text-primary mt-6">Homage to original creators</h2>
           <p>
             G.R.I.P. acknowledges and respects the open-source community. Code that originates from
             GitHub repositories you select or that we reference remains attributed to those
             repositories and their creators. This attributions page is part of our platform&apos;s
-            commitment to transparency and to honoring the work of open-source contributors. We do
-            not inject attribution files or notices into the projects you build and export; your
-            exported project is yours. Compliance with the licenses of any repos you base your work on
+            commitment to transparency and to honoring the work of open-source contributors. We are
+            evaluating how to surface and preserve attributions in builds while keeping your exported
+            project under your control. Compliance with the licenses of any repos you base your work on
             is your responsibility when you distribute or publish your project.
           </p>
 
@@ -91,11 +96,18 @@ export default async function AttributionsPage() {
 
           <h2 className="text-xl font-semibold text-text-primary mt-6">Your project exports</h2>
           <p>
-            When you export, download, or deploy a project from G.R.I.P., we do not add attribution
-            or license files into your project. Your build and end result are not modified for
-            attribution; this page exists only within the G.R.I.P. application to document our
-            platform&apos;s use of GitHub and open source and to pay homage to original creators,
-            while keeping your delivered project clean and under your control.
+            When you export, download, or deploy a project from G.R.I.P., we aim to surface and respect
+            attributions and licenses from the cloned repo where appropriate. Your build remains yours;
+            we document our use of GitHub and open source here and are working toward launch-ready
+            deployment. We are informing ourselves of GitHub&apos;s terms and usage options so that
+            G.R.I.P. remains feasible and compliant as we move to general availability.
+          </p>
+
+          <h2 className="text-xl font-semibold text-text-primary mt-6">Launch readiness</h2>
+          <p>
+            We are reviewing GitHub&apos;s Terms of Service and usage options to ensure G.R.I.P. can
+            operate at scale and reach deployment readiness. Feasibility and compliance are priorities
+            as we prepare for launch.
           </p>
 
           <h2 className="text-xl font-semibold text-text-primary mt-6">Contact</h2>

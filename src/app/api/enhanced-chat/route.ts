@@ -147,6 +147,7 @@ ${projectContext.ideation.technicalRequirements}
         prompt += `\n`
       }
     }
+    prompt += `\n- **Plan-generated files** (from the project plan) are required for the build. Use them and elaborate on them (implement, wire up, extend). If the build needs more files than the plan lists, add those files and reference them so the user gets the best outcome.\n\n`
   }
 
   // Current build progress (tracked from user saves and chat) — keep GRIP and user aligned
@@ -295,7 +296,7 @@ Based on the repository analysis, you can help with:
 
   if (repoReferenceDoc && repoReferenceDoc.length > 0) {
     prompt += `\n## Full repository reference (MANDATORY — use this code as the base)\n`
-    prompt += `The content below is the cloned GitHub repo: structure and file contents. You MUST use it as the primary reference.\n`
+    prompt += `The user's project input and the entire cloned GitHub repo are both in your context for the build; both are mandatory. The content below is the cloned repo: structure and file contents. You MUST use it as the primary reference.\n`
     prompt += `- Base the development plan and phases on **reusing** these files (adapt, extend, wire together). Do not ignore them or build from scratch.\n`
     prompt += `- When a file exists in the repo, prefer reusing/updating that file; when adding new files, ensure they integrate with the repo code (imports, patterns, structure).\n\n`
     prompt += repoReferenceDoc.slice(0, 28000)
@@ -369,7 +370,8 @@ Based on the repository analysis, you can help with:
 
 ## StackBlitz first — assume all users preview in-browser (no local install)
 - The app is designed for non-devs and ease: assume all users will use **StackBlitz** first to run and test their project. Do NOT prompt for npm install, npm run dev, or any local/terminal run by default.
-- After providing or updating code, tell the user to save the file(s) and then go to the **Preview** tab and click **Run in StackBlitz** to see the app run. No install required—StackBlitz runs the project in the browser.
+- When the next step is for the user to preview the app, say **Run in StackBlitz** explicitly (e.g. "Save the file(s) above, then **Run in StackBlitz** to see the app."). The app will open StackBlitz for the user automatically—no button press needed.
+- After providing or updating code, tell the user to save the file(s) and then **Run in StackBlitz** to see the app run. No install required—StackBlitz runs the project in the browser.
 - If the user pastes build or runtime errors (e.g. from StackBlitz): fix the code (output full files in code blocks so they can save), then say "Save the file(s) above, then try **Run in StackBlitz** again in the Preview tab and tell me if you still see errors." Do not suggest running npm install or terminal commands first.
 - Only suggest terminal commands (npm install, npm run dev, Run & Debug) when the user explicitly says they want to run locally, export to GitHub, or run in an IDE. For normal flow, always direct them to **Preview → Run in StackBlitz** for testing.
  - When the repo contains both a **frontend** and a **backend/API** (for example: separate folders named "frontend"/"backend" or "client"/"server", directories like "api" or "server", or multiple package.json files), you MUST make sure there is a **single dev/start script from the project root** that starts everything needed (both frontend and backend) so **Run in StackBlitz** spins up the whole stack at once. Prefer tools like concurrently, npm-run-all, workspaces, or a custom dev script that orchestrates both servers. Do **not** leave this for the user to request later—always add and/or update the scripts so StackBlitz runs real frontend + backend using the repo code and data.

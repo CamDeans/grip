@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -181,6 +181,40 @@ export default function ProjectOverviewPage() {
     })
   }, [projectId])
 
+  // Auto-run plan + sync so user can get to Develop without pressing buttons (smoother flow)
+  const autoPlanRanRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!projectId || !project?.repository?.owner || !project?.repository?.name) return
+    if (autoPlanRanRef.current === projectId) return
+    if (hasPlan === true && projectState?.phases?.length) return
+    if (hasPlan === null) return
+    autoPlanRanRef.current = projectId
+    sonnerToast.info('Setting up your plan…', { description: 'Generating plan, build steps, and required files so you can go straight to Develop.' })
+    const run = async () => {
+      try {
+        const planRes = await fetch(`/api/projects/${projectId}/plan`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        if (!planRes.ok) return
+        const syncRes = await fetch(`/api/projects/${projectId}/plan/sync-state`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        if (!syncRes.ok) return
+        const filesRes = await fetch(`/api/projects/${projectId}/files/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+        const filesData = filesRes.ok ? await filesRes.json().catch(() => ({})) : {}
+        const fileCount = filesData.successCount ?? filesData.generatedFiles?.filter((f: { success?: boolean }) => f.success).length ?? 0
+        const [state] = await Promise.all([
+          fetch(`/api/projects/${projectId}/state`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        ])
+        setProjectState(state && (state.phases?.length || state.currentPhase) ? state : null)
+        setHasPlan(true)
+        sonnerToast.success(
+          'Plan ready',
+          { description: fileCount > 0 ? `Phases and ${fileCount} file(s) created. Go to Develop to build with GRIP.` : 'You can go to Develop to start building with GRIP.' }
+        )
+      } catch {
+        autoPlanRanRef.current = null
+      }
+    }
+    run()
+  }, [projectId, project?.repository?.owner, project?.repository?.name, hasPlan, projectState?.phases?.length])
+
   if (isLoading) {
     return <LoadingState message="Loading project information..." />
   }
@@ -288,7 +322,7 @@ export default function ProjectOverviewPage() {
               <div>
                 <span className="font-medium">4. Plan</span> — Generate a development plan (phases and tasks).
                 {!stepsComplete[3] && (
-                  <Link href={`/dashboard/projects/${projectId}/planning`} className="ml-1 text-primary hover:underline text-sm">Generate plan in Planning</Link>
+                  <span className="text-sm text-muted-foreground">Plan is created automatically when you link a repo.</span>
                 )}
               </div>
             </li>
@@ -297,7 +331,7 @@ export default function ProjectOverviewPage() {
               <div>
                 <span className="font-medium">5. Review phases</span> — Review the build phases below. When ready, start chat with GRIP; GRIP will use the current phase as the starting point.
                 {!stepsComplete[4] && (
-                  <span className="text-sm text-text-muted ml-1">Generate a plan first, then sync phases from Planning if needed.</span>
+                  <span className="text-sm text-text-muted ml-1">Plan and phases are created automatically when you link a repo.</span>
                 )}
               </div>
             </li>
@@ -366,7 +400,7 @@ export default function ProjectOverviewPage() {
                 </>
               ) : (
                 <>
-                  <p>No phases yet. Generate a plan in <Link href={`/dashboard/projects/${projectId}/planning`} className="text-primary hover:underline">Planning</Link>, then return here. Sync build steps in Planning if needed so phases appear.</p>
+                  <p>No phases yet. Link a repo and return to Overview — plan and phases are created automatically, then go to Develop.</p>
                   <Link href={`/dashboard/projects/${projectId}/enhanced-chat`}>
                     <Button variant="outline">Open Develop anyway</Button>
                   </Link>
@@ -483,7 +517,7 @@ export default function ProjectOverviewPage() {
             <p className="text-sm text-text-secondary">Loading...</p>
           ) : generatedFiles.length === 0 ? (
             <p className="text-sm text-text-secondary">
-              No generated files yet. Generate files from the <Link href={`/dashboard/projects/${projectId}/planning`} className="text-primary hover:underline">Plan</Link> tab, or get code from <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="text-primary hover:underline">Develop</Link> (code in chat is in message history).
+              No generated files yet. Files are generated automatically with the plan, or get code from <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="text-primary hover:underline">Develop</Link> (code in chat is in message history).
             </p>
           ) : (
             <ul className="space-y-2">
@@ -742,14 +776,14 @@ export default function ProjectOverviewPage() {
             <Button 
               variant="outline" 
               className="h-auto p-4 justify-start"
-              onClick={() => router.push(`/dashboard/projects/${projectId}/planning`)}
+              onClick={() => router.push(`/dashboard/projects/${projectId}/enhanced-chat`)}
             >
               <div className="flex items-start">
                 <ClipboardIcon className="w-5 h-5 mr-3 mt-0.5 text-accent-blue" />
                 <div className="text-left">
-                  <div className="font-semibold">Project Planning Tools</div>
+                  <div className="font-semibold">Develop with GRIP</div>
                   <p className="text-sm text-text-secondary">
-                    Access planning tools and templates for your project
+                    Open Develop to chat with GRIP; plan and files are in Show Context
                   </p>
                 </div>
               </div>

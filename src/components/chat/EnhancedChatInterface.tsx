@@ -12,7 +12,13 @@ import { useWebSocket } from '@/hooks/useWebSocket'
 import { validateMessage } from '@/lib/validation'
 import { EnhancedChatProvider } from '@/components/providers/EnhancedChatProvider'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { XCircleIcon, FileIcon, GitForkIcon, TerminalIcon, CodeIcon, RefreshCwIcon, ChevronDownIcon, ChevronUpIcon, PlayIcon, SendIcon, Loader2Icon, CheckCircle2, Circle } from 'lucide-react'
 import Link from 'next/link'
 import { toast as sonnerToast } from 'sonner'
@@ -31,6 +37,13 @@ interface EnhancedChatProps {
 }
 
 // Context panel to display project information
+interface RepoTreeNode {
+  name: string
+  path: string
+  type: 'file' | 'dir'
+  children?: RepoTreeNode[]
+}
+
 const ContextPanel = () => {
   const params = useParams<{ id: string }>()
   const projectId = params?.id || ''
@@ -52,6 +65,70 @@ const ContextPanel = () => {
     loadingContext,
     refreshContext
   } = useEnhancedChat()
+
+  const [repoTree, setRepoTree] = useState<{ tree: RepoTreeNode[]; fileCount: number; repo: string } | null>(null)
+  const [repoTreeLoading, setRepoTreeLoading] = useState(false)
+  const [repoTreeError, setRepoTreeError] = useState<string | null>(null)
+
+  const [planData, setPlanData] = useState<{ plan?: { phases?: Array<{ name: string; description?: string; tasks?: Array<{ name?: string; title?: string; status?: string }> }> }; structure?: { fileHierarchy?: unknown } } | null>(null)
+  const [planLoading, setPlanLoading] = useState(false)
+  const [generatedFilesList, setGeneratedFilesList] = useState<Array<{ path: string; filename: string }>>([])
+
+  const [contextTab, setContextTab] = useState<string>('project')
+  const CONTEXT_TABS = [
+    { value: 'project', label: 'Project' },
+    { value: 'analysis', label: 'Analysis' },
+    { value: 'code', label: 'Code' },
+    { value: 'repo', label: 'Repository' },
+    { value: 'plan', label: 'Plan & files' },
+    { value: 'terminal', label: 'Terminal' },
+  ] as const
+  const currentContextLabel = CONTEXT_TABS.find((t) => t.value === contextTab)?.label ?? 'Project'
+
+  useEffect(() => {
+    if (!projectId || !projectContext?.repository || !contextEnabled) return
+    setRepoTreeLoading(true)
+    setRepoTreeError(null)
+    fetch(`/api/projects/${projectId}/repo/tree`)
+      .then((r) => {
+        if (!r.ok) throw new Error(r.status === 400 ? 'No repo linked or clone needed' : 'Failed to load repo tree')
+        return r.json()
+      })
+      .then((data) => {
+        setRepoTree({ tree: data.tree || [], fileCount: data.fileCount || 0, repo: data.repo || '' })
+      })
+      .catch((e) => {
+        setRepoTreeError(e instanceof Error ? e.message : 'Failed to load')
+        setRepoTree(null)
+      })
+      .finally(() => setRepoTreeLoading(false))
+  }, [projectId, projectContext?.repository, contextEnabled])
+
+  useEffect(() => {
+    if (!projectId || !contextEnabled) return
+    setPlanLoading(true)
+    Promise.all([
+      fetch(`/api/projects/${projectId}/plan`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`/api/project-files?projectId=${projectId}&limit=200`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    ]).then(([plan, files]) => {
+      setPlanData(plan || null)
+      setGeneratedFilesList(Array.isArray(files) ? files.map((f: { path?: string; filename?: string }) => ({ path: f.path || '', filename: f.filename || '' })) : [])
+    }).finally(() => setPlanLoading(false))
+  }, [projectId, contextEnabled])
+
+  const renderRepoTree = (nodes: RepoTreeNode[], depth = 0) => (
+    <ul className={cn('list-none pl-0', depth > 0 && 'pl-3 border-l border-border ml-1')}>
+      {nodes.map((node) => (
+        <li key={node.path} className="text-xs py-0.5">
+          <span className={cn('text-muted-foreground', node.type === 'dir' && 'font-medium')}>
+            {node.type === 'dir' ? '📁 ' : '📄 '}
+            {node.name}
+          </span>
+          {node.children?.length ? renderRepoTree(node.children, depth + 1) : null}
+        </li>
+      ))}
+    </ul>
+  )
 
   return (
     <div className="h-full flex flex-col bg-background-secondary overflow-y-auto overflow-x-hidden w-full min-w-0">
@@ -86,17 +163,40 @@ const ContextPanel = () => {
       )}
 
       {!loadingContext && contextEnabled && (
-        <Tabs defaultValue="project" className="w-full px-3">
-          <TabsList className="w-full bg-background-tertiary mb-2 flex flex-wrap">
-            <TabsTrigger value="project" className="flex-1 min-w-0 text-xs">Project</TabsTrigger>
-            <TabsTrigger value="analysis" className="flex-1 min-w-0 text-xs">Analysis</TabsTrigger>
-            <TabsTrigger value="code" className="flex-1 min-w-0 text-xs">Code</TabsTrigger>
-            <TabsTrigger value="terminal" className="flex-1 min-w-0 text-xs flex items-center gap-1">
-              <TerminalIcon className="h-3 w-3 shrink-0" />
-              Terminal
-            </TabsTrigger>
-          </TabsList>
-          
+        <Tabs value={contextTab} onValueChange={setContextTab} className="w-full px-3">
+          <div className="mb-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-between text-xs font-medium h-8"
+                >
+                  <span className="truncate">{currentContextLabel}</span>
+                  <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[180px]">
+                {CONTEXT_TABS.map((tab) => (
+                  <DropdownMenuItem
+                    key={tab.value}
+                    onClick={() => setContextTab(tab.value)}
+                    className={cn(contextTab === tab.value && 'bg-primary/10 text-primary')}
+                  >
+                    {tab.value === 'terminal' ? (
+                      <span className="flex items-center gap-2">
+                        <TerminalIcon className="h-3.5 w-3.5" />
+                        {tab.label}
+                      </span>
+                    ) : (
+                      tab.label
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
           <TabsContent value="project" className="space-y-4 mt-2">
             {projectContext ? (
               <div>
@@ -298,6 +398,85 @@ const ContextPanel = () => {
             )}
           </TabsContent>
 
+          <TabsContent value="repo" className="mt-2">
+            {projectContext?.repository ? (
+              <div className="space-y-2">
+                <div className="bg-success-light dark:bg-success/10 p-2 rounded text-xs border border-success/30">
+                  <p className="font-medium text-success">Cloned GitHub repo in GRIP&apos;s context</p>
+                  <p className="text-success opacity-90">
+                    This folder/file list is included in GRIP&apos;s context for the build. Your project input + this repo are used together.
+                  </p>
+                </div>
+                <p className="text-xs font-medium">
+                  {projectContext.repository.owner}/{projectContext.repository.name}
+                </p>
+                {repoTreeLoading ? (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Loader2Icon className="h-3 w-3 animate-spin" /> Loading repo tree…
+                  </p>
+                ) : repoTreeError ? (
+                  <p className="text-xs text-destructive">{repoTreeError}</p>
+                ) : repoTree && repoTree.tree.length > 0 ? (
+                  <div className="max-h-64 overflow-y-auto rounded border border-border p-2 bg-background">
+                    <p className="text-[10px] text-muted-foreground mb-1">{repoTree.fileCount} files</p>
+                    {renderRepoTree(repoTree.tree)}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No repo files yet. Open the Repo tab, clone or refresh the repo, then return here to confirm it&apos;s in context.</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Link a GitHub repo in project settings so GRIP can use it for the build.</p>
+            )}
+          </TabsContent>
+
+          <TabsContent value="plan" className="mt-2">
+            <div className="space-y-3 text-xs">
+              <div className="bg-success-light dark:bg-success/10 p-2 rounded text-xs border border-success/30">
+                <p className="font-medium text-success">Planning outcomes (no Planning page needed)</p>
+                <p className="text-success opacity-90">Phases, steps, and generated files below are used by GRIP for the build.</p>
+              </div>
+              {planLoading ? (
+                <p className="text-muted-foreground flex items-center gap-1"><Loader2Icon className="h-3 w-3 animate-spin" /> Loading…</p>
+              ) : planData?.plan?.phases?.length ? (
+                <>
+                  <h4 className="text-sm font-medium">Phases</h4>
+                  <ul className="space-y-2 max-h-40 overflow-y-auto">
+                    {planData.plan.phases.map((phase, i) => (
+                      <li key={i} className="border border-border rounded p-2">
+                        <span className="font-medium">{phase.name}</span>
+                        {phase.tasks?.length ? (
+                          <ul className="mt-1 pl-3 list-disc text-muted-foreground">
+                            {phase.tasks.slice(0, 5).map((t, j) => (
+                              <li key={j}>{t.name ?? t.title ?? 'Task'}</li>
+                            ))}
+                            {(phase.tasks?.length ?? 0) > 5 && <li>+{(phase.tasks?.length ?? 0) - 5} more</li>}
+                          </ul>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                  <h4 className="text-sm font-medium mt-2">Generated files (used in build)</h4>
+                  {generatedFilesList.length > 0 ? (
+                    <ul className="max-h-32 overflow-y-auto space-y-0.5">
+                      {generatedFilesList.slice(0, 30).map((f, i) => (
+                        <li key={i} className="flex items-center gap-1">
+                          <FileIcon className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{f.path ? `${f.path}/` : ''}{f.filename}</span>
+                        </li>
+                      ))}
+                      {generatedFilesList.length > 30 && <li className="text-muted-foreground">+{generatedFilesList.length - 30} more</li>}
+                    </ul>
+                  ) : (
+                    <p className="text-muted-foreground">None yet. Plan-generated files appear here and are required for the build.</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-muted-foreground">No plan yet. It will appear here after setup so you can go straight to Develop.</p>
+              )}
+            </div>
+          </TabsContent>
+
           <TabsContent value="terminal" className="mt-2">
             <div className="space-y-3 text-xs">
               <h4 className="text-sm font-medium flex items-center gap-1">
@@ -465,6 +644,7 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
   const lastAssistantMessageRef = useRef<HTMLDivElement>(null)
   const params = useParams()
   const prevMessagesLengthRef = useRef(0)
+  const lastOpenedStackBlitzForMessageIdRef = useRef<string | null>(null)
 
   // When user returns to chat or messages load/update, scroll to last message so they see the latest GRIP response
   useEffect(() => {
@@ -496,6 +676,29 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
       return () => cancelAnimationFrame(t)
     }
   }, [isTyping, messages.length, messages])
+
+  // Auto-open StackBlitz when GRIP says "Run in StackBlitz" in chat. We only open a new tab (never navigate away).
+  // On revisit: last message in history may mention StackBlitz, so we try to open once; the browser often blocks
+  // (no user gesture on page load). That's expected — we show "Popup blocked" and the user can click the button.
+  // When GRIP says it during the conversation, the new tab usually opens; if blocked, the button (user click) always works.
+  useEffect(() => {
+    if (!projectId || isTyping || messages.length === 0) return
+    const last = messages[messages.length - 1]
+    if (last?.role !== 'assistant') return
+    const content = 'content' in last ? last.content : undefined
+    if (typeof content !== 'string') return
+    const lower = content.toLowerCase()
+    const mentionsStackBlitz = lower.includes('stackblitz') || lower.includes('run in stackblitz') || lower.includes('preview tab') || lower.includes('preview the app') || lower.includes('test in stackblitz') || /preview.*stackblitz|stackblitz.*preview/i.test(content)
+    if (!mentionsStackBlitz || lastOpenedStackBlitzForMessageIdRef.current === last.id) return
+    lastOpenedStackBlitzForMessageIdRef.current = last.id
+    const url = `/dashboard/open-stackblitz/${projectId}`
+    const win = window.open(url, '_blank', 'noopener,noreferrer')
+    if (win) {
+      sonnerToast.success('Opening StackBlitz', { description: 'A new tab is opening. Stay here in chat — paste any errors back for GRIP to fix.' })
+    } else {
+      sonnerToast.warning('Popup blocked', { description: 'Click "Open StackBlitz again" below to open StackBlitz in a new tab.' })
+    }
+  }, [projectId, isTyping, messages.length, messages])
 
   // Add rate limiting and request size limits
   const MAX_MESSAGE_SIZE = 5000; // 5KB
@@ -947,17 +1150,17 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
 
           {!isUser && projectId && messageMentionsStackBlitzPreview('content' in message ? message.content : undefined) && (
             <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-xs text-muted-foreground mb-1">StackBlitz opens in a new tab. Paste any errors here and send to GRIP to fix.</p>
               <button
                 type="button"
                 onClick={() => {
-                  const url = `/dashboard/projects/${projectId}/open-stackblitz`
-                  window.open(url, '_blank', 'noopener,noreferrer')
-                  sonnerToast.success('Opening StackBlitz in new tab', { description: 'Stay here in chat — copy errors from StackBlitz and paste below to send to GRIP.' })
+                  window.open(`/dashboard/open-stackblitz/${projectId}`, '_blank', 'noopener,noreferrer')
+                  sonnerToast.success('Opening StackBlitz', { description: 'Stay here — paste errors from StackBlitz and send to GRIP.' })
                 }}
                 className="inline-flex items-center gap-2 rounded-md border border-primary/50 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/20 transition-colors"
               >
                 <CodeIcon className="h-4 w-4 shrink-0" />
-                Run in StackBlitz (opens new tab)
+                Open StackBlitz again
               </button>
             </div>
           )}
@@ -1075,7 +1278,6 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
           <button
             type="button"
             onClick={() => setRunDebugOpen(!runDebugOpen)}
-            aria-expanded={runDebugOpen}
             aria-controls="run-debug-panel"
             id="run-debug-toggle"
             className="w-full flex items-center justify-between px-4 py-3 text-left text-sm font-semibold text-primary border border-primary/40 bg-primary/10 hover:bg-primary/20 transition-colors rounded-b-none"
@@ -1160,12 +1362,15 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
 
         {/* Chat Input — textarea expands with content; Enter sends, Shift+Enter new line */}
         <div className="flex-shrink-0 border-t p-4">
+          {messages.length > 0 && messages[messages.length - 1]?.role === 'assistant' && (messages[messages.length - 1]?.content ?? '').includes('```') && !isTyping && (
+            <p className="text-[11px] text-muted-foreground mb-2">Save any code blocks above with &quot;Save to project&quot;, then tell GRIP when you&apos;re ready or paste errors from StackBlitz.</p>
+          )}
           <form ref={formRef} onSubmit={handleSubmit} className="flex gap-2 items-end">
             <Textarea
               ref={inputRef}
               name="message"
               defaultValue=""
-              placeholder={isTyping ? "GRIP is thinking..." : "Type your message... (Shift+Enter for new line)"}
+              placeholder={isTyping ? "GRIP is thinking..." : "Ask GRIP to build, fix, or add features… Paste errors here for fixes. (Shift+Enter new line)"}
               disabled={isLoading || isTyping}
               className="flex-1 min-h-[40px] max-h-[200px] resize-none py-2.5"
               rows={1}
