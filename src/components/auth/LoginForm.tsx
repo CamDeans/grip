@@ -115,7 +115,7 @@ export function LoginForm() {
 
               <div className="flex justify-center gap-4">
                 <Link
-                  href="/register"
+                  href="/register?callbackUrl=%2Fplans"
                   className="text-sm font-medium text-primary hover:text-primary-hover"
                 >
                   Create an account

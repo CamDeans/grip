@@ -2,255 +2,88 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { 
-  ServerIcon, 
-  FolderIcon, 
-  ClockIcon, 
-  TerminalIcon,
-  SlidersHorizontal,
-  CheckCircleIcon,
-  XCircleIcon
+import {
+  BarChart3Icon,
+  DollarSign,
+  Users,
+  Heart,
+  MessageSquare,
+  FileText,
+  Megaphone,
+  RefreshCw,
+  Activity,
+  Shield,
+  Settings,
+  Coins,
 } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
 import { AdminDashboardLayout } from '@/components/admin/AdminDashboardLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-// The G.R.I.P. Enhancement Plan Phases
-const enhancementPlan = [
-  {
-    id: 'phase_1',
-    name: 'Database Integration',
-    description: 'Connect G.R.I.P. to MongoDB collections and prepare for project automation',
-    status: 'completed',
-    icon: <ServerIcon className="h-8 w-8 text-primary" />,
-    href: '/dashboard/admin'
-  },
-  {
-    id: 'phase_2',
-    name: 'Context Enhancement',
-    description: 'Modify the chat system to maintain and utilize project context',
-    status: 'completed',
-    icon: <FolderIcon className="h-8 w-8 text-accent-blue" />,
-    href: '/dashboard/admin'
-  },
-  {
-    id: 'phase_3',
-    name: 'Project Planning Engine',
-    description: 'Create system to generate project structure and development plans',
-    status: 'completed',
-    icon: <FolderIcon className="h-8 w-8 text-success" />,
-    href: '/dashboard/admin'
-  },
-  {
-    id: 'phase_4',
-    name: 'Code Generation System',
-    description: 'Build the code generation engine for creating project files',
-    status: 'completed',
-    icon: <FolderIcon className="h-8 w-8 text-accent-amber" />,
-    href: '/dashboard/admin/files'
-  },
-  {
-    id: 'phase_5',
-    name: 'Build Automation System',
-    description: 'Create the background automation system for project building',
-    status: 'completed',
-    icon: <ServerIcon className="h-8 w-8 text-destructive" />,
-    href: '/dashboard/admin/builds'
-  },
-  {
-    id: 'phase_6',
-    name: 'Terminal Integration',
-    description: 'Create virtual terminal for command execution',
-    status: 'completed',
-    icon: <TerminalIcon className="h-8 w-8 text-indigo-500" />,
-    href: '/dashboard/admin/terminal'
-  },
-  {
-    id: 'phase_7',
-    name: 'Admin Dashboard',
-    description: 'Create admin interface for monitoring automation',
-    status: 'completed',
-    icon: <SlidersHorizontal className="h-8 w-8 text-destructive" />,
-    href: '/dashboard/admin'
-  },
-  {
-    id: 'phase_8',
-    name: 'Chat Interface Enhancement',
-    description: 'Update chat UI to support development workflow',
-    status: 'completed',
-    icon: <FolderIcon className="h-8 w-8 text-teal-500" />,
-    href: '/dashboard/chat'
-  },
-  {
-    id: 'phase_9',
-    name: 'Testing and Integration',
-    description: 'Test the complete system and ensure smooth integration',
-    status: 'completed',
-    icon: <CheckCircleIcon className="h-8 w-8 text-violet-500" />,
-    href: '/dashboard/admin'
-  }
-]
-
-// Admin access sections
 const adminSections = [
-  {
-    id: 'tasks',
-    title: 'Task Manager',
-    description: 'Manage automation tasks',
-    icon: <ClockIcon className="h-8 w-8 text-primary" />,
-    href: '/dashboard/admin/tasks'
-  },
-  {
-    id: 'builds',
-    title: 'Build Monitor',
-    description: 'Monitor build status and logs',
-    icon: <ServerIcon className="h-8 w-8 text-success" />,
-    href: '/dashboard/admin/builds'
-  },
-  {
-    id: 'files',
-    title: 'File Explorer',
-    description: 'Browse generated project files',
-    icon: <FolderIcon className="h-8 w-8 text-amber-500" />,
-    href: '/dashboard/admin/files'
-  },
-  {
-    id: 'terminal',
-    title: 'Terminal',
-    description: 'Access the terminal interface',
-    icon: <TerminalIcon className="h-8 w-8 text-indigo-500" />,
-    href: '/dashboard/admin/terminal'
-  },
-  {
-    id: 'controls',
-    title: 'System Controls',
-    description: 'Control system automation',
-    icon: <SlidersHorizontal className="h-8 w-8 text-destructive" />,
-    href: '/dashboard/admin/controls'
-  },
-  {
-    id: 'support',
-    title: 'Support Tickets',
-    description: 'View and manage support tickets',
-    icon: <XCircleIcon className="h-8 w-8 text-primary" />,
-    href: '/dashboard/admin/support'
-  }
+  { id: 'revenue', title: 'Revenue', description: 'View revenue and subscription metrics', icon: <DollarSign className="h-6 w-6 text-primary" />, href: '/dashboard/admin/revenue' },
+  { id: 'payouts', title: 'Payouts', description: 'Manage payouts (55/45 split)', icon: <DollarSign className="h-6 w-6 text-accent-blue" />, href: '/dashboard/admin/payouts' },
+  { id: 'users', title: 'Users', description: 'View and manage users', icon: <Users className="h-6 w-6 text-success" />, href: '/dashboard/admin/users' },
+  { id: 'valued-testers', title: 'Valued Testers', description: 'Add or remove valued testers (10 max)', icon: <Heart className="h-6 w-6 text-destructive" />, href: '/dashboard/admin/valued-testers' },
+  { id: 'support', title: 'Support', description: 'View and manage support tickets', icon: <MessageSquare className="h-6 w-6 text-primary" />, href: '/dashboard/admin/support' },
+  { id: 'reports', title: 'Reports', description: 'View reports', icon: <FileText className="h-6 w-6 text-accent-amber" />, href: '/dashboard/admin/reports' },
+  { id: 'announcements', title: 'Announcements', description: 'Create and manage announcements', icon: <Megaphone className="h-6 w-6 text-accent-teal" />, href: '/dashboard/admin/announcements' },
+  { id: 'app-updates', title: 'App Updates', description: 'Push app updates (toast in main app)', icon: <RefreshCw className="h-6 w-6 text-indigo-500" />, href: '/dashboard/admin/app-updates' },
+  { id: 'activity', title: 'Activity Log', description: 'View admin activity log', icon: <Activity className="h-6 w-6 text-violet-500" />, href: '/dashboard/admin/activity-log' },
+  { id: 'system-health', title: 'System Health', description: 'DB and GRIP AI connectivity', icon: <Shield className="h-6 w-6 text-success" />, href: '/dashboard/admin/system-health' },
+  { id: 'token-limits', title: 'Token limits', description: 'Set admin and valued-tester token allowances', icon: <Coins className="h-6 w-6 text-primary" />, href: '/dashboard/admin/token-limits' },
+  { id: 'settings', title: 'Settings', description: 'Tax, password, admin settings', icon: <Settings className="h-6 w-6 text-text-muted" />, href: '/dashboard/admin/settings' },
 ]
 
 export default function AdminDashboardPage() {
-  const [buildStats, setBuildStats] = useState({
-    total: 0,
-    running: 0,
-    completed: 0,
-    failed: 0
-  })
-
-  const [terminalStats, setTerminalStats] = useState({
-    total: 0,
-    active: 0,
-    inactive: 0
-  })
-
   const [userStats, setUserStats] = useState({
     totalUsers: 0,
     newThisWeek: 0,
     totalProjects: 0,
     usersWithProjects: 0,
-    conversionRate: 0
+    conversionRate: 0,
   })
-  
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const [buildRes, terminalRes, userRes] = await Promise.all([
-          fetch('/api/admin/stats/builds'),
-          fetch('/api/admin/stats/terminals'),
-          fetch('/api/admin/stats/users')
-        ])
-        if (buildRes.ok) setBuildStats(await buildRes.json())
-        if (terminalRes.ok) setTerminalStats(await terminalRes.json())
-        if (userRes.ok) setUserStats(await userRes.json())
-      } catch (error) {
-        console.error('Error fetching stats:', error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchStats()
+    fetch('/api/admin/stats/users')
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d) => setUserStats(d))
+      .catch(() => {})
+      .finally(() => setIsLoading(false))
   }, [])
 
   return (
     <AdminDashboardLayout>
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-bold mb-4">G.R.I.P. Enhancement Progress</h2>
-          <p className="text-text-secondary mb-4">
-            Current implementation status of the G.R.I.P. Enhancement Plan
+          <h2 className="text-2xl font-bold mb-2">Admin Dashboard</h2>
+          <p className="text-text-secondary text-sm">
+            Revenue, payouts, users, valued testers, support, reports, announcements, app updates, activity log, system health, and settings.
           </p>
-          
-          <div className="grid grid-cols-1 gap-4">
-            {enhancementPlan.map(phase => (
-              <Card key={phase.id} className={`border-l-4 ${phase.status === 'completed' ? 'border-l-success' : 'border-l-accent-amber'}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      {phase.icon}
-                      <div>
-                        <h3 className="font-semibold">{phase.name}</h3>
-                        <p className="text-sm text-text-secondary">{phase.description}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {phase.status === 'completed' ? (
-                        <>
-                          <CheckCircleIcon className="h-5 w-5 text-success" />
-                          <span className="text-success font-medium">Completed</span>
-                        </>
-                      ) : (
-                        <>
-                          <div className="h-5 w-5 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
-                          <span className="text-amber-600 font-medium">In Progress</span>
-                        </>
-                      )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {adminSections.map((section) => (
+            <Link key={section.id} href={section.href} className="block no-underline">
+              <Card className="h-full transition-colors hover:border-primary/50 hover:bg-background-secondary/50">
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">{section.icon}</div>
+                    <div>
+                      <h3 className="font-semibold text-text-primary">{section.title}</h3>
+                      <p className="text-sm text-text-secondary mt-0.5">{section.description}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            </Link>
+          ))}
         </div>
-        
-        <div className="mt-8">
-          <h2 className="text-2xl font-bold mb-4">Admin Features</h2>
-          <p className="text-text-secondary mb-4">
-            Access all admin features to manage and monitor G.R.I.P.
-          </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {adminSections.map(section => (
-              <Link 
-                href={section.href} 
-                key={section.id}
-                className="block no-underline"
-              >
-                <div className="h-full rounded-lg border border-border bg-background-secondary shadow-sm p-6 transition-all hover:shadow-md hover:border-primary/50">
-                  <div className="flex items-center mb-3">
-                    {section.icon}
-                    <span className="ml-2 text-xl font-semibold">{section.title}</span>
-                  </div>
-                  <p className="text-text-secondary text-sm">{section.description}</p>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle>User Metrics</CardTitle>
+              <CardTitle className="text-base">User Metrics</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -271,7 +104,7 @@ export default function AdminDashboardPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle>Conversion</CardTitle>
+              <CardTitle className="text-base">Conversion</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -292,84 +125,26 @@ export default function AdminDashboardPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle>Payments</CardTitle>
+              <CardTitle className="text-base">Revenue</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-4 text-text-secondary text-sm">
-                Payment metrics coming soon. Connect Stripe or your provider to see revenue and subscriptions.
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle>Support</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Link href="/dashboard/admin/support" className="text-primary hover:underline text-sm">
-                View support tickets →
+              <Link href="/dashboard/admin/revenue" className="text-primary hover:underline text-sm font-medium">
+                View revenue →
               </Link>
             </CardContent>
           </Card>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle>Build Statistics</CardTitle>
+              <CardTitle className="text-base">Support</CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
-                <div className="animate-pulse h-20 bg-background-tertiary rounded"></div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-3 bg-primary/10 rounded-lg">
-                    <div className="text-3xl font-bold text-primary">{buildStats.total}</div>
-                    <div className="text-sm text-primary">Total Builds</div>
-                  </div>
-                  <div className="text-center p-3 bg-success/10 rounded-lg">
-                    <div className="text-3xl font-bold text-success ">{buildStats.completed}</div>
-                    <div className="text-sm text-success ">Completed</div>
-                  </div>
-                  <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                    <div className="text-3xl font-bold text-amber-600 dark:text-amber-400">{buildStats.running}</div>
-                    <div className="text-sm text-amber-600 dark:text-amber-400">Running</div>
-                  </div>
-                  <div className="text-center p-3 bg-destructive/10 rounded-lg">
-                    <div className="text-3xl font-bold text-destructive">{buildStats.failed}</div>
-                    <div className="text-sm text-destructive">Failed</div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle>Terminal Statistics</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="animate-pulse h-20 bg-background-tertiary rounded"></div>
-              ) : (
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
-                    <div className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{terminalStats.total}</div>
-                    <div className="text-sm text-indigo-600 dark:text-indigo-400">Total Sessions</div>
-                  </div>
-                  <div className="text-center p-3 bg-success/10 rounded-lg">
-                    <div className="text-3xl font-bold text-success ">{terminalStats.active}</div>
-                    <div className="text-sm text-success ">Active</div>
-                  </div>
-                  <div className="text-center p-3 bg-background-tertiary rounded-lg">
-                    <div className="text-3xl font-bold text-text-muted">{terminalStats.inactive}</div>
-                    <div className="text-sm text-text-muted">Inactive</div>
-                  </div>
-                </div>
-              )}
+              <Link href="/dashboard/admin/support" className="text-primary hover:underline text-sm font-medium">
+                View support tickets →
+              </Link>
             </CardContent>
           </Card>
         </div>
       </div>
     </AdminDashboardLayout>
   )
-} 
+}

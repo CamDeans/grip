@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { AdminDashboardLayout } from '@/components/admin/AdminDashboardLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/Button'
 import Link from 'next/link'
 
 interface Ticket {
@@ -21,30 +22,39 @@ export default function AdminSupportPage() {
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchTickets = async () => {
-      try {
-        const res = await fetch('/api/support/tickets')
-        if (res.ok) {
-          const data = await res.json()
-          setTickets(data.tickets || [])
-        }
-      } catch (err) {
-        console.error(err)
-      } finally {
-        setLoading(false)
+  const fetchTickets = async () => {
+    try {
+      const res = await fetch('/api/support/tickets')
+      if (res.ok) {
+        const data = await res.json()
+        setTickets(data.tickets || [])
       }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchTickets()
   }, [])
 
+  const setStatus = (id: string, status: 'open' | 'closed') => {
+    fetch(`/api/support/tickets/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    }).then(() => fetchTickets())
+  }
+
   return (
     <AdminDashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 overflow-x-auto min-w-0">
         <div>
           <h1 className="text-2xl font-bold">Support Tickets</h1>
           <p className="text-text-secondary mt-1">
-            Tickets created via the support form. Link users to <Link href="/support" className="text-primary hover:underline">/support</Link> to submit.
+            Tickets from main app. User gets confirmation email; you get notified. Open/close below. <Link href="/support" className="text-primary hover:underline">/support</Link>
           </p>
         </div>
 
@@ -61,8 +71,8 @@ export default function AdminSupportPage() {
               <ul className="divide-y divide-border">
                 {tickets.map((t) => (
                   <li key={t._id} className="py-4 first:pt-0">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
                         <div className="font-medium text-text-primary">{t.subject}</div>
                         <div className="text-sm text-text-secondary mt-1">
                           {t.name} &lt;{t.email}&gt;
@@ -75,9 +85,16 @@ export default function AdminSupportPage() {
                           {new Date(t.createdAt).toLocaleString()}
                         </div>
                       </div>
-                      <Badge variant={t.status === 'open' ? 'default' : 'secondary'}>
-                        {t.status}
-                      </Badge>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant={t.status === 'open' ? 'default' : 'secondary'}>
+                          {t.status}
+                        </Badge>
+                        {t.status === 'open' ? (
+                          <Button size="sm" variant="outline" onClick={() => setStatus(t._id, 'closed')}>Close</Button>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => setStatus(t._id, 'open')}>Reopen</Button>
+                        )}
+                      </div>
                     </div>
                   </li>
                 ))}

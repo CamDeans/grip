@@ -32,11 +32,32 @@ export async function GET(
     if (result instanceof NextResponse) return result
     const { id, db } = result
 
-    const project = await db.collection('projects').findOne({ _id: new ObjectId(id) })
-    if (!project) {
-      return new NextResponse(JSON.stringify({ error: 'Project not found' }), { status: 404 })
+    // Try main projects first
+    let project = await db.collection('projects').findOne({ _id: new ObjectId(id) })
+    if (project) {
+      return NextResponse.json({ ...project, isSandbox: false })
     }
-    return NextResponse.json(project)
+
+    // Try sandbox projects
+    const sandboxProject = await db.collection('sandboxProjects').findOne({ _id: new ObjectId(id) })
+    if (sandboxProject) {
+      // Convert to unified format
+      return NextResponse.json({
+        _id: sandboxProject._id,
+        title: sandboxProject.title,
+        description: sandboxProject.description,
+        repository: sandboxProject.repository,
+        ideation: sandboxProject.ideation,
+        userId: sandboxProject.userId,
+        createdAt: sandboxProject.createdAt,
+        updatedAt: sandboxProject.updatedAt,
+        status: 'active',
+        isSandbox: true,
+        parentProjectId: sandboxProject.parentProjectId,
+      })
+    }
+
+    return new NextResponse(JSON.stringify({ error: 'Project not found' }), { status: 404 })
   } catch (error: unknown) {
     console.error('Error loading project:', error)
     return new NextResponse(

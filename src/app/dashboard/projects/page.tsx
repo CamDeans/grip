@@ -49,14 +49,16 @@ export default function ProjectsPage() {
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [currentTab, setCurrentTab] = useState('all')
+  const [currentTab, setCurrentTab] = useState<'active' | 'archived'>('active')
   const [sortOrder, setSortOrder] = useState('newest')
   
-  // Get status from URL if present
+  // Get status from URL if present (active = main dashboard; archived = completed + archived)
   useEffect(() => {
     const status = searchParams?.get('status')
-    if (status && ['all', 'active', 'completed', 'archived'].includes(status)) {
-      setCurrentTab(status)
+    if (status === 'archived') {
+      setCurrentTab('archived')
+    } else {
+      setCurrentTab('active')
     }
   }, [searchParams])
 
@@ -82,21 +84,18 @@ export default function ProjectsPage() {
     fetchProjects()
   }, [])
 
-  // Count by status (for tab labels)
-  const statusCounts = {
-    all: projects.length,
-    active: projects.filter(p => (p.status || 'active') === 'active').length,
-    completed: projects.filter(p => p.status === 'completed').length,
-    archived: projects.filter(p => p.status === 'archived').length,
-  }
+  // Count by status: active = open projects (main dashboard); archived = completed + archived (archived tab only)
+  const activeCount = projects.filter(p => (p.status || 'active') === 'active').length
+  const archivedCount = projects.filter(p => p.status === 'completed' || p.status === 'archived').length
 
-  // Filter projects
+  // Filter projects: main dashboard = active only; archived tab = completed + archived only
   useEffect(() => {
     let result = [...projects]
     
-    // Filter by status (treat missing status as 'active')
-    if (currentTab !== 'all') {
-      result = result.filter(project => (project.status || 'active') === currentTab)
+    if (currentTab === 'active') {
+      result = result.filter(project => (project.status || 'active') === 'active')
+    } else {
+      result = result.filter(project => project.status === 'completed' || project.status === 'archived')
     }
 
     // Filter by search term
@@ -131,14 +130,13 @@ export default function ProjectsPage() {
     })
   }
 
-  const handleTabChange = (value: string) => {
+  const handleTabChange = (value: 'active' | 'archived') => {
     setCurrentTab(value)
-    // Update URL to reflect the selected status
     const params = new URLSearchParams(searchParams?.toString() || '')
-    if (value === 'all') {
+    if (value === 'active') {
       params.delete('status')
     } else {
-      params.set('status', value)
+      params.set('status', 'archived')
     }
     router.replace(`/dashboard/projects?${params.toString()}`)
   }
@@ -163,13 +161,11 @@ export default function ProjectsPage() {
         {/* Filters and search */}
         <Card className="p-4 min-w-0 overflow-hidden">
           <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 gap-4 min-w-0">
-            {/* Status filter */}
-            <Tabs value={currentTab} onValueChange={handleTabChange} className="min-w-0 w-full md:w-auto">
+            {/* Status filter: main dashboard = Active only; Archived tab = completed + archived only */}
+            <Tabs value={currentTab} onValueChange={(v) => handleTabChange(v as 'active' | 'archived')} className="min-w-0 w-full md:w-auto">
               <TabsList className="flex flex-wrap w-full md:w-auto gap-1 p-1">
-                <TabsTrigger value="all" className="flex-1 min-w-0 sm:flex-initial">All ({statusCounts.all})</TabsTrigger>
-                <TabsTrigger value="active" className="flex-1 min-w-0 sm:flex-initial">Active ({statusCounts.active})</TabsTrigger>
-                <TabsTrigger value="completed" className="flex-1 min-w-0 sm:flex-initial">Completed ({statusCounts.completed})</TabsTrigger>
-                <TabsTrigger value="archived" className="flex-1 min-w-0 sm:flex-initial">Archived ({statusCounts.archived})</TabsTrigger>
+                <TabsTrigger value="active" className="flex-1 min-w-0 sm:flex-initial">Active ({activeCount})</TabsTrigger>
+                <TabsTrigger value="archived" className="flex-1 min-w-0 sm:flex-initial">Archived ({archivedCount})</TabsTrigger>
               </TabsList>
             </Tabs>
 
@@ -234,21 +230,19 @@ export default function ProjectsPage() {
             <p className="mt-1 text-text-secondary max-w-md">
               {searchTerm
                 ? 'No projects match your search criteria.'
-                : currentTab === 'completed'
-                  ? 'No completed projects yet. Open a project and mark it as Completed from Overview or Settings.'
-                  : currentTab === 'archived'
-                    ? 'No archived projects yet. Open a project and Archive it from Settings.'
-                    : currentTab === 'active' && statusCounts.all > 0
-                      ? 'No active projects. Mark a project as Active from its Overview or Settings.'
-                      : 'Get started by creating your first project.'}
+                : currentTab === 'archived'
+                  ? 'No completed or archived projects yet. Open a project and mark it Completed or Archived from Overview or Settings.'
+                  : activeCount === 0 && projects.length > 0
+                    ? 'No active projects. Mark a project as Active from its Overview or Settings.'
+                    : 'Get started by creating your first project.'}
             </p>
             <div className="mt-6 flex flex-wrap gap-3 justify-center">
-              {currentTab !== 'all' && (
+              {currentTab === 'archived' && (
                 <Button
                   variant="outline"
-                  onClick={() => handleTabChange('all')}
+                  onClick={() => handleTabChange('active')}
                 >
-                  View all projects
+                  View active projects
                 </Button>
               )}
               <Button

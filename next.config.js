@@ -14,7 +14,7 @@ const nextConfig = {
   webpack: (config, { isServer }) => {
     // Handle native modules on the server side
     if (isServer) {
-      config.externals = [...config.externals, 
+      config.externals = [...config.externals,
         'node-pty',
         '@mongodb-js/zstd',
         'snappy',
@@ -23,7 +23,10 @@ const nextConfig = {
         '@aws-sdk/credential-providers',
         'kerberos',
         'mongoose',
-        'ssh2'
+        'ssh2',
+        'tree-sitter',
+        'tree-sitter-javascript',
+        'tree-sitter-typescript'
       ]
     }
 

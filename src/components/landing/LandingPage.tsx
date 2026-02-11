@@ -13,6 +13,12 @@ import {
   Sparkles,
   FileCode2,
   GitBranch,
+  FlaskConical,
+  Shield,
+  Code2,
+  Users,
+  DollarSign,
+  Coins,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -26,22 +32,22 @@ const FLOW_STEPS = [
   },
   {
     step: 2,
-    title: 'Link a GitHub repo',
-    description: 'Connect any public repo. GRIP clones it, analyzes structure and code, and uses it as the base for your build.',
+    title: 'Link a GitHub repo (reference only)',
+    description: 'Connect any public repo. GRIP analyzes its structure, patterns, and dependencies—using it as a reference only. All code GRIP generates is clean-room implementation, never copied from the repo.',
     icon: GitBranch,
-    mockLabel: 'Repo · File tree',
+    mockLabel: 'Repo · Analysis · Reference',
   },
   {
     step: 3,
     title: 'Plan & files — automatic',
-    description: 'GRIP generates a development plan and starter files from your ideation and repo. No extra clicks; everything shows in Develop → Show Context.',
+    description: 'GRIP generates a development plan and starter files from your ideation and repo patterns. All code is newly generated—clean-room implementation that follows the repo\'s structure and patterns. No extra clicks; everything shows in Develop → Show Context.',
     icon: FileCode2,
     mockLabel: 'Plan & generated files',
   },
   {
     step: 4,
     title: 'Develop with GRIP in chat',
-    description: 'Chat with GRIP to implement features, fix bugs, and add code. Save files to the project with one click. Build progress stays in sync.',
+    description: 'Chat with GRIP to implement features, fix bugs, and add code. Code is automatically saved to your project, and builds run automatically. Build progress stays in sync.',
     icon: MessageSquare,
     mockLabel: 'Develop · Chat with GRIP',
   },
@@ -63,36 +69,37 @@ const FLOW_STEPS = [
 
 const USE_CASES = [
   {
-    title: 'I have an idea and a repo — I want an app, not a blank slate',
-    description: 'You found a GitHub template or starter you like. GRIP uses your plain-English goals and that repo to generate a plan and code. You chat to refine; GRIP writes and updates files. Preview in-browser, then export or deploy.',
-    cta: 'Get started free',
-    href: '/register',
+    icon: Code2,
+    title: 'I have an idea and a repo',
+    subtitle: 'Want an app, not a blank slate',
+    description: 'You found a GitHub template or starter you like. GRIP analyzes its patterns and generates new code that follows those patterns. Chat to refine; code is automatically saved and builds run automatically.',
   },
   {
-    title: "I'm not very technical but I want to ship something",
-    description: 'Describe what you want in simple terms. GRIP guides you step by step, puts code in blocks you can save with one click, and opens StackBlitz so you can see the app run. No local install required.',
-    cta: 'Try GRIP',
-    href: '/register',
+    icon: Users,
+    title: "I'm not very technical",
+    subtitle: 'But I want to ship something',
+    description: 'Describe what you want in simple terms. GRIP guides you step by step, generates code that\'s automatically saved, runs builds automatically, and opens StackBlitz so you can see the app run. No local install required.',
   },
   {
-    title: 'I want to customize an existing project without breaking it',
-    description: 'Link your repo. GRIP has full context of the codebase and your ideation. Ask for new features, fixes, or refactors; GRIP suggests full-file updates you save once. You and GRIP stay aligned on phases and next steps.',
-    cta: 'Sign in',
-    href: '/login',
+    icon: FlaskConical,
+    title: 'I want to experiment safely',
+    subtitle: 'Without breaking my main project',
+    description: 'Use GRIP\'s Sandbox Playground to create isolated experiments. Try new architectures, risky refactors, or test dependencies—all in a separate environment. When you\'re happy, promote changes back to main.',
   },
   {
-    title: 'I want one place to go from idea → running app → deployed',
+    icon: Rocket,
+    title: 'I want one place',
+    subtitle: 'From idea → running app → deployed',
     description: 'Create project, link repo, chat with GRIP, preview in StackBlitz, then export to GitHub or deploy to Vercel. The whole flow lives in GRIP so you don’t juggle tools.',
-    cta: 'See how it works',
-    href: '#how-it-works',
   },
 ] as const
 
 const MOCK_SCREENS = [
   { label: 'Dashboard', sublabel: 'Your projects', route: 'Overview · Repo · Develop · Preview' },
   { label: 'Create project', sublabel: 'Name, repo, ideation', route: 'Goals · Audience · Features' },
-  { label: 'Repo', sublabel: 'Cloned GitHub repo', route: 'File tree · Search · Summaries' },
+  { label: 'Repo', sublabel: 'Reference & analysis', route: 'File tree · Patterns · Dependencies' },
   { label: 'Develop', sublabel: 'Chat with GRIP', route: 'Code blocks · Save to project · Build progress' },
+  { label: 'Sandbox Develop', sublabel: 'Chat with GRIP in sandbox', route: 'Isolated builds · Promote to main' },
   { label: 'Preview', sublabel: 'Run in StackBlitz', route: 'Live app in browser' },
   { label: 'Export & deploy', sublabel: 'GitHub · Vercel', route: 'Ship your product' },
 ] as const
@@ -143,10 +150,13 @@ export function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <span className="text-xl font-bold text-primary">G.R.I.P.</span>
           <div className="flex items-center gap-3">
+            <Link href="/admin/login">
+              <Button variant="ghost" size="sm">Sign in as admin</Button>
+            </Link>
             <Link href="/login">
               <Button variant="ghost" size="sm">Sign in</Button>
             </Link>
-            <Link href="/register">
+            <Link href="/plans">
               <Button size="sm">Get started</Button>
             </Link>
           </div>
@@ -164,16 +174,24 @@ export function LandingPage() {
             Your AI development partner
           </h1>
           <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto mb-2">
-            Turn GitHub repos and ideas into runnable, deployable products. No juggling tools—one flow from idea to ship.
+            Turn GitHub repos and ideas into runnable, deployable products. Clean-room code generation—reference repos for patterns, generate new code. No juggling tools—one flow from idea to ship.
           </p>
           <p className="text-sm text-text-muted max-w-xl mx-auto mb-10">
-            Create projects, link repos, chat with GRIP, save code with one click, preview in StackBlitz, and export or deploy. Built for developers and makers who want to move fast.
+            Create projects, link repos for reference, chat with GRIP to generate new code that's automatically saved, experiment safely in sandbox playgrounds, watch builds run automatically, preview in StackBlitz, and export or deploy. Built for developers and makers who want to move fast.
+          </p>
+          <p className="text-xs text-text-muted max-w-lg mx-auto mb-6">
+            Paid plans only—no freemium. Your subscription covers real AI usage so you get predictable pricing and enough tokens to ship.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link href="/register">
               <Button size="lg" className="gap-2">
-                Get started free
+                Get started
                 <ChevronRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Link href="#pricing">
+              <Button variant="outline" size="lg">
+                See plans & pricing
               </Button>
             </Link>
             <Link href="#how-it-works">
@@ -184,6 +202,96 @@ export function LandingPage() {
           </div>
         </section>
 
+        {/* Pricing — paid tiers & token usage */}
+        <section id="pricing" className="px-4 py-16 sm:py-20 border-t border-border bg-background-secondary/30">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary mb-4">
+                <DollarSign className="h-3.5 w-3.5" />
+                Simple pricing
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-text-primary mb-4">
+                Plans & token usage
+              </h2>
+              <p className="text-text-secondary max-w-2xl mx-auto mb-2">
+                GRIP is paid-only so we can cover real AI API costs and give you predictable limits. No freemium—every plan includes a monthly token allowance for chat, code generation, and builds.
+              </p>
+              <p className="text-sm text-text-muted max-w-xl mx-auto">
+                <strong>Tokens</strong> are used when you chat with GRIP, generate code, or run builds. Your plan’s allowance resets each billing cycle. Choose the tier that matches how much you build.
+              </p>
+              <div className="mt-6 p-4 rounded-lg bg-background-primary border border-border text-left max-w-2xl mx-auto">
+                <p className="text-xs font-semibold text-text-primary mb-2">What uses tokens:</p>
+                <ul className="text-xs text-text-secondary space-y-1 list-disc list-inside">
+                  <li>Enhanced chat (project chat with GRIP)</li>
+                  <li>Project and legal-sandbox chat</li>
+                  <li>Editing files from chat (update-from-chat)</li>
+                  <li>Repo summarization</li>
+                  <li>Plan generation (main and sandbox)</li>
+                  <li>AI keyword generation</li>
+                  <li>Repository analysis and code suggestions</li>
+                  <li>Chat completion and legacy chat</li>
+                </ul>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="p-6 rounded-xl border-2 border-border bg-background-primary hover:border-primary/40 transition-colors">
+                <div className="flex items-center gap-2 mb-4">
+                  <Coins className="h-6 w-6 text-primary" />
+                  <h3 className="font-semibold text-lg text-text-primary">Starter</h3>
+                </div>
+                <p className="text-2xl font-bold text-primary mb-1">$19<span className="text-sm font-normal text-text-muted">/month</span></p>
+                <p className="text-sm text-text-secondary mb-4">50,000 tokens/month</p>
+                <p className="text-sm text-text-muted">
+                  Light use, side projects. Enough for regular chat and code generation without worrying about limits.
+                </p>
+                <Link href="/plans" className="mt-4 inline-block">
+                  <Button variant="outline" size="sm" className="w-full">Get started</Button>
+                </Link>
+              </div>
+              <div className="p-6 rounded-xl border-2 border-primary bg-primary/10 relative">
+                <div className="absolute -top-2.5 left-4 px-2 py-0.5 bg-primary text-primary-foreground text-xs font-semibold rounded">Popular</div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Coins className="h-6 w-6 text-primary" />
+                  <h3 className="font-semibold text-lg text-text-primary">Pro</h3>
+                </div>
+                <p className="text-2xl font-bold text-primary mb-1">$49<span className="text-sm font-normal text-text-muted">/month</span></p>
+                <p className="text-sm text-text-secondary mb-4">200,000 tokens/month</p>
+                <p className="text-sm text-text-muted">
+                  Serious builders, daily use. Four times the tokens for heavy development and multiple projects.
+                </p>
+                <Link href="/plans" className="mt-4 inline-block">
+                  <Button size="sm" className="w-full">Get started</Button>
+                </Link>
+              </div>
+              <div className="p-6 rounded-xl border-2 border-border bg-background-primary hover:border-primary/40 transition-colors">
+                <div className="flex items-center gap-2 mb-4">
+                  <Coins className="h-6 w-6 text-primary" />
+                  <h3 className="font-semibold text-lg text-text-primary">Team</h3>
+                </div>
+                <p className="text-2xl font-bold text-primary mb-1">$99<span className="text-sm font-normal text-text-muted">/month</span></p>
+                <p className="text-sm text-text-secondary mb-4">500,000 tokens/month</p>
+                <p className="text-sm text-text-muted">
+                  Small teams, heavy usage. Maximum allowance for shipping multiple apps and experiments.
+                </p>
+                <Link href="/plans" className="mt-4 inline-block">
+                  <Button variant="outline" size="sm" className="w-full">Get started</Button>
+                </Link>
+              </div>
+            </div>
+            <p className="text-center text-sm text-text-muted mt-6 max-w-xl mx-auto">
+              After signup you’ll choose a plan and pay via Stripe. Your token allowance is used for all GRIP AI actions (chat, code gen, builds). No hidden fees.
+            </p>
+            <div className="text-center mt-6">
+              <Link href="/plans">
+                <Button size="lg" className="gap-2">
+                  Choose a plan
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+
         {/* How it works — full app flow */}
         <section id="how-it-works" className="px-4 py-16 sm:py-20 border-t border-border bg-background-secondary/30">
           <div className="max-w-4xl mx-auto">
@@ -191,7 +299,7 @@ export function LandingPage() {
               How GRIP works
             </h2>
             <p className="text-text-secondary text-center max-w-xl mx-auto mb-12">
-              One clear path: create project → link repo → develop with GRIP → preview → export or deploy.
+              One clear path: create project → link repo (reference only) → GRIP generates new code → develop with GRIP → experiment in sandbox → preview → export or deploy.
             </p>
             <div className="space-y-12">
               {FLOW_STEPS.map(({ step, title, description, icon: Icon, mockLabel }) => (
@@ -229,9 +337,9 @@ export function LandingPage() {
               ))}
             </div>
             <div className="text-center mt-12">
-              <Link href="/register">
+              <Link href="#pricing">
                 <Button size="lg" className="gap-2">
-                  Start building with GRIP
+                  See plans & pricing
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </Link>
@@ -240,30 +348,45 @@ export function LandingPage() {
         </section>
 
         {/* Use cases — user POV */}
-        <section className="px-4 py-16 sm:py-20 border-t border-border">
-          <div className="max-w-4xl mx-auto">
+        <section className="px-4 py-16 sm:py-20 border-t border-border bg-background-secondary/30">
+          <div className="max-w-5xl mx-auto">
             <h2 className="text-2xl sm:text-3xl font-bold text-text-primary text-center mb-4">
               Use cases
             </h2>
             <p className="text-text-secondary text-center max-w-xl mx-auto mb-12">
               From your point of view: what you want, and how GRIP helps.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {USE_CASES.map((uc, i) => (
-                <div
-                  key={i}
-                  className="p-6 rounded-xl border border-border bg-background-secondary/50 hover:border-primary/30 transition-colors"
-                >
-                  <h3 className="font-semibold text-text-primary mb-2">{uc.title}</h3>
-                  <p className="text-sm text-text-secondary mb-4">{uc.description}</p>
-                  <Link href={uc.href}>
-                    <Button variant={i === 0 ? 'default' : 'outline'} size="sm" className="gap-1">
-                      {uc.cta}
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    </Button>
-                  </Link>
-                </div>
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+              {USE_CASES.map((uc, i) => {
+                const Icon = uc.icon
+                return (
+                  <div
+                    key={i}
+                    className="group relative p-6 rounded-xl border border-border bg-background-primary hover:border-primary/50 hover:shadow-lg transition-all duration-200"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:bg-primary/20 transition-colors">
+                        <Icon className="h-6 w-6" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-text-primary mb-1 text-base leading-tight">
+                          {uc.title}
+                        </h3>
+                        <p className="text-xs text-primary font-medium mb-3">{uc.subtitle}</p>
+                        <p className="text-sm text-text-secondary leading-relaxed">{uc.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="text-center">
+              <Link href="#pricing">
+                <Button size="lg" className="gap-2">
+                  See plans
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </Link>
             </div>
           </div>
         </section>
@@ -287,16 +410,59 @@ export function LandingPage() {
                 />
               ))}
             </div>
-            <p className="text-center text-xs text-muted-foreground mt-6">
-              Replace these with real screenshots when you’re ready for launch. The flow stays: Dashboard → Create project → Repo → Develop → Preview → Export / Deploy.
-            </p>
             <div className="text-center mt-8">
-              <Link href="/register">
+              <Link href="#pricing">
                 <Button size="lg" className="gap-2">
-                  Get started free
+                  Choose a plan
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* Sandbox Playground Section */}
+        <section id="sandbox-playground" className="px-4 py-16 sm:py-20 border-t border-border bg-background-secondary/30">
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-400 mb-4">
+                <FlaskConical className="h-3.5 w-3.5" />
+                Safe Experimentation
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-text-primary mb-4">
+                Sandbox Playground
+              </h2>
+              <p className="text-text-secondary max-w-xl mx-auto">
+                Create isolated experiments without affecting your main project. Perfect for risky refactors, architecture changes, or testing new dependencies.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="p-6 rounded-xl border border-border bg-background-secondary/50">
+                <GitBranch className="h-8 w-8 text-primary mb-3" />
+                <h3 className="font-semibold text-text-primary mb-2">Architecture Experiments</h3>
+                <p className="text-sm text-text-secondary">
+                  Try new patterns or structures (e.g., migrating from pages/ to app/ routes) without breaking your main project.
+                </p>
+              </div>
+              <div className="p-6 rounded-xl border border-border bg-background-secondary/50">
+                <Zap className="h-8 w-8 text-primary mb-3" />
+                <h3 className="font-semibold text-text-primary mb-2">Risky Refactors</h3>
+                <p className="text-sm text-text-secondary">
+                  Test major changes or new dependencies in isolation. When you're happy with the results, promote changes back to main.
+                </p>
+              </div>
+              <div className="p-6 rounded-xl border border-border bg-background-secondary/50">
+                <Shield className="h-8 w-8 text-primary mb-3" />
+                <h3 className="font-semibold text-text-primary mb-2">Legal-Safe Mode</h3>
+                <p className="text-sm text-text-secondary">
+                  Strict clean-room generation—repo is reference only, all code is new. Perfect for compliance and avoiding licensing issues.
+                </p>
+              </div>
+            </div>
+            <div className="mt-8 text-center">
+              <p className="text-sm text-text-secondary mb-4">
+                Sandbox experiments are completely isolated. Build, test, and iterate safely. When ready, promote successful changes to your main project with one click.
+              </p>
             </div>
           </div>
         </section>
@@ -310,16 +476,16 @@ export function LandingPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 text-center sm:text-left">
               <div className="flex flex-col items-center sm:items-start p-6 rounded-xl border border-border bg-background-secondary/50">
                 <FolderGit2 className="h-10 w-10 text-primary mb-4" aria-hidden />
-                <h3 className="font-semibold text-text-primary mb-2">Link any repo</h3>
+                <h3 className="font-semibold text-text-primary mb-2">Reference repos, generate new code</h3>
                 <p className="text-sm text-text-secondary">
-                  Connect a GitHub repo. GRIP analyzes structure and code so you can build on a real codebase, not a blank slate.
+                  Connect a GitHub repo for reference. GRIP analyzes structure, patterns, and dependencies—then generates clean-room code that follows those patterns. No code copying, only new implementation.
                 </p>
               </div>
               <div className="flex flex-col items-center sm:items-start p-6 rounded-xl border border-border bg-background-secondary/50">
                 <MessageSquare className="h-10 w-10 text-primary mb-4" aria-hidden />
                 <h3 className="font-semibold text-text-primary mb-2">Chat with GRIP</h3>
                 <p className="text-sm text-text-secondary">
-                  Get code, file generation, and step-by-step guidance. Save to project with one click; build progress stays in sync.
+                  Get code, file generation, and step-by-step guidance. Code is automatically saved to your project, builds run automatically, and progress stays in sync.
                 </p>
               </div>
               <div className="flex flex-col items-center sm:items-start p-6 rounded-xl border border-border bg-background-secondary/50">
@@ -340,13 +506,18 @@ export function LandingPage() {
               Ready to build with GRIP?
             </h2>
             <p className="text-text-secondary mb-8">
-              Create a project, link a repo, and chat with GRIP to turn your idea into a runnable app. No credit card required.
+              Create a project, link a repo for reference, and chat with GRIP to generate new code and turn your idea into a runnable app. Experiment safely in sandbox playgrounds. Choose a paid plan—your token allowance covers all AI usage so you can ship without surprises.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-4">
-              <Link href="/register">
+              <Link href="#pricing">
                 <Button size="lg" className="gap-2">
-                  Get started free
+                  See plans & pricing
                   <ChevronRight className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="/plans">
+                <Button variant="outline" size="lg">
+                  Subscribe
                 </Button>
               </Link>
               <Link href="/login">

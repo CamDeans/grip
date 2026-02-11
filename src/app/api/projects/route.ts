@@ -1,4 +1,6 @@
 import { getServerAuthSession } from '@/lib/auth'
+import { requireAppAccess, requireTokenBalance } from '@/lib/access'
+import { addTokenUsage } from '@/lib/tokenUsage'
 import { NextResponse } from 'next/server'
 import { ObjectId } from 'mongodb'
 import { getOrCloneRepository } from '@/lib/repository'
@@ -20,6 +22,10 @@ export async function POST(req: Request) {
         { status: 401 }
       )
     }
+    const accessDenied = await requireAppAccess(session)
+    if (accessDenied) return accessDenied
+    const tokenExhausted = await requireTokenBalance(session)
+    if (tokenExhausted) return tokenExhausted
 
     const data = await req.json()
     console.log('Project creation data:', {
@@ -62,7 +68,13 @@ export async function POST(req: Request) {
       if (projectToCreate.repository) {
         console.log('Starting repository analysis:', projectToCreate.repository)
         try {
-          await analyzeProject(savedProject._id, projectToCreate.repository)
+          const analysisResult = await analyzeProject(savedProject._id, projectToCreate.repository)
+          const totalTokens = analysisResult?.totalTokens ?? 0
+          if (totalTokens > 0 && session.user?.id) {
+            addTokenUsage(session.user.id, totalTokens).catch((err) =>
+              console.warn('Project create (analyze): failed to record token usage', err)
+            )
+          }
           console.log('Repository analysis completed')
         } catch (error) {
           console.error('Repository analysis failed:', error)
@@ -117,20 +129,48 @@ export async function GET() {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const accessDenied = await requireAppAccess(session)
+    if (accessDenied) return accessDenied
 
     await connectToDatabase()
     const userId = session.user.id
-    const projects = await Project.find({ userId }).sort({ createdAt: -1 })
+    
+    // Fetch both main projects and sandbox projects
+    const mainProjects = await Project.find({ userId }).sort({ createdAt: -1 })
+    const { listSandboxProjects } = await import('@/lib/services/sandboxProjectService')
+    const sandboxProjects = await listSandboxProjects(userId)
+
+    // Convert sandbox projects to unified format with isSandbox flag
+    const unifiedProjects = [
+      ...mainProjects.map((p: any) => ({ ...p.toObject(), isSandbox: false })),
+      ...sandboxProjects.map((sp: any) => ({
+        _id: sp._id,
+        title: sp.title,
+        description: sp.description,
+        repository: sp.repository,
+        ideation: sp.ideation,
+        userId: sp.userId,
+        createdAt: sp.createdAt,
+        updatedAt: sp.updatedAt,
+        status: 'active' as const,
+        isSandbox: true,
+        parentProjectId: sp.parentProjectId,
+      })),
+    ].sort((a, b) => {
+      const aTime = new Date(a.updatedAt || a.createdAt).getTime()
+      const bTime = new Date(b.updatedAt || b.createdAt).getTime()
+      return bTime - aTime
+    })
 
     // Dev-only: help debug "no projects locally" (same MONGODB_URI + same user id = same list)
     if (process.env.NODE_ENV === 'development') {
       const hint = process.env.MONGODB_URI
         ? `${process.env.MONGODB_URI.replace(/mongodb(\+srv)?:\/\/([^:]+):([^@]+)@/, 'mongodb$1://$2:****@').slice(0, 50)}...`
         : '(MONGODB_URI not set)'
-      console.log(`[Projects GET] userId=${userId} count=${projects.length} uri=${hint}`)
+      console.log(`[Projects GET] userId=${userId} main=${mainProjects.length} sandbox=${sandboxProjects.length} total=${unifiedProjects.length} uri=${hint}`)
     }
 
-    return NextResponse.json({ projects })
+    return NextResponse.json({ projects: unifiedProjects })
   } catch (error: unknown) {
     console.error('Error fetching projects:', error instanceof Error ? error.message : 'Unknown error')
     return NextResponse.json(

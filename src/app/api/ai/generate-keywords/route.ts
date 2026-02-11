@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { generateKeywordsServer } from '@/lib/services/aiService'
 import { getServerSession } from 'next-auth/next'
 import { rateLimit } from '@/lib/api-utils/rate-limit'
+import { requireAppAccess, requireTokenBalance } from '@/lib/access'
+import { addTokenUsage } from '@/lib/tokenUsage'
 
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication
     const session = await getServerSession()
     if (!session) {
       return NextResponse.json(
@@ -13,8 +14,11 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+    const accessDenied = await requireAppAccess(session)
+    if (accessDenied) return accessDenied
+    const tokenExhausted = await requireTokenBalance(session)
+    if (tokenExhausted) return tokenExhausted
 
-    // Rate limiting to prevent abuse
     const limiter = await rateLimit('generate-keywords', 10, '1h')
     if (!limiter.success) {
       return NextResponse.json(
@@ -23,11 +27,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Parse request body
     const body = await request.json()
     const { title, description } = body
 
-    // Validate request data
     if (!title || !description) {
       return NextResponse.json(
         { message: 'Missing required fields: title and description are required' },
@@ -42,10 +44,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate keywords using the server-side function
-    const keywords = await generateKeywordsServer(title, description)
+    const { keywords, totalTokens } = await generateKeywordsServer(title, description)
 
-    // Return the generated keywords
+    if (totalTokens > 0 && session.user?.id) {
+      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+        console.warn('Generate keywords: failed to record token usage', err)
+      )
+    }
+
     return NextResponse.json({ keywords })
   } catch (error) {
     console.error('[API] Error generating keywords:', error)

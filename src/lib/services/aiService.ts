@@ -30,8 +30,10 @@ export async function generateKeywords(title: string, description: string): Prom
   }
 }
 
+export type GenerateKeywordsServerResult = { keywords: string[]; totalTokens: number }
+
 // Server-side helper function for use in API routes
-export async function generateKeywordsServer(title: string, description: string): Promise<string[]> {
+export async function generateKeywordsServer(title: string, description: string): Promise<GenerateKeywordsServerResult> {
   try {
     const apiKey = getAnthropicApiKey()
     if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set')
@@ -53,27 +55,29 @@ nextjs, react, tailwind, authentication, dashboard`
       }]
     });
 
+    const totalTokens = (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0)
+
     // Handle Claude 3 response format
     if (response.content && response.content[0] && 'text' in response.content[0]) {
       const keywordsText = response.content[0].text.trim();
-      
+
       if (!keywordsText) {
         throw new Error('No valid keywords generated');
       }
-      
+
       // Parse comma-separated keywords and trim whitespace
       const keywords = keywordsText.split(',').map(keyword => keyword.trim()).filter(Boolean);
-      
+
       if (keywords.length === 0) {
-        return ['repository'];
+        return { keywords: ['repository'], totalTokens };
       }
-      
-      return keywords;
+
+      return { keywords, totalTokens };
     }
 
     throw new Error('Invalid response format from AI');
   } catch (error) {
     console.error('Error generating keywords:', error);
-    return ['repository']; // Fallback keyword
+    return { keywords: ['repository'], totalTokens: 0 }; // Fallback keyword
   }
 }

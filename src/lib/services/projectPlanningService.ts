@@ -89,13 +89,12 @@ export async function generateProjectPlan(projectId: string): Promise<PlanningRe
       throw new Error(`Failed to create project structure for: ${projectId}`)
     }
     
-    // Step 3: Enhance structure with feature-specific details
     console.log('Step 3: Enhancing project structure with feature details')
-    const enhancedStructure = await enhanceProjectStructure(projectId, structure)
-    
-    // Step 4: Generate development plan
+    const { structure: enhancedStructure, totalTokens: structureTokens } = await enhanceProjectStructure(projectId, structure)
+
     console.log('Step 4: Generating development plan')
-    const plan = await generateDevelopmentPlan(projectId)
+    const { plan, totalTokens: planTokens } = await generateDevelopmentPlan(projectId)
+    const totalTokens = structureTokens + planTokens
     
     // Step 5: Link plan to structure
     console.log('Step 5: Linking plan to structure')
@@ -119,7 +118,7 @@ export async function generateProjectPlan(projectId: string): Promise<PlanningRe
     const recommendedPackages = getRecommendedDependenciesFromIdeation(project as { ideation?: { technicalRequirements?: string; keyFeatures?: string } } | null)
     
     // Create result object (match GET shape: packages + recommendedPackages for PlanGenerator Overview)
-    const result: PlanningResult = {
+    const result: PlanningResult & { totalTokens: number } = {
       structureId,
       planId: plan._id,
       dependencyTree: {
@@ -132,11 +131,12 @@ export async function generateProjectPlan(projectId: string): Promise<PlanningRe
         ...enhancedStructure,
         _id: structure._id
       },
-      plan
+      plan,
+      totalTokens
     }
-    
+
     console.log(`Project plan generated successfully for: ${projectId}`)
-    
+
     return result
   } catch (error) {
     console.error(`Error generating project plan: ${error}`)

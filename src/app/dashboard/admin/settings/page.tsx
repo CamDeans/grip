@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Switch } from '@/components/ui/Switch'
 import { Label } from '@/components/ui/Label'
 import { useState } from 'react'
+import Link from 'next/link'
 import { 
   AlertTriangleIcon, 
   SaveIcon, 
@@ -46,7 +47,7 @@ export default function AdminSettingsPage() {
   return (
     <AdminDashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <h1 className="text-2xl font-bold">Admin Settings</h1>
           <Button 
             onClick={handleSave} 
@@ -60,7 +61,9 @@ export default function AdminSettingsPage() {
             Save Changes
           </Button>
         </div>
-        
+        <p className="text-text-secondary text-sm">
+          Update admin details: use the main app <Link href="/dashboard/settings" className="text-primary hover:underline">Settings</Link> to change your password. Tax details for reports are derived from revenue and payouts in the Reports page.
+        </p>
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
             <CardHeader>

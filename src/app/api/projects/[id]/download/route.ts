@@ -27,10 +27,25 @@ export async function GET(
 
     const client = await clientPromise
     const db = client.db('test')
-    const project = await db.collection('projects').findOne(
+    
+    // Check if this is a sandbox project
+    let project = await db.collection('projects').findOne(
       { _id: new ObjectId(projectId) },
       { projection: { title: 1, userId: 1 } }
     ) as { title?: string; userId?: unknown } | null
+    
+    let isSandbox = false
+    if (!project) {
+      // Try sandbox projects
+      const sandboxProject = await db.collection('sandboxProjects').findOne(
+        { _id: new ObjectId(projectId) },
+        { projection: { title: 1, userId: 1 } }
+      ) as { title?: string; userId?: unknown } | null
+      if (sandboxProject) {
+        project = sandboxProject
+        isSandbox = true
+      }
+    }
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
@@ -40,7 +55,10 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const filesArray = await getProjectFilesForExport(projectId)
+    // Use appropriate export function based on project type
+    const filesArray = isSandbox
+      ? await (await import('@/lib/services/legalSandboxService')).getLegalSandboxFilesForExport(projectId)
+      : await getProjectFilesForExport(projectId)
     if (!filesArray.length) {
       return NextResponse.json(
         { error: 'No files to download. Add generated files or link a repo.' },

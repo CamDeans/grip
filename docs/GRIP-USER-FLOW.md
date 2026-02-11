@@ -2,14 +2,14 @@
 
 ## Vision in One Line
 
-**Clone any repo → understand it fully → customize it with GRIP → run it here → deploy it.** All in one place, one clear path.
+**Reference any repo → analyze patterns → generate new code with GRIP → experiment safely in sandbox → run it here → deploy it.** All in one place, one clear path. Clean-room code generation—reference repos for patterns, generate new code.
 
 ---
 
 ## The GRIP Journey (Linear Flow)
 
 ```
-Dashboard → New Project → [Project Home] → Repo → Plan → Develop (Chat) → Preview → Export/Deploy
+Dashboard → New Project → [Project Home] → Repo (Reference) → Plan → Develop (Chat) → Sandbox (Optional) → Preview → Export/Deploy
 ```
 
 ### 1. **Dashboard** (`/dashboard`)
@@ -42,6 +42,16 @@ Dashboard → New Project → [Project Home] → Repo → Plan → Develop (Chat
 - "Build with GRIP."
 - Single chat experience (no "Standard" vs "Enhanced" in nav): always enhanced, project context, repo + analysis.
 - Actions: ask questions, request code changes, run commands (terminal bridge), see task progress.
+- GRIP generates new code following repository patterns—clean-room implementation, never copied.
+- **Automated workflow**: Code is automatically saved to project files, builds run automatically after saves.
+- Users can also manually save code blocks if they prefer to review first.
+
+### 6b. **Sandbox Playground** (`/dashboard/projects/[id]/sandbox-chat`)
+- "Experiment safely."
+- Create isolated sandbox experiments from main project.
+- Test risky refactors, architecture changes, or new dependencies.
+- All sandbox code is clean-room generated (reference only).
+- When successful, promote changes back to main project with one click.
 
 ### 7. **Preview** (`/dashboard/projects/[id]/preview`)
 - "See it run."
@@ -63,12 +73,13 @@ Dashboard → New Project → [Project Home] → Repo → Plan → Develop (Chat
 
 | Order | Tab       | Route                          | Purpose                    |
 |-------|-----------|---------------------------------|----------------------------|
-| 1     | Overview  | `/dashboard/projects/[id]`     | Home, status, next step    |
-| 2     | Repo      | `.../repo`                     | Explore & own the codebase |
-| 3     | Plan      | `.../planning`                 | Structure & tasks          |
-| 4     | Develop   | `.../enhanced-chat`            | Chat with GRIP, build      |
-| 5     | Preview   | `.../preview`                  | See it run                 |
-| 6     | Settings  | `.../settings`                 | Project config             |
+| 1     | Overview  | `/dashboard/projects/[id]`     | Home, status, next step, sandbox experiments |
+| 2     | Repo      | `.../repo`                     | Reference & analyze patterns                  |
+| 3     | Plan      | `.../planning`                 | Structure & tasks                            |
+| 4     | Develop   | `.../enhanced-chat`            | Chat with GRIP, build (main)                 |
+| 4b    | Sandbox   | `.../sandbox-chat`             | Experiment safely (sandbox projects)         |
+| 5     | Preview   | `.../preview`                  | See it run                                   |
+| 6     | Settings  | `.../settings`                 | Project config                               |
 
 "Ship" (Export/Deploy) lives on **Overview** as primary actions, not a separate tab.
 

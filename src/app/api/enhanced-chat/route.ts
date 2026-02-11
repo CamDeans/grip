@@ -3,13 +3,16 @@ import { ObjectId } from 'mongodb'
 import clientPromise from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { requireAppAccess, requireTokenBalance } from '@/lib/access'
+import { addTokenUsage } from '@/lib/tokenUsage'
 import { anthropicService } from '@/lib/services/anthropicService'
 import { getOrBuildRepoContextDocument } from '@/lib/services/repoContextService'
 import { listProjectFiles } from '@/lib/services/fileStorageService'
 import { getProjectPlan } from '@/lib/services/projectPlanningService'
 import { getProjectState } from '@/lib/services/projectStateService'
-import { createProjectFolder, getFileContentByPath, saveProjectFile } from '@/lib/services/gripProjectActions'
+import { createProjectFolder, saveProjectFile } from '@/lib/services/gripProjectActions'
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
+import { runMainProject } from '@/lib/runMainProject'
 
 // Phase 2, Step 2: Create Project Data Fetcher for enhanced chat
 
@@ -30,10 +33,11 @@ const buildSystemPrompt = (
   repoReferenceDoc?: string,
   savedFiles?: Array<{ path: string; filename: string }>,
   planContext?: { phases?: Array<{ name: string; description?: string; tasks?: Array<{ name: string; status?: string }> }>; fileHierarchy?: { path: string; name?: string; children?: unknown[] } },
-  projectStateContext?: ProjectStateContext
+  projectStateContext?: ProjectStateContext,
+  structuredSummary?: string
 ) => {
   let prompt = `You are G.R.I.P. (Guided Real-time Intelligence Partner) designed to help with software development projects. 
-You are not Claude or an Anthropic AI. You are G.R.I.P., an AI assistant built specifically for helping developers automate project creation.
+You are G.R.I.P., an AI assistant built specifically for helping developers automate project creation. Do not claim to be or reference any other AI product or provider.
 
 Your primary purpose is to help guide users through building out projects by writing code, creating files, and implementing features
 based on the project ideation, repository structure, and existing code in the cloned GitHub repository.
@@ -69,21 +73,13 @@ Use plain text for each field; you may merge the user's plain-English answer wit
       prompt += `- Repository: ${projectContext.repository.owner}/${projectContext.repository.name}
 `
       prompt += `
-## MANDATORY: Use the cloned GitHub repository (reuse, do not rebuild from scratch)
-- This project has a **linked GitHub repository**. You MUST use the cloned repo files and code as the base for the build.
-- Your job is to **reuse** the existing repo code and create the plan, phases, and new files **around** that code so the project works with the reused code.
-- NEVER say you did not or will not use the repo. NEVER build an entirely new project from scratch when a repo is linked.
-- **README deep analysis**: You MUST do a deep analysis of the cloned repo's README.md (when provided in context). Ensure all details from the README—features, setup, scripts, structure, usage—are reflected in your planning and phases. Planning and phases must align with and incorporate every capability and requirement described in the repo's README.
-- **Use all features from the cloned repo**: You MUST incorporate and use all features, scripts, and capabilities described or implemented in the cloned repo. Do not omit or replace repo features with simplified versions unless the user explicitly asks.
-- When creating the development plan and phases: base them on reusing and adapting the repo's existing files (e.g. "Adapt \`src/App.tsx\` from repo for the new feature", "Reuse \`package.json\` and add dependencies", "Wire new components into existing repo structure").
-- When writing code: prefer reusing and updating files that exist in the repo; add new files only when they integrate with or extend the repo code. Reference the repo file contents provided in context below.
-- If the user asks whether you used the repo: confirm that you use the cloned repo code and files as the base and build the plan and new files around them.
-
-## MANDATORY: No mock data — use repo code and real data
-- You MUST NOT create apps that use **mock data**, **simulated data**, **placeholder data**, or **hardcoded fake data** when the repo contains real code, models, or data sources. Use the actual repo code and data.
-- If the repo has models (e.g. Python tornado detection, ML models), APIs, or data processing: **incorporate them** in the build (e.g. call them via an API, use their output in the UI). Do not build a demo with fake coordinates, fake stats, or "sample" data and then suggest "next we could connect real data."
-- Plan and implement so the app **uses the repo's real logic and data from the start** (or as soon as the stack allows). If the repo has Python models and the app is web: create or use a backend/API that runs the repo code and have the frontend call it; do not substitute mock data.
-- If the user says the app is showing mock/simulated data: acknowledge it and fix it by wiring the app to the repo's real code and data (or to a service that uses the repo). Never leave the app on mock data when the repo provides the real implementation.
+## MANDATORY: Linked GitHub repository is reference/dependency only (clean-room mode)
+- This project has a **linked GitHub repository**. You MUST treat the cloned repo as a **reference and dependency only**, not as a source of code to copy.
+- Your job is to **analyze patterns, structure, and APIs** in the repo (via the analysis context) and then **write NEW implementation code** into this project that follows those patterns. Do not paste or closely paraphrase repo source code.
+- NEVER copy/paste code from the repo into this project. Use only high-level structure, file naming conventions, data shapes, and API contracts as guidance.
+- When creating the development plan and phases: align them with what the repo does (features, flows, routes, APIs) but describe work as **new implementation** that is compatible with those patterns.
+- When writing code: create or update project files here to implement behavior compatible with the repo (e.g. call the same endpoints, follow similar component structure), but always as fresh code.
+- If the user asks whether you used the repo: confirm that you used it as a **reference for patterns and behavior only**, and that all code you generated in this project is clean-room implementation.
 `
     }
 
@@ -115,7 +111,7 @@ ${projectContext.ideation.technicalRequirements}
     if (planContext.phases && planContext.phases.length > 0) {
       prompt += `\n## Development Plan (Phases)\nUse this plan to guide the build. Prefer completing tasks in order.\n`
       if (projectContext?.repository) {
-        prompt += `Interpret phases as reusing and adapting the cloned repo (update existing repo files, add new files that integrate with repo code). Do not treat the plan as building from scratch.\n`
+            prompt += `Interpret phases as aligning with what the linked repo already does (features, flows, routes, APIs) while implementing **new, clean-room code** in this project that follows those patterns. Do not copy repo source code.\n`
       }
       planContext.phases.forEach((phase: { name: string; description?: string; tasks?: Array<{ name: string; status?: string }> }, i: number) => {
         prompt += `\n### Phase ${i + 1}: ${phase.name}\n`
@@ -210,11 +206,29 @@ ${projectContext.ideation.technicalRequirements}
     prompt += `\n`
   }
 
-  // Add analysis context if available - enhanced to provide more actionable insights
+  // Add analysis context if available - prioritize tree-sitter analysis (repositoryAnalysis)
   if (analysisContext) {
-    prompt += `\n## Repository Analysis\n`
+    // Primary: Use tree-sitter analysis (repositoryAnalysis) if available
+    const ra = analysisContext.repositoryAnalysis as
+      | { projectAnalysis?: string; fileAnalyses?: Array<{ path: string; analysis: string }>; structuredAnalysis?: any }
+      | undefined
 
-    if (analysisContext.repositoryStructure) {
+    if (ra?.projectAnalysis) {
+      // Tree-sitter analysis available - use it as primary analysis
+      prompt += `\n## Repository Analysis (tree-sitter AST analysis)\n${ra.projectAnalysis.slice(0, 8000)}\n`
+    } else if (Array.isArray(ra?.fileAnalyses) && ra.fileAnalyses.length > 0) {
+      // Fallback: Use file-level analyses from tree-sitter
+      prompt += `\n## Repository Analysis (tree-sitter file-level analysis)\n`
+      ra.fileAnalyses.slice(0, 20).forEach((f: { path: string; analysis: string }) => {
+        prompt += `\n### ${f.path}\n${f.analysis.slice(0, 500)}\n`
+      })
+      if (ra.fileAnalyses.length > 20) {
+        prompt += `\n_(... and ${ra.fileAnalyses.length - 20} more files analyzed)_\n`
+      }
+    } else if (analysisContext.repositoryStructure) {
+      // Fallback: Use old basic structure analysis
+      prompt += `\n## Repository Analysis\n`
+
       prompt += `- Total Files: ${analysisContext.repositoryStructure.totalFiles}
 `
 
@@ -247,39 +261,39 @@ ${projectContext.ideation.technicalRequirements}
           }
         });
       }
-    }
 
-    if (analysisContext.codeStructure) {
-      prompt += `\n### Code Structure
+      if (analysisContext.codeStructure) {
+        prompt += `\n### Code Structure
 - File Count: ${analysisContext.codeStructure.fileCount}
 `
 
-      if (analysisContext.codeStructure.components && analysisContext.codeStructure.components.length > 0) {
-        prompt += `- Components: ${analysisContext.codeStructure.components.join(', ')}
+        if (analysisContext.codeStructure.components && analysisContext.codeStructure.components.length > 0) {
+          prompt += `- Components: ${analysisContext.codeStructure.components.join(', ')}
 `
+        }
+
+        if (analysisContext.codeStructure.features && analysisContext.codeStructure.features.length > 0) {
+          prompt += `- Features: ${analysisContext.codeStructure.features.join(', ')}
+`
+        }
+        
+        // Add main entry points and architecture information
+        if (analysisContext.codeStructure.mainEntryPoints) {
+          prompt += `- Main Entry Points: ${analysisContext.codeStructure.mainEntryPoints.join(', ')}
+`
+        }
+        
+        if (analysisContext.codeStructure.architecture) {
+          prompt += `- Architecture: ${analysisContext.codeStructure.architecture}
+`
+        }
       }
 
-      if (analysisContext.codeStructure.features && analysisContext.codeStructure.features.length > 0) {
-        prompt += `- Features: ${analysisContext.codeStructure.features.join(', ')}
-`
-      }
-      
-      // Add main entry points and architecture information
-      if (analysisContext.codeStructure.mainEntryPoints) {
-        prompt += `- Main Entry Points: ${analysisContext.codeStructure.mainEntryPoints.join(', ')}
-`
-      }
-      
-      if (analysisContext.codeStructure.architecture) {
-        prompt += `- Architecture: ${analysisContext.codeStructure.architecture}
-`
-      }
-    }
-
-    if (analysisContext.recommendations && analysisContext.recommendations.length > 0) {
-      prompt += `\n### Recommendations
+      if (analysisContext.recommendations && analysisContext.recommendations.length > 0) {
+        prompt += `\n### Recommendations
 ${analysisContext.recommendations.map((rec: string) => `- ${rec}`).join('\n')}
 `
+      }
     }
     
     // Add automation capabilities based on repository analysis
@@ -294,17 +308,22 @@ Based on the repository analysis, you can help with:
 `
   }
 
+  // Add structured analysis summary (tree-link JSON) if available
+  if (structuredSummary && structuredSummary.trim()) {
+    prompt += `\n## Structured repo analysis (tree-link JSON summary; capabilities vs requirements; no code)\n${structuredSummary.slice(0, 4000)}\n`
+  }
+
   if (repoReferenceDoc && repoReferenceDoc.length > 0) {
-    prompt += `\n## Full repository reference (MANDATORY — use this code as the base)\n`
-    prompt += `The user's project input and the entire cloned GitHub repo are both in your context for the build; both are mandatory. The content below is the cloned repo: structure and file contents. You MUST use it as the primary reference.\n`
-    prompt += `- Base the development plan and phases on **reusing** these files (adapt, extend, wire together). Do not ignore them or build from scratch.\n`
-    prompt += `- When a file exists in the repo, prefer reusing/updating that file; when adding new files, ensure they integrate with the repo code (imports, patterns, structure).\n\n`
+    prompt += `\n## Repository reference (structure, patterns, and APIs only — do NOT copy code)\n`
+    prompt += `The user's project input and the cloned GitHub repo are both in your context for the build. The content below is the repo's structure and file contents. You MUST use it only to understand patterns, architecture, and APIs—**never** to copy or closely paraphrase code.\n`
+    prompt += `- Base the development plan and phases on what the repo does (features, flows, routes, APIs), but implement everything here as new, clean-room code.\n`
+    prompt += `- When a file exists in the repo, you may mirror its responsibilities and structure in new files in this project, but do not paste its contents. Integrate via compatible APIs and data shapes.\n\n`
     prompt += repoReferenceDoc.slice(0, 28000)
     if (repoReferenceDoc.length > 28000) prompt += '\n_(document truncated)_'
     prompt += '\n\n'
   } else if (projectContext?.repository) {
     prompt += `\n## Repository context note\n`
-    prompt += `This project has a linked repo (${projectContext.repository.owner}/${projectContext.repository.name}) but repo file content is not in this context yet. You MUST still base your work on reusing the repo: when implementing, use and reference the repo's files and structure. If you need repo file contents to proceed, tell the user to open the Repo tab to load the clone, or to refresh the project so repo context can be rebuilt.\n\n`
+    prompt += `This project has a linked repo (${projectContext.repository.owner}/${projectContext.repository.name}) but repo file content is not in this context yet. You MUST still treat the repo as a reference only: when implementing, follow its patterns and structure but write new, clean-room code here. If you need repo file contents to proceed, tell the user to open the Repo tab to load the clone, or to refresh the project so repo context can be rebuilt.\n\n`
   }
 
   // List files currently in the project so GRIP can reference them and answer "which files used snippet.txt"
@@ -622,7 +641,7 @@ interface ChatHistoryDocument {
   };
 }
 
-/** Parse grip-actions block from message, execute create_folder/copy_file, return cleaned message and summary. */
+/** Parse grip-actions block from message, execute create_folder, return cleaned message and summary. */
 async function parseAndExecuteGripActions(
   projectId: string,
   message: string
@@ -639,19 +658,77 @@ async function parseAndExecuteGripActions(
       if (obj.action === 'create_folder' && typeof obj.path === 'string') {
         const result = await createProjectFolder(projectId, obj.path)
         if (result.ok) executed.push(`Created folder: ${obj.path}`)
-      } else if (obj.action === 'copy_file' && typeof obj.sourcePath === 'string' && typeof obj.targetPath === 'string') {
-        const content = await getFileContentByPath(projectId, obj.sourcePath)
-        if (content != null) {
-          const result = await saveProjectFile(projectId, obj.targetPath, content)
-          if (result.ok) executed.push(`Copied ${obj.sourcePath} → ${obj.targetPath}`)
-        }
-      }
+      } 
     } catch {
       // skip malformed lines
     }
   }
   const cleanedMessage = message.replace(blockRe, '').trim()
   return { cleanedMessage, executedSummary: executed }
+}
+
+/** Parse file path from text immediately before a code block. Mirrors sandbox helper. */
+function parseFilePathFromPrecedingText(text: string): string | null {
+  const trimmed = text.trim()
+  const extPattern = /\.(?:tsx?|jsx?|css|html|json|md|py|yml|yaml|env)$/i
+  const candidates: { full: string; index: number }[] = []
+  let m: RegExpExecArray | null
+  const backtickRegex = /`([^`]+)`/g
+  while ((m = backtickRegex.exec(trimmed)) !== null) {
+    const full = m[1].trim()
+    if (extPattern.test(full) || full.includes('/') || /^[a-zA-Z0-9_.-]+$/.test(full)) {
+      candidates.push({ full, index: m.index })
+    }
+  }
+  const boldRegex = /\*\*([^*]+)\*\*/g
+  while ((m = boldRegex.exec(trimmed)) !== null) {
+    const full = m[1].trim()
+    if (extPattern.test(full) || full.includes('/')) candidates.push({ full, index: m.index })
+  }
+  const pathLikeRegex = /([\w./-]+\.(?:tsx?|jsx?|css|html|json|md|py|yml|yaml|env))\s*:?\s*$/gm
+  while ((m = pathLikeRegex.exec(trimmed)) !== null) {
+    candidates.push({ full: m[1].trim(), index: m.index })
+  }
+  if (candidates.length === 0) return null
+  const last = candidates.reduce((best, c) => (c.index >= best.index ? c : best))
+  return last.full
+}
+
+/** Find all code blocks and parse path from preceding text; return [{ path, content }]. */
+function extractCodeBlocksWithPaths(message: string): Array<{ path: string; content: string }> {
+  const out: Array<{ path: string; content: string }> = []
+  const codeBlockRegex = /```([\w-]*)\n([\s\S]*?)```/g
+  let lastEnd = 0
+  let match: RegExpExecArray | null
+  while ((match = codeBlockRegex.exec(message)) !== null) {
+    const preceding = message.slice(lastEnd, match.index)
+    const content = (match[2] || '').trimEnd()
+    lastEnd = codeBlockRegex.lastIndex
+    const path = parseFilePathFromPrecedingText(preceding)
+    if (path && content.length > 0) out.push({ path, content })
+  }
+  return out
+}
+
+/** Save all extracted code blocks directly to project files (projectFiles or legalSandboxFiles based on project type). */
+async function saveCodeBlocksToProject(
+  projectId: string,
+  message: string,
+  isSandbox: boolean = false
+): Promise<{ saved: string[] }> {
+  const blocks = extractCodeBlocksWithPaths(message)
+  const saved: string[] = []
+  for (const { path, content } of blocks) {
+    if (isSandbox) {
+      const { upsertLegalSandboxFile } = await import('@/lib/services/legalSandboxService')
+      const res = await upsertLegalSandboxFile(projectId, path, content)
+      if (res.ok) saved.push(path)
+    } else {
+      const res = await saveProjectFile(projectId, path, content)
+      if (res.ok) saved.push(path)
+    }
+  }
+  return { saved }
 }
 
 /** Parse grip-update-ideation block from message, update project ideation, return cleaned message. */
@@ -804,8 +881,12 @@ export async function POST(request: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const accessDenied = await requireAppAccess(session)
+    if (accessDenied) return accessDenied
+    const tokenExhausted = await requireTokenBalance(session)
+    if (tokenExhausted) return tokenExhausted
 
-    const { message, projectId, messages: clientMessages } = await request.json()
+    const { message, projectId, messages: clientMessages, runAfterApply: runAfterApplyRaw } = await request.json()
 
     if (!projectId || !message) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -833,28 +914,100 @@ export async function POST(request: NextRequest) {
         '\n\n[Reminder: Output the entire README in exactly ONE markdown code block. Do not split into multiple blocks (e.g. one for features, one for install, one for bash). One block only.]'
     }
 
-    // Get project context
+    // Get project context (check both main and sandbox)
     const client = await clientPromise
     const db = client.db('test')
-    const project = await db.collection('projects').findOne({
+    let project = await db.collection('projects').findOne({
       _id: new ObjectId(projectId)
     })
-
+    let isSandbox = false
+    
     if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+      // Try sandbox projects
+      const sandboxProject = await db.collection('sandboxProjects').findOne({
+        _id: new ObjectId(projectId)
+      })
+      if (sandboxProject) {
+        isSandbox = true
+        project = {
+          _id: sandboxProject._id,
+          title: sandboxProject.title,
+          description: sandboxProject.description,
+          repository: sandboxProject.repository,
+          ideation: sandboxProject.ideation,
+          userId: sandboxProject.userId,
+          createdAt: sandboxProject.createdAt,
+          updatedAt: sandboxProject.updatedAt,
+          isSandbox: true,
+          parentProjectId: sandboxProject.parentProjectId,
+        }
+      } else {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+      }
     }
 
-    // Get analysis context
-    const analysis = await db.collection('analyses').findOne({
+    // Get analysis context (use sandboxAnalyses for sandbox projects)
+    const analysisCollection = isSandbox ? 'sandboxAnalyses' : 'analyses'
+    const analysis = await db.collection(analysisCollection).findOne({
       projectId: new ObjectId(projectId)
     })
+
+    // Extract structured analysis summary (tree-link JSON) if available
+    let structuredSummary = ''
+    try {
+      const ra = analysis?.repositoryAnalysis as
+        | { projectAnalysis?: string; fileAnalyses?: Array<{ path: string; analysis: string }>; structuredAnalysis?: any }
+        | undefined
+      if (ra?.structuredAnalysis) {
+        const sa = ra.structuredAnalysis as any
+        const identity = sa.identity || {}
+        const ideation = sa.ideation_alignment || {}
+        const matched = Array.isArray(ideation.matched_capabilities) ? ideation.matched_capabilities : []
+        const missing = Array.isArray(ideation.missing_capabilities) ? ideation.missing_capabilities : []
+        const subsystems = Array.isArray(sa.architecture_summary?.subsystems)
+          ? sa.architecture_summary.subsystems
+          : []
+        const routes = Array.isArray(sa.route_map) ? sa.route_map : []
+
+        const lines: string[] = []
+        lines.push('Identity & architecture:')
+        lines.push(
+          `- Repo name: ${identity.repo_name || '(unknown)'}`,
+          `- Primary languages: ${(identity.primary_languages || []).join(', ') || '(none)'}`,
+          `- Frameworks: ${(identity.detected_frameworks || []).join(', ') || '(none)'}`,
+        )
+        if (subsystems.length) {
+          lines.push('- Subsystems (partial): ' + subsystems.slice(0, 3).map((s: any) => s.name || '(unnamed)').join(', '))
+        }
+        if (routes.length) {
+          lines.push('- Routes (partial): ' + routes.slice(0, 5).map((r: any) => r.route || '').join(', '))
+        }
+        if (ideation.normalized_requirements?.product_summary) {
+          lines.push(`- Ideation product summary: ${ideation.normalized_requirements.product_summary}`)
+        }
+        lines.push(
+          `- Matched capabilities: ${matched.length}`,
+          `- Missing capabilities: ${missing.length}`,
+        )
+        structuredSummary = lines.join('\n')
+      }
+    } catch {
+      // optional
+    }
 
     // Get or build repo reference document (full repo context for G.R.I.P.)
     const repoReferenceDoc = await getOrBuildRepoContextDocument(projectId)
 
-    // List files already saved to this project so GRIP knows where we are and stays on the same page
-    const projectFilesList = await listProjectFiles(projectId)
-    const savedFiles = projectFilesList.map((f) => ({ path: f.path || '', filename: f.filename || '' }))
+    // List files already saved to this project (use sandbox files if sandbox project)
+    let savedFiles: Array<{ path: string; filename: string }> = []
+    if (isSandbox) {
+      const { listLegalSandboxFiles } = await import('@/lib/services/legalSandboxService')
+      const sandboxFiles = await listLegalSandboxFiles(projectId)
+      savedFiles = sandboxFiles.map((f) => ({ path: f.path || '', filename: f.filename || '' }))
+    } else {
+      const projectFilesList = await listProjectFiles(projectId)
+      savedFiles = projectFilesList.map((f) => ({ path: f.path || '', filename: f.filename || '' }))
+    }
 
     // Development plan (phases + file hierarchy) so GRIP uses the same plan and file paths
     let planContext: { phases?: Array<{ name: string; description?: string; tasks?: Array<{ name: string; status?: string }> }>; fileHierarchy?: { path: string; name?: string; children?: unknown[] } } | undefined
@@ -903,7 +1056,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build system prompt with context
-    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext)
+    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary)
 
     // Production readiness: fail gracefully when AI is not configured
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
@@ -939,6 +1092,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const totalTokens = (response.usage?.promptTokens ?? 0) + (response.usage?.completionTokens ?? 0)
+    if (totalTokens > 0 && session.user?.id) {
+      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+        console.warn('Enhanced chat: failed to record token usage', err)
+      )
+    }
+
     let aiMessage = (response.content && String(response.content).trim()) || ''
     // Treat empty or placeholder-only responses as failure so the user sees a real message
     if (!aiMessage || /^[-–—\s]+$/.test(aiMessage) || aiMessage.length < 3) {
@@ -950,7 +1110,7 @@ export async function POST(request: NextRequest) {
       aiMessage = aiMessage.trimEnd() + '\n```'
     }
 
-    // Parse and execute grip-actions (create_folder, copy_file) so GRIP can create folders and copy files for the user
+    // Parse and execute grip-actions (create_folder) so GRIP can create folders for the user
     try {
       const { cleanedMessage, executedSummary } = await parseAndExecuteGripActions(projectId, aiMessage)
       if (executedSummary.length > 0) {
@@ -977,6 +1137,37 @@ export async function POST(request: NextRequest) {
     // Merge multiple README blocks into one so the user gets a single "Save to project" button
     aiMessage = mergeReadmeBlocks(aiMessage)
 
+    // Save all code blocks with explicit file paths directly to project files (sandbox or main)
+    const { saved: appliedPaths } = await saveCodeBlocksToProject(projectId, aiMessage, isSandbox)
+
+    // Optionally run backend build after applying files, mirroring sandbox behavior
+    let runErrors: string[] = []
+    const runAfterApply = runAfterApplyRaw !== false // default: run when files changed
+    let buildRan = false
+    let buildSucceeded = false
+    if (runAfterApply && appliedPaths.length > 0) {
+      try {
+        const runResult = await runMainProject(projectId, isSandbox)
+        buildRan = true
+        buildSucceeded = runResult.success
+        if (!runResult.success && runResult.errors.length > 0) {
+          runErrors = runResult.errors
+        }
+      } catch (runErr) {
+        console.warn('Enhanced chat: run-after-apply failed:', runErr)
+      }
+    }
+
+    if (appliedPaths.length > 0) {
+      const appliedLine = `**Applied:** ${appliedPaths.join(', ')}.`
+      const buildLine = buildRan
+        ? buildSucceeded
+          ? ' **We ran the build; it succeeded.** Use **Run in StackBlitz** or your local dev environment to preview, or tell me what to change or paste any errors.'
+          : ' **We ran the build; it reported errors (see below).** I\'ll use them as the next step to fix the code.'
+        : ' Use **Run in StackBlitz** or your local dev environment to preview, or tell me what to change or paste any errors.'
+      aiMessage = aiMessage + (aiMessage ? '\n\n' : '') + appliedLine + buildLine
+    }
+
     // Save AI response
     await saveChatMessage(projectId, {
       role: 'assistant',
@@ -986,7 +1177,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       message: aiMessage,
-      refreshContext: false
+      refreshContext: false,
+      appliedPaths,
+      runErrors: runErrors.length > 0 ? runErrors : undefined,
+      buildRan: runAfterApply && appliedPaths.length > 0 ? buildRan : undefined,
+      buildSucceeded: runAfterApply && appliedPaths.length > 0 ? buildSucceeded : undefined,
     })
   } catch (error) {
     console.error('Error in enhanced chat:', error)

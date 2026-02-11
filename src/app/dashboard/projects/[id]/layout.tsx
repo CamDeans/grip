@@ -13,12 +13,12 @@ interface Project {
   repository?: { owner: string; name: string }
 }
 
-/** Step order: Overview → Setup → Repo → Develop → Preview. Plan is automated; outcomes show in Develop → Show Context. */
+/** Step order: Overview → Setup → Repo → Develop → Preview. Sandbox uses sandbox-chat for Develop. */
 const STEP_CONFIG = [
   { id: 'overview', path: '', label: 'Overview', pathMatch: (base: string) => base === '' },
   { id: 'setup', path: '/settings', label: 'Setup', pathMatch: (base: string) => base === 'settings' },
   { id: 'repo', path: '/repo', label: 'Repo', pathMatch: (base: string) => base === 'repo' },
-  { id: 'develop', path: '/enhanced-chat', label: 'Develop', pathMatch: (base: string) => base === 'enhanced-chat' },
+  { id: 'develop', path: '/enhanced-chat', label: 'Develop', pathMatch: (base: string) => base === 'enhanced-chat' || base === 'sandbox-chat' },
   { id: 'preview', path: '/preview', label: 'Preview', pathMatch: (base: string) => base === 'preview' },
 ] as const
 
@@ -57,22 +57,25 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   }, [projectId])
 
   useEffect(() => {
-    if (!projectId) return
+    if (!projectId || !project) return
+    const planUrl = project.isSandbox 
+      ? `/api/projects/${projectId}/legal-sandbox/plan`
+      : `/api/projects/${projectId}/plan`
     Promise.all([
       fetch(`/api/projects/${projectId}/analysis/status`).then((r) => (r.ok ? r.json() : null)).then((d) => d?.hasAnalysis ?? d?.analysisCompleted ?? false).catch(() => false),
-      fetch(`/api/projects/${projectId}/plan`).then((r) => r.ok).catch(() => false),
+      fetch(planUrl).then((r) => r.ok).catch(() => false),
     ]).then(([analysis, plan]) => {
       setHasAnalysis(!!analysis)
       setHasPlan(!!plan)
     })
-  }, [projectId])
+  }, [projectId, project])
 
   // Which step is current (from pathname)
   const currentStepIndex = STEP_CONFIG.findIndex((s) => {
     if (s.id === 'overview') return pathSegment === ''
     if (s.id === 'setup') return pathSegment === 'settings'
     if (s.id === 'repo') return pathSegment === 'repo'
-    if (s.id === 'develop') return pathSegment === 'enhanced-chat'
+    if (s.id === 'develop') return pathSegment === 'enhanced-chat' || pathSegment === 'sandbox-chat'
     if (s.id === 'preview') return pathSegment === 'preview'
     return false
   })
@@ -83,11 +86,19 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
     if (currentStep.id === 'preview') return null
     if (currentStep.id === 'overview') {
       if (!hasRepo) return STEP_CONFIG[1] // Setup
-      if (hasPlan === true) return STEP_CONFIG[3] // Develop
+      if (hasPlan === true) {
+        // Use sandbox-chat for sandbox projects, enhanced-chat for main projects
+        const developPath = project?.isSandbox ? '/sandbox-chat' : '/enhanced-chat'
+        return { ...STEP_CONFIG[3], path: developPath }
+      }
       return STEP_CONFIG[2] // Repo
     }
     if (currentStep.id === 'setup') return STEP_CONFIG[2] // Repo
-    if (currentStep.id === 'repo') return STEP_CONFIG[3] // Develop (plan is automated)
+    if (currentStep.id === 'repo') {
+      // Use sandbox-chat for sandbox projects, enhanced-chat for main projects
+      const developPath = project?.isSandbox ? '/sandbox-chat' : '/enhanced-chat'
+      return { ...STEP_CONFIG[3], path: developPath }
+    }
     if (currentStep.id === 'develop') return STEP_CONFIG[4] // Preview
     return null
   }
@@ -119,7 +130,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
     pathSegment === '' ? 'overview' :
     pathSegment === 'settings' ? 'setup' :
     pathSegment === 'repo' ? 'repo' :
-    pathSegment === 'enhanced-chat' ? 'develop' :
+    (pathSegment === 'enhanced-chat' || pathSegment === 'sandbox-chat') ? 'develop' :
     pathSegment === 'preview' ? 'preview' : 'overview'
 
   return (
@@ -139,17 +150,23 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
       <div className="mb-6 border-b border-border-default">
         <Tabs value={activeValue} className="w-full">
           <TabsList className="w-full justify-start flex-wrap gap-1">
-            {orderedVisible.map((step) => (
-              <Link
-                key={step.id}
-                href={`${basePath}${step.path}`}
-                className="flex-1 min-w-0 max-w-[120px]"
-              >
-                <TabsTrigger value={step.id} className="w-full">
-                  {step.label}
-                </TabsTrigger>
-              </Link>
-            ))}
+            {orderedVisible.map((step) => {
+              // Use sandbox-chat for sandbox projects, enhanced-chat for main projects
+              const stepPath = step.id === 'develop' && project?.isSandbox
+                ? '/sandbox-chat'
+                : step.path
+              return (
+                <Link
+                  key={step.id}
+                  href={`${basePath}${stepPath}`}
+                  className="flex-1 min-w-0 max-w-[120px]"
+                >
+                  <TabsTrigger value={step.id} className="w-full">
+                    {step.label}
+                  </TabsTrigger>
+                </Link>
+              )
+            })}
           </TabsList>
         </Tabs>
       </div>

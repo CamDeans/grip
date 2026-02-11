@@ -110,6 +110,16 @@ export async function GET(_req: Request) {
 
 export async function POST(request: Request) {
   try {
+    const session = await getServerAuthSession()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const { requireAppAccess, requireTokenBalance } = await import('@/lib/access')
+    const accessDenied = await requireAppAccess(session)
+    if (accessDenied) return accessDenied
+    const tokenExhausted = await requireTokenBalance(session)
+    if (tokenExhausted) return tokenExhausted
+
     const anthropic = getAnthropicClient()
     if (!anthropic) {
       return NextResponse.json(
@@ -157,6 +167,14 @@ Always maintain a professional but friendly tone, and provide specific, actionab
           }
         ]
       })
+
+      const totalTokens = (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0)
+      if (totalTokens > 0 && session.user?.id) {
+        const { addTokenUsage } = await import('@/lib/tokenUsage')
+        addTokenUsage(session.user.id, totalTokens).catch((err) =>
+          console.warn('Chat: failed to record token usage', err)
+        )
+      }
 
       console.log('API: Received response from G.R.I.P.:', {
         responseLength: response.content[0].text.length,

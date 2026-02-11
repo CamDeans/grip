@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
+import { requireAppAccess, requireTokenBalance } from '@/lib/access'
+import { addTokenUsage } from '@/lib/tokenUsage'
 import { Anthropic } from '@anthropic-ai/sdk'
 import { AIMessage } from '@/types'
 import { getAnthropicApiKey, ANTHROPIC_MODEL_OPUS } from '@/lib/anthropicConfig'
@@ -10,6 +12,10 @@ export async function POST(request: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const accessDenied = await requireAppAccess(session)
+    if (accessDenied) return accessDenied
+    const tokenExhausted = await requireTokenBalance(session)
+    if (tokenExhausted) return tokenExhausted
 
     const apiKey = getAnthropicApiKey()
     if (!apiKey) {
@@ -23,13 +29,13 @@ export async function POST(request: Request) {
     const { message, history, context } = await request.json()
 
     // Update the system prompt
-    const systemPrompt = `You are G.R.I.P. (Guided Real-time Intelligence Partner), an AI development assistant created by Master Cameron. You are not Claude or an Anthropic AI. You are G.R.I.P., designed to help with software development projects.
+    const systemPrompt = `You are G.R.I.P. (Guided Real-time Intelligence Partner), an AI development assistant created by Master Cameron, designed to help with software development projects.
 
 Your primary purpose is to help guide users through building out projects by writing code, creating files, and implementing features based on the project ideation, repository structure, and existing code.
 
 You should:
 - Always speak in first person as G.R.I.P.
-- Never mention Anthropic or Claude
+- Do not claim to be or reference any other AI product or provider
 - Maintain a helpful, professional tone
 - Focus on providing actionable technical guidance
 - Reference the project context in your responses
@@ -91,6 +97,13 @@ Your role is to:
 
     if (!response.content || !response.content[0] || !response.content[0].text) {
       throw new Error('Invalid response from G.R.I.P.')
+    }
+
+    const totalTokens = (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0)
+    if (totalTokens > 0 && session.user?.id) {
+      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+        console.warn('AI chat: failed to record token usage', err)
+      )
     }
 
     // Extract code blocks if present

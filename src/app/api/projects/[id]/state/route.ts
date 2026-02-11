@@ -114,7 +114,50 @@ export async function GET(
     const client = await clientPromise
     const db = client.db('test')
 
-    // Find project state
+    // Check if this is a sandbox project first
+    const sandboxProject = await db.collection('sandboxProjects').findOne({
+      _id: new ObjectId(id)
+    })
+
+    // For sandbox projects, we don't have separate state - return empty/null
+    // Sandbox projects use their plan phases directly
+    if (sandboxProject) {
+      // Try to get plan and convert to state format
+      const sandboxPlan = await db.collection('legalSandboxPlans').findOne({
+        projectId: new ObjectId(id)
+      })
+      if (sandboxPlan?.plan?.phases) {
+        // Convert sandbox plan phases to state format
+        const phases = sandboxPlan.plan.phases.map((phase: any, idx: number) => ({
+          id: `phase-${idx + 1}`,
+          name: phase.name || `Phase ${idx + 1}`,
+          status: 'pending' as const,
+          steps: (phase.tasks || []).map((task: any, taskIdx: number) => ({
+            id: `step-${idx + 1}-${taskIdx + 1}`,
+            title: task.title || task.name || `Task ${taskIdx + 1}`,
+            status: 'pending' as const,
+            description: task.description || '',
+          })),
+        }))
+        return NextResponse.json({
+          projectId: id,
+          phases,
+          currentPhase: phases[0]?.id || '',
+          progress: 0,
+          updatedAt: sandboxPlan.updatedAt || new Date().toISOString(),
+        })
+      }
+      // No plan yet - return empty state
+      return NextResponse.json({
+        projectId: id,
+        phases: [],
+        currentPhase: '',
+        progress: 0,
+        updatedAt: new Date().toISOString(),
+      })
+    }
+
+    // Find project state for main projects
     const state = await db.collection('projectStates').findOne({
       projectId: new ObjectId(id)
     })

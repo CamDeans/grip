@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui'
-import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks } from 'lucide-react'
+import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle } from 'lucide-react'
 import { toast as sonnerToast } from 'sonner'
 import Link from 'next/link'
 import { useRouter, useParams } from 'next/navigation'
@@ -32,6 +32,19 @@ interface Project {
   completionStatus?: 'draft' | 'ready_to_export' | 'exported' | 'deployed'
   exportedRepoUrl?: string
   deployedUrl?: string
+  isSandbox?: boolean
+  parentProjectId?: string
+}
+
+interface SandboxExperiment {
+  _id: string
+  title: string
+  description: string
+  repository?: { owner: string; name: string }
+  createdAt: string
+  updatedAt: string
+  isSandbox: true
+  parentProjectId: string
 }
 
 export default function ProjectOverviewPage() {
@@ -53,6 +66,8 @@ export default function ProjectOverviewPage() {
   } | null>(null)
   const [hasAnalysis, setHasAnalysis] = useState<boolean | null>(null)
   const [hasPlan, setHasPlan] = useState<boolean | null>(null)
+  const [sandboxes, setSandboxes] = useState<SandboxExperiment[]>([])
+  const [loadingSandboxes, setLoadingSandboxes] = useState(false)
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const projectId = params?.id || ''
@@ -133,6 +148,7 @@ export default function ProjectOverviewPage() {
         const response = await fetch(`/api/projects/${projectId}`)
         if (!response.ok) throw new Error('Failed to fetch project')
         const data = await response.json()
+        console.log('[Project Overview] Loaded project:', { id: projectId, isSandbox: data.isSandbox, title: data.title })
         setProject(data)
         setError(null)
       } catch (error) {
@@ -145,13 +161,46 @@ export default function ProjectOverviewPage() {
     fetchProject()
   }, [projectId])
 
+  // Fetch sandbox experiments for main projects
+  useEffect(() => {
+    if (!projectId || project?.isSandbox) return
+    const fetchSandboxes = async () => {
+      setLoadingSandboxes(true)
+      try {
+        const response = await fetch(`/api/projects/${projectId}/sandboxes`)
+        if (response.ok) {
+          const data = await response.json()
+          setSandboxes(data.sandboxes || [])
+        }
+      } catch (error) {
+        console.error('Error fetching sandboxes:', error)
+      } finally {
+        setLoadingSandboxes(false)
+      }
+    }
+    fetchSandboxes()
+  }, [projectId, project?.isSandbox])
+
   const refreshGeneratedFiles = () => {
     if (!projectId) return
     setLoadingFiles(true)
-    fetch(`/api/project-files?projectId=${projectId}&limit=100`)
+    // Use appropriate endpoint based on project type
+    const endpoint = project?.isSandbox
+      ? `/api/projects/${projectId}/legal-sandbox/files`
+      : `/api/project-files?projectId=${projectId}&limit=100`
+    fetch(endpoint)
       .then(async (r) => {
         if (!r.ok) return []
         const data = await r.json()
+        // Handle different response formats
+        if (project?.isSandbox && Array.isArray(data)) {
+          return data.map((f: { path?: string; filename?: string; content?: string }) => ({
+            id: `${f.path || ''}/${f.filename || ''}`,
+            path: f.path || '',
+            filename: f.filename || '',
+            content: f.content,
+          }))
+        }
         return Array.isArray(data) ? data : []
       })
       .then((list: Array<{ id: string; path: string; filename: string; size?: number; content?: string; language?: string }>) => setGeneratedFiles(list))
@@ -162,14 +211,17 @@ export default function ProjectOverviewPage() {
   useEffect(() => {
     if (!projectId) return
     refreshGeneratedFiles()
-  }, [projectId])
+  }, [projectId, project?.isSandbox])
 
   // Fetch project state (phases), analysis status, and plan for Get started + Phases
+  // Works for both main and sandbox projects
   useEffect(() => {
     if (!projectId) return
     const stateUrl = `/api/projects/${projectId}/state`
     const analysisUrl = `/api/projects/${projectId}/analysis/status`
-    const planUrl = `/api/projects/${projectId}/plan`
+    const planUrl = project?.isSandbox 
+      ? `/api/projects/${projectId}/legal-sandbox/plan`
+      : `/api/projects/${projectId}/plan`
     Promise.all([
       fetch(stateUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       fetch(analysisUrl).then((r) => (r.ok ? r.json() : null)).then((d) => d?.hasAnalysis ?? d?.analysisCompleted ?? false).catch(() => false),
@@ -179,12 +231,13 @@ export default function ProjectOverviewPage() {
       setHasAnalysis(!!analysis)
       setHasPlan(!!plan)
     })
-  }, [projectId])
+  }, [projectId, project?.isSandbox])
 
   // Auto-run plan + sync so user can get to Develop without pressing buttons (smoother flow)
+  // Skip for sandbox projects - they use their own plan flow
   const autoPlanRanRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!projectId || !project?.repository?.owner || !project?.repository?.name) return
+    if (!projectId || project?.isSandbox || !project?.repository?.owner || !project?.repository?.name) return
     if (autoPlanRanRef.current === projectId) return
     if (hasPlan === true && projectState?.phases?.length) return
     if (hasPlan === null) return
@@ -250,8 +303,274 @@ export default function ProjectOverviewPage() {
   const allPreChatStepsComplete = stepsComplete[0] && stepsComplete[1] && stepsComplete[2] && stepsComplete[3] && stepsComplete[4]
   const readyForDevelop = hasPlan === true || (projectState?.phases?.length ?? 0) > 0
 
+  const handleCreateSandbox = async (title?: string, copyFiles: boolean = false) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/create-sandbox`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, copyFiles }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed')
+      const data = await res.json()
+      sonnerToast.success('Sandbox experiment created', { description: `Created "${data.sandboxProject.title}"` })
+      // Refresh sandboxes list
+      const sandboxesRes = await fetch(`/api/projects/${projectId}/sandboxes`)
+      if (sandboxesRes.ok) {
+        const sandboxesData = await sandboxesRes.json()
+        setSandboxes(sandboxesData.sandboxes || [])
+      }
+      // Optionally navigate to the new sandbox
+      if (data.sandboxProject._id) {
+        router.push(`/dashboard/projects/${data.sandboxProject._id}`)
+      }
+    } catch (e) {
+      sonnerToast.error(e instanceof Error ? e.message : 'Failed to create sandbox')
+    }
+  }
+
   return (
     <div className="space-y-8">
+      {/* Sandbox indicator banner - only show if it's a linked experiment */}
+      {project?.isSandbox && project?.parentProjectId && (
+        <Card className="border-2 border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+          <CardContent className="pt-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="px-3 py-1 bg-amber-500 text-white rounded-md text-sm font-semibold">
+                  EXPERIMENT
+                </div>
+                <p className="text-sm text-text-secondary">
+                  This is an experiment linked to a main project. Changes here do not affect the main project.
+                  <Link href={`/dashboard/projects/${project.parentProjectId}`} className="ml-2 text-primary hover:underline">
+                    View main project →
+                  </Link>
+                </p>
+              </div>
+              <Button
+                onClick={async () => {
+                  if (!confirm('Promote all files from this experiment to the main project? This will copy all sandbox files to your main project.')) {
+                    return
+                  }
+                  try {
+                    const res = await fetch(`/api/projects/${projectId}/promote-sandbox`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ overwrite: false }),
+                    })
+                    const data = await res.json()
+                    if (res.ok) {
+                      sonnerToast.success(
+                        'Sandbox promoted',
+                        {
+                          description: `Promoted ${data.summary.promoted} file(s) to main project.${data.summary.skipped > 0 ? ` ${data.summary.skipped} file(s) skipped (already exist).` : ''}`,
+                        }
+                      )
+                      // Navigate to main project
+                      router.push(`/dashboard/projects/${project.parentProjectId}`)
+                    } else {
+                      throw new Error(data.error || 'Failed to promote')
+                    }
+                  } catch (e) {
+                    sonnerToast.error(e instanceof Error ? e.message : 'Failed to promote sandbox')
+                  }
+                }}
+                variant="default"
+                size="sm"
+                className="shrink-0"
+              >
+                <ArrowUpCircle className="w-4 h-4 mr-2" />
+                Promote to Main
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Sandbox Experiments Section for main projects */}
+      {/* Show sandbox card for main projects only (not sandbox projects themselves) */}
+      {project && project.isSandbox !== true && (
+        <Card className="border-2 border-primary/30 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="text-xl font-bold flex items-center gap-2">
+              <FlaskConical className="w-5 h-5 text-primary" />
+              Sandbox Experiments
+            </CardTitle>
+            <CardDescription>
+              Create isolated environments to experiment with new features, architectures, or refactors without affecting your main project.
+              Sandboxes use <strong>clean-room code generation</strong> and <strong>legal-safe practices</strong>—perfect for risky experiments.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Use cases */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-background/50 rounded-lg border border-border">
+              <div className="flex items-start gap-3">
+                <GitBranch className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <h5 className="text-sm font-semibold mb-1">Architecture Experiments</h5>
+                  <p className="text-xs text-text-secondary">
+                    Try new patterns (e.g., move from pages/ to app/ routes) without breaking your main project.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Zap className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <h5 className="text-sm font-semibold mb-1">Risky Refactors</h5>
+                  <p className="text-xs text-text-secondary">
+                    Test major changes or new dependencies in isolation before committing to your main build.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Shield className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <h5 className="text-sm font-semibold mb-1">Legal-Safe Mode</h5>
+                  <p className="text-xs text-text-secondary">
+                    Strict clean-room generation—repo is reference only, all code is new. Perfect for compliance.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* List existing sandboxes */}
+            {loadingSandboxes ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-5 h-5 animate-spin text-text-muted" />
+              </div>
+            ) : sandboxes.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                    <FlaskConical className="w-4 h-4" />
+                    Active Experiments ({sandboxes.length})
+                  </h4>
+                  <Link href={`/dashboard/projects/${sandboxes[0]._id}/sandbox-chat`}>
+                    <Button variant="outline" size="sm" className="shrink-0">
+                      <MessageSquare className="w-4 h-4 mr-2" />
+                      Sandbox Develop
+                    </Button>
+                  </Link>
+                </div>
+                {sandboxes.map((sandbox) => (
+                  <div
+                    key={sandbox._id}
+                    className="flex items-center justify-between p-4 bg-background border border-border rounded-lg hover:bg-accent/50 transition-colors group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="px-2 py-0.5 bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-semibold rounded shrink-0">
+                          EXPERIMENT
+                        </span>
+                        <Link
+                          href={`/dashboard/projects/${sandbox._id}`}
+                          className="font-semibold text-primary hover:underline truncate"
+                        >
+                          {sandbox.title}
+                        </Link>
+                      </div>
+                      {sandbox.description && (
+                        <p className="text-xs text-text-secondary line-clamp-2 mb-1">{sandbox.description}</p>
+                      )}
+                      <div className="flex items-center gap-4 text-xs text-text-muted">
+                        <span>Updated {new Date(sandbox.updatedAt).toLocaleDateString()}</span>
+                        {sandbox.repository && (
+                          <span className="flex items-center gap-1">
+                            <Code className="w-3 h-3" />
+                            {sandbox.repository.owner}/{sandbox.repository.name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button
+                        onClick={async () => {
+                          if (!confirm(`Promote all files from "${sandbox.title}" to the main project?`)) {
+                            return
+                          }
+                          try {
+                            const res = await fetch(`/api/projects/${sandbox._id}/promote-sandbox`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ overwrite: false }),
+                            })
+                            const data = await res.json()
+                            if (res.ok) {
+                              sonnerToast.success(
+                                'Sandbox promoted',
+                                {
+                                  description: `Promoted ${data.summary.promoted} file(s) to main project.${data.summary.skipped > 0 ? ` ${data.summary.skipped} file(s) skipped.` : ''}`,
+                                }
+                              )
+                              // Refresh page to show updated main project
+                              refreshProject()
+                            } else {
+                              throw new Error(data.error || 'Failed to promote')
+                            }
+                          } catch (e) {
+                            sonnerToast.error(e instanceof Error ? e.message : 'Failed to promote sandbox')
+                          }
+                        }}
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                      >
+                        <ArrowUpCircle className="w-4 h-4 mr-1" />
+                        Promote
+                      </Button>
+                      <Link href={`/dashboard/projects/${sandbox._id}`}>
+                        <Button variant="ghost" size="sm" className="shrink-0">
+                          Open
+                          <ChevronRight className="w-4 h-4 ml-1" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-text-secondary border-2 border-dashed border-border rounded-lg">
+                <FlaskConical className="w-8 h-8 mx-auto mb-2 text-text-muted" />
+                <p className="text-sm font-medium mb-1">No sandbox experiments yet</p>
+                <p className="text-xs">Create one to start experimenting safely without affecting your main project.</p>
+              </div>
+            )}
+
+            {/* Create new sandbox */}
+            <div className="pt-4 border-t border-border">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold mb-1 flex items-center gap-2">
+                    <Zap className="w-4 h-4" />
+                    Create New Experiment
+                  </h4>
+                  <p className="text-xs text-text-secondary">
+                    Start with an empty sandbox or copy your current files to experiment with modifications.
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    onClick={() => handleCreateSandbox(undefined, false)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <FlaskConical className="w-4 h-4 mr-2" />
+                    Empty Sandbox
+                  </Button>
+                  <Button
+                    onClick={() => handleCreateSandbox(undefined, true)}
+                    variant="default"
+                    size="sm"
+                  >
+                    <GitBranch className="w-4 h-4 mr-2" />
+                    Copy Files
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Next step: Start chat with GRIP — show when plan or phases exist so user always sees what to do */}
       {readyForDevelop && (
         <Card className="border-2 border-primary bg-primary/10">
@@ -266,10 +585,38 @@ export default function ProjectOverviewPage() {
                   <strong>Before you go:</strong> GRIP works only on the current phase. When that phase is done, GRIP will route you back to this Overview page for next steps and realignment so you and GRIP stay in sync. Then you can start the next phase from here.
                 </p>
               </div>
-              <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="shrink-0 mt-2 sm:mt-0">
+              <Link href={`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}`} className="shrink-0 mt-2 sm:mt-0">
                 <Button size="lg" className="w-full sm:w-auto">
                   <MessageSquare className="w-4 h-4 mr-2" />
                   Go to Develop (chat with GRIP)
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Sandbox Develop - show only when sandbox experiments exist */}
+      {project && !project.isSandbox && sandboxes.length > 0 && (
+        <Card className="border-2 border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+          <CardContent className="pt-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                  <FlaskConical className="w-5 h-5" />
+                  Sandbox Develop
+                </h2>
+                <p className="text-sm text-text-secondary">
+                  You have {sandboxes.length} active experiment{sandboxes.length !== 1 ? 's' : ''}. Open <strong>Sandbox Develop</strong> to chat with GRIP in your sandbox environment.
+                </p>
+                <p className="text-xs text-text-muted border-l-2 border-amber-500/50 pl-3">
+                  <strong>Note:</strong> Sandbox experiments are isolated from your main project. Changes here won't affect your main build until you promote them.
+                </p>
+              </div>
+              <Link href={`/dashboard/projects/${sandboxes[0]._id}/sandbox-chat`} className="shrink-0 mt-2 sm:mt-0">
+                <Button size="lg" variant="outline" className="w-full sm:w-auto border-amber-500 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/40">
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Go to Sandbox Develop
                 </Button>
               </Link>
             </div>
@@ -378,7 +725,7 @@ export default function ProjectOverviewPage() {
               <p className="text-xs text-text-muted border-l-2 border-primary/50 pl-3">
                 GRIP works only on the current phase. When the phase is complete, GRIP will route you back to this Overview page for next steps and realignment; then you can start the next phase from here so you and GRIP stay in sync.
               </p>
-              <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="mt-5 block">
+              <Link href={`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}`} className="mt-5 block">
                 <Button className="w-full sm:w-auto" size="lg">
                   <MessageSquare className="w-4 h-4 mr-2" />
                   {allPreChatStepsComplete ? 'Start chat with GRIP' : 'Continue with GRIP'}
@@ -394,14 +741,14 @@ export default function ProjectOverviewPage() {
                   <p className="text-xs text-text-muted border-l-2 border-primary/50 pl-3">
                     GRIP works only on the current phase and will always route you back to this Overview page for next steps and realignment before the next phase.
                   </p>
-                  <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="mt-5 block">
+                  <Link href={`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}`} className="mt-5 block">
                     <Button size="lg">Go to Develop (chat with GRIP)</Button>
                   </Link>
                 </>
               ) : (
                 <>
                   <p>No phases yet. Link a repo and return to Overview — plan and phases are created automatically, then go to Develop.</p>
-                  <Link href={`/dashboard/projects/${projectId}/enhanced-chat`}>
+                  <Link href={`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}`}>
                     <Button variant="outline">Open Develop anyway</Button>
                   </Link>
                 </>
@@ -517,7 +864,7 @@ export default function ProjectOverviewPage() {
             <p className="text-sm text-text-secondary">Loading...</p>
           ) : generatedFiles.length === 0 ? (
             <p className="text-sm text-text-secondary">
-              No generated files yet. Files are generated automatically with the plan, or get code from <Link href={`/dashboard/projects/${projectId}/enhanced-chat`} className="text-primary hover:underline">Develop</Link> (code in chat is in message history).
+              No generated files yet. Files are generated automatically with the plan, or get code from <Link href={`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}`} className="text-primary hover:underline">Develop</Link> (code in chat is in message history).
             </p>
           ) : (
             <ul className="space-y-2">
@@ -776,7 +1123,7 @@ export default function ProjectOverviewPage() {
             <Button 
               variant="outline" 
               className="h-auto p-4 justify-start"
-              onClick={() => router.push(`/dashboard/projects/${projectId}/enhanced-chat`)}
+              onClick={() => router.push(`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}`)}
             >
               <div className="flex items-start">
                 <ClipboardIcon className="w-5 h-5 mr-3 mt-0.5 text-accent-blue" />

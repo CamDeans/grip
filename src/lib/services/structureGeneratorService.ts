@@ -131,53 +131,47 @@ interface GeneratedStructure {
 /**
  * Enhance project structure with AI-generated details
  */
+export type EnhanceProjectStructureResult = { structure: IProjectStructureData; totalTokens: number }
+
 export async function enhanceProjectStructure(
   projectId: string,
   structure: IProjectStructureData
-): Promise<IProjectStructureData> {
+): Promise<EnhanceProjectStructureResult> {
   try {
     console.log(`Enhancing project structure: ${projectId}`)
     const db = (await clientPromise).db()
-    
-    // Fetch project details
+
     const project = await db.collection('projects').findOne({
       _id: new ObjectId(projectId)
     })
-    
-    if (!project) {
-      throw new Error(`Project not found: ${projectId}`)
-    }
-    
-    // Check if structure already has detailed children
-    if (structure.fileHierarchy.children && 
+
+    if (!project) throw new Error(`Project not found: ${projectId}`)
+
+    if (structure.fileHierarchy.children &&
         structure.fileHierarchy.children.some(child => child.description)) {
       console.log('Structure already has detailed children, skipping enhancement')
-      return structure
+      return { structure, totalTokens: 0 }
     }
     
-    // Extract features from project ideation
-    const features = await extractFeaturesFromIdeation(
+    const { features, totalTokens } = await extractFeaturesFromIdeation(
       project.ideation?.keyFeatures || '',
       project.ideation?.technicalRequirements || ''
     )
-    
-    // Add feature-specific directories and files
+
     const enhancedHierarchy = addFeaturesDirectories(structure.fileHierarchy, features)
-    
-    // Update structure with enhanced hierarchy
+
     const enhancedStructure: IProjectStructureData = {
       ...structure,
       fileHierarchy: enhancedHierarchy,
       updatedAt: new Date()
     }
-    
-    // Save the enhanced structure
+
     await db.collection('projectStructures').updateOne(
       { projectId: new ObjectId(projectId) },
       { $set: enhancedStructure }
     )
-    
-    return enhancedStructure
+
+    return { structure: enhancedStructure, totalTokens }
   } catch (error) {
     console.error('Error enhancing project structure:', error)
     throw error
@@ -232,23 +226,23 @@ Return only the JSON array, no explanation.
       temperature: 0.2,
       messages: [{ role: 'user', content: prompt }]
     })
-    
+
+    const totalTokens = (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0)
     const content = response?.content?.[0]?.text || '[]'
-    
-    // Extract JSON from content (in case the AI added explanation)
+
     const jsonMatch = content.match(/\[[\s\S]*\]/)
     const jsonString = jsonMatch ? jsonMatch[0] : '[]'
-    
+
     try {
       const features = JSON.parse(jsonString) as FeatureDetails[]
-      return features
+      return { features, totalTokens }
     } catch (parseError) {
       console.error('Error parsing AI response:', parseError)
-      return []
+      return { features: [], totalTokens }
     }
   } catch (error) {
     console.error('Error extracting features from ideation:', error)
-    return []
+    return { features: [], totalTokens: 0 }
   }
 }
 
@@ -564,15 +558,13 @@ export async function generateStructurePlan(projectId: string): Promise<Generate
       throw new Error(`Project not found: ${projectId}`)
     }
     
-    // Extract features from project ideation
-    const features = await extractFeaturesFromIdeation(
+    const { features } = await extractFeaturesFromIdeation(
       project.ideation?.keyFeatures || '',
       project.ideation?.technicalRequirements || ''
     )
-    
-    // Enhance structure with feature-specific directories
-    const enhancedStructure = await enhanceProjectStructure(projectId, structure)
-    
+
+    const { structure: enhancedStructure } = await enhanceProjectStructure(projectId, structure)
+
     return {
       structure: enhancedStructure,
       features
@@ -602,17 +594,14 @@ export async function getOrCreateProjectStructure(projectId: string): Promise<IP
     // If not, generate a new structure
     const { structureId } = await analyzeAndCreateProjectStructure(projectId)
     
-    // Fetch the created structure
     const newStructure = await db.collection('projectStructures').findOne<IProjectStructureData>({
       _id: new ObjectId(structureId)
     })
-    
-    if (!newStructure) {
-      throw new Error(`Failed to create structure for project: ${projectId}`)
-    }
-    
-    // Enhance the new structure
-    return await enhanceProjectStructure(projectId, newStructure)
+
+    if (!newStructure) throw new Error(`Failed to create structure for project: ${projectId}`)
+
+    const { structure: enhancedStructure } = await enhanceProjectStructure(projectId, newStructure)
+    return enhancedStructure
   } catch (error) {
     console.error('Error getting or creating project structure:', error)
     throw error

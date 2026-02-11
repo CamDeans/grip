@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
+import { requireAppAccess, requireTokenBalance } from '@/lib/access'
+import { addTokenUsage } from '@/lib/tokenUsage'
 import { clientPromise } from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
 import { AIMessage, ProjectState, ChatResponse, ChatError, StepContext } from '@/types'
@@ -11,6 +13,10 @@ export async function POST(request: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const accessDenied = await requireAppAccess(session)
+    if (accessDenied) return accessDenied
+    const tokenExhausted = await requireTokenBalance(session)
+    if (tokenExhausted) return tokenExhausted
 
     const apiKey = getAnthropicApiKey()
     if (!apiKey) {
@@ -83,6 +89,13 @@ Remember to:
 
     const data = await response.json()
     const aiMessage = data.content[0].text
+
+    const totalTokens = (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0)
+    if (totalTokens > 0 && session.user?.id) {
+      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+        console.warn('Chat completion: failed to record token usage', err)
+      )
+    }
 
     // Determine if the message indicates a step completion
     const stepContext: StepContext = {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
+import { requireAppAccess, requireTokenBalance } from '@/lib/access'
+import { addTokenUsage } from '@/lib/tokenUsage'
 import { getOrCloneRepository } from '@/lib/repository'
 import { anthropicService } from '@/lib/services/anthropicService'
 import clientPromise from '@/lib/db'
@@ -22,6 +24,10 @@ export async function POST(
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const accessDenied = await requireAppAccess(session)
+    if (accessDenied) return accessDenied
+    const tokenExhausted = await requireTokenBalance(session)
+    if (tokenExhausted) return tokenExhausted
 
     const { id: projectId } = await params
     if (!projectId || !ObjectId.isValid(projectId)) {
@@ -72,6 +78,7 @@ export async function POST(
     }
 
     let done = 0
+    let totalTokens = 0
     for (const file of withContent) {
       const content = (file.content || '').slice(0, MAX_CONTENT_FOR_SUMMARY)
       const prompt = `Summarize this file in one short sentence (what it does or its role). Be concise.\n\nFile: ${file.path}\n\nContent:\n${content}`
@@ -81,6 +88,7 @@ export async function POST(
           [{ role: 'user', content: prompt }],
           { system: 'You are G.R.I.P. Provide only a single short sentence summary. No preamble.' }
         )
+        totalTokens += (res.usage?.promptTokens ?? 0) + (res.usage?.completionTokens ?? 0)
         const summary = (res.content || '').trim()
         await db.collection('repoFileSummaries').updateOne(
           { projectId: new ObjectId(projectId), path: file.path },
@@ -91,6 +99,11 @@ export async function POST(
       } catch (e) {
         console.warn('Summarize failed for', file.path, e)
       }
+    }
+    if (totalTokens > 0 && session.user?.id) {
+      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+        console.warn('Summarize: failed to record token usage', err)
+      )
     }
 
     return NextResponse.json({

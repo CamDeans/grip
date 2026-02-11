@@ -32,10 +32,25 @@ export async function GET(
 
     const client = await clientPromise
     const db = client.db('test')
-    const project = await db.collection('projects').findOne(
+    
+    // Check if this is a sandbox project
+    let project = await db.collection('projects').findOne(
       { _id: new ObjectId(projectId) },
       { projection: { title: 1, userId: 1 } }
     ) as { title?: string; userId?: unknown } | null
+    
+    let isSandbox = false
+    if (!project) {
+      // Try sandbox projects
+      const sandboxProject = await db.collection('sandboxProjects').findOne(
+        { _id: new ObjectId(projectId) },
+        { projection: { title: 1, userId: 1 } }
+      ) as { title?: string; userId?: unknown } | null
+      if (sandboxProject) {
+        project = sandboxProject
+        isSandbox = true
+      }
+    }
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
@@ -45,7 +60,10 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const filesArray = await getProjectFilesForExport(projectId, { gripOnly: false })
+    // Use appropriate export function based on project type
+    const filesArray = isSandbox
+      ? await (await import('@/lib/services/legalSandboxService')).getLegalSandboxFilesForExport(projectId)
+      : await getProjectFilesForExport(projectId, { gripOnly: false })
     if (!filesArray.length) {
       return NextResponse.json(
         { error: 'No files to export. Link a repo or add generated files.' },
@@ -65,23 +83,26 @@ export async function GET(
     // Ensure every projectFile (including copied files in nested folders) is in the payload by
     // reading projectFiles directly with the same client used in this route.
     // Match both ObjectId and string projectId so we never miss docs (e.g. from different writers).
-    const projectFilesDocs = await db
-      .collection('projectFiles')
-      .find({
-        $or: [
-          { projectId: new ObjectId(projectId) },
-          { projectId: projectId as unknown },
-        ],
-      })
-      .project({ path: 1, filename: 1, content: 1 })
-      .toArray() as { path?: string; filename?: string; content?: string }[]
-    for (const f of projectFilesDocs) {
-      const path = f.path ?? ''
-      const filename = f.filename ?? ''
-      if (!filename) continue
-      const fullPath = path === '' ? filename : `${path}/${filename}`
-      const key = normalizePathForStackBlitz(fullPath) || fullPath
-      files[key] = f.content ?? ''
+    // For sandbox projects, use legalSandboxFiles collection instead
+    if (!isSandbox) {
+      const projectFilesDocs = await db
+        .collection('projectFiles')
+        .find({
+          $or: [
+            { projectId: new ObjectId(projectId) },
+            { projectId: projectId as unknown },
+          ],
+        })
+        .project({ path: 1, filename: 1, content: 1 })
+        .toArray() as { path?: string; filename?: string; content?: string }[]
+      for (const f of projectFilesDocs) {
+        const path = f.path ?? ''
+        const filename = f.filename ?? ''
+        if (!filename) continue
+        const fullPath = path === '' ? filename : `${path}/${filename}`
+        const key = normalizePathForStackBlitz(fullPath) || fullPath
+        files[key] = f.content ?? ''
+      }
     }
 
     // Ensure image files have valid image content (not blank/encrypted/wrong format) so StackBlitz can use them.
@@ -128,24 +149,27 @@ export async function GET(
     }
 
     // Merge recommended dependencies from project plan (ideation) so export runs locally with fewer manual installs
-    try {
-      const plan = await getProjectPlan(projectId)
-      const recommended = plan?.dependencyTree?.recommendedPackages
-      if (Array.isArray(recommended) && recommended.length > 0) {
-        const pkgRaw = files['package.json']
-        if (pkgRaw) {
-          const pkg = JSON.parse(pkgRaw) as { devDependencies?: Record<string, string>; dependencies?: Record<string, string> }
-          if (!pkg.devDependencies) pkg.devDependencies = {}
-          recommended.forEach((name: string) => {
-            if (!pkg.dependencies?.[name] && !pkg.devDependencies[name]) {
-              pkg.devDependencies[name] = pkg.dependencies?.[name] ?? '*'
-            }
-          })
-          files['package.json'] = JSON.stringify(pkg, null, 2)
+    // Only for main projects (sandbox projects don't have main project plans)
+    if (!isSandbox) {
+      try {
+        const plan = await getProjectPlan(projectId)
+        const recommended = plan?.dependencyTree?.recommendedPackages
+        if (Array.isArray(recommended) && recommended.length > 0) {
+          const pkgRaw = files['package.json']
+          if (pkgRaw) {
+            const pkg = JSON.parse(pkgRaw) as { devDependencies?: Record<string, string>; dependencies?: Record<string, string> }
+            if (!pkg.devDependencies) pkg.devDependencies = {}
+            recommended.forEach((name: string) => {
+              if (!pkg.dependencies?.[name] && !pkg.devDependencies[name]) {
+                pkg.devDependencies[name] = pkg.dependencies?.[name] ?? '*'
+              }
+            })
+            files['package.json'] = JSON.stringify(pkg, null, 2)
+          }
         }
+      } catch {
+        // non-fatal
       }
-    } catch {
-      // non-fatal
     }
 
     files['.stackblitzrc'] = JSON.stringify(

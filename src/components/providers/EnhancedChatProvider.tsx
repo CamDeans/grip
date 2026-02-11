@@ -190,8 +190,19 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
 
   // Load chat history when user returns so progress is not lost
   const loadChatHistory = async () => {
+    if (!projectId) return
     try {
-      const response = await fetch(`/api/chat/history?projectId=${projectId}`)
+      // Check if this is a sandbox project
+      const projectRes = await fetch(`/api/projects/${projectId}`)
+      const projectData = projectRes.ok ? await projectRes.json() : null
+      const isSandbox = projectData?.isSandbox === true
+      
+      // Use appropriate endpoint based on project type
+      const historyEndpoint = isSandbox
+        ? `/api/projects/${projectId}/legal-sandbox/chat/history`
+        : `/api/chat/history?projectId=${projectId}`
+      
+      const response = await fetch(historyEndpoint)
       
       if (response.ok) {
         const data = await response.json()
@@ -534,9 +545,20 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
       // Show typing indicator
       setIsTyping(true)
 
+      // Determine endpoint based on project type
+      // Check if this is a sandbox project
+      const projectRes = await fetch(`/api/projects/${projectId}`)
+      const projectData = projectRes.ok ? await projectRes.json() : null
+      const isSandbox = projectData?.isSandbox === true
+      
+      // Use appropriate endpoint based on project type
+      const chatEndpoint = isSandbox
+        ? `/api/projects/${projectId}/legal-sandbox/chat`
+        : '/api/enhanced-chat'
+      
       // Send message to API with conversation history so GRIP responds in context
-      console.log('Client: Sending message to API')
-      const response = await fetch('/api/enhanced-chat', {
+      console.log('Client: Sending message to API', { endpoint: chatEndpoint, isSandbox })
+      const response = await fetch(chatEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -546,6 +568,7 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
           projectId,
           context: projectContext,
           messages: messages.map(m => ({ role: m.role, content: m.content })),
+          runAfterApply: true, // Enable automatic builds
         }),
       })
 

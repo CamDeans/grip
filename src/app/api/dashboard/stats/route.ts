@@ -23,6 +23,8 @@ export async function GET() {
 
     const activeProjects = projects.filter((p: { status?: string }) => (p.status ?? 'active') === 'active').length
     const completedProjects = projects.filter((p: { status?: string }) => p.status === 'completed').length
+    const archivedProjects = projects.filter((p: { status?: string }) => p.status === 'archived').length
+    const archivedTabCount = completedProjects + archivedProjects
     const totalProjects = projects.length
 
     // Build sessions and terminal sessions for this user's projects only (support both ObjectId and string projectId)
@@ -36,6 +38,8 @@ export async function GET() {
     const stats = {
       activeProjects: activeProjects || 0,
       completedProjects: completedProjects || 0,
+      archivedProjects: archivedProjects || 0,
+      archivedTabCount: archivedTabCount || 0,
       totalProjects: totalProjects || 0,
       totalBuilds: buildLogs.length || 0,
       terminalSessions: terminalSessions.length || 0,

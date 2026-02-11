@@ -32,10 +32,25 @@ export async function GET(
 
     const client = await clientPromise
     const db = client.db('test')
-    const project = await db.collection('projects').findOne(
+    
+    // Check if this is a sandbox project
+    let project = await db.collection('projects').findOne(
       { _id: new ObjectId(projectId) },
-      { projection: { userId: 1 } }
-    ) as { userId?: unknown } | null
+      { projection: { userId: 1, repository: 1, exportedRepoUrl: 1 } }
+    ) as { userId?: unknown; repository?: { owner: string; name: string }; exportedRepoUrl?: string } | null
+    
+    let isSandbox = false
+    if (!project) {
+      // Try sandbox projects
+      const sandboxProject = await db.collection('sandboxProjects').findOne(
+        { _id: new ObjectId(projectId) },
+        { projection: { userId: 1, repository: 1 } }
+      ) as { userId?: unknown; repository?: { owner: string; name: string } } | null
+      if (sandboxProject) {
+        project = sandboxProject
+        isSandbox = true
+      }
+    }
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
@@ -49,7 +64,10 @@ export async function GET(
     const suggestions: string[] = []
 
     if (target === 'stackblitz') {
-      const filesArray = await getProjectFilesForExport(projectId, { gripOnly: true })
+      // Use appropriate export function based on project type
+      const filesArray = isSandbox
+        ? await (await import('@/lib/services/legalSandboxService')).getLegalSandboxFilesForExport(projectId)
+        : await getProjectFilesForExport(projectId, { gripOnly: true })
       if (!filesArray.length) {
         errors.push('No files to run. Add generated files in Develop (chat) or link a repo.')
         suggestions.push('Use GRIP in Develop to generate code and save files to the project, or connect a GitHub repo.')
@@ -88,7 +106,9 @@ export async function GET(
     }
 
     if (target === 'export') {
-      const filesArray = await getProjectFilesForExport(projectId)
+      const filesArray = isSandbox
+        ? await (await import('@/lib/services/legalSandboxService')).getLegalSandboxFilesForExport(projectId)
+        : await getProjectFilesForExport(projectId)
       if (!filesArray.length) {
         errors.push('No files to export. Add generated files or link a repo.')
         suggestions.push('Use Develop to generate and save files, or connect a GitHub repo.')
@@ -96,11 +116,7 @@ export async function GET(
     }
 
     if (target === 'deploy') {
-      const projectFull = await db.collection('projects').findOne(
-        { _id: new ObjectId(projectId) },
-        { projection: { repository: 1, exportedRepoUrl: 1 } }
-      ) as { repository?: { owner: string; name: string }; exportedRepoUrl?: string } | null
-      if (!projectFull?.repository?.owner && !projectFull?.exportedRepoUrl) {
+      if (!project?.repository?.owner && !('exportedRepoUrl' in project && project.exportedRepoUrl)) {
         errors.push('Deploy requires a linked GitHub repo or an exported repo.')
         suggestions.push('Link a repo in Settings, or use "Export to GitHub" first.')
       }
@@ -118,7 +134,9 @@ export async function GET(
             suggestions: [...suggestions],
             at: new Date().toISOString(),
           }
-      await db.collection('projects').updateOne(
+      // Update the appropriate collection based on project type
+      const collection = isSandbox ? 'sandboxProjects' : 'projects'
+      await db.collection(collection).updateOne(
         { _id: new ObjectId(projectId) },
         { $set: { lastPreflight, updatedAt: new Date() } }
       )

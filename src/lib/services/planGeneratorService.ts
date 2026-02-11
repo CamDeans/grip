@@ -107,10 +107,12 @@ export interface DevelopmentPlan {
   completedAt?: Date
 }
 
+export type GenerateDevelopmentPlanResult = { plan: DevelopmentPlan; totalTokens: number }
+
 /**
  * Generate a development plan for a project
  */
-export async function generateDevelopmentPlan(projectId: string): Promise<DevelopmentPlan> {
+export async function generateDevelopmentPlan(projectId: string): Promise<GenerateDevelopmentPlanResult> {
   try {
     console.log(`Generating development plan for project: ${projectId}`)
     const db = (await clientPromise).db()
@@ -128,8 +130,8 @@ export async function generateDevelopmentPlan(projectId: string): Promise<Develo
     const structure = await getOrCreateProjectStructure(projectId)
     
     // Generate initial plan
-    const plan = await createInitialPlan(projectId, project, structure)
-    
+    const { plan, totalTokens } = await createInitialPlan(projectId, project, structure)
+
     // Add resource requirements
     await addResourceRequirements(plan)
     
@@ -147,12 +149,12 @@ export async function generateDevelopmentPlan(projectId: string): Promise<Develo
     
     // Save plan to database
     const result = await db.collection('developmentPlans').insertOne(plan)
-    
+
     if (!result.insertedId) {
       throw new Error('Failed to save development plan')
     }
-    
-    return { ...plan, _id: result.insertedId }
+
+    return { plan: { ...plan, _id: result.insertedId }, totalTokens }
   } catch (error) {
     console.error('Error generating development plan:', error)
     throw error
@@ -166,8 +168,7 @@ async function createInitialPlan(
   projectId: string,
   project: any,
   structure: IProjectStructureData
-): Promise<DevelopmentPlan> {
-  // Default phases for the development plan
+): Promise<{ plan: DevelopmentPlan; totalTokens: number }> {
   const phases: Phase[] = [
     createPhase('1', 'Setup', 'Project setup and configuration', 0),
     createPhase('2', 'Base Infrastructure', 'Core infrastructure and architecture', 1),
@@ -175,11 +176,10 @@ async function createInitialPlan(
     createPhase('4', 'Testing & Refinement', 'Testing, bug fixing, and refinement', 3),
     createPhase('5', 'Deployment', 'Deployment preparation and launch', 4)
   ]
-  
-  // Add tasks to each phase
-  await addTasksToPhases(phases, project, structure)
-  
-  return {
+
+  const totalTokens = await addTasksToPhases(phases, project, structure)
+
+  const plan: DevelopmentPlan = {
     projectId: new ObjectId(projectId),
     name: `${project.title} Development Plan`,
     description: `Development plan for ${project.title}`,
@@ -188,6 +188,7 @@ async function createInitialPlan(
     createdAt: new Date(),
     updatedAt: new Date()
   }
+  return { plan, totalTokens }
 }
 
 /**
@@ -213,7 +214,7 @@ async function addTasksToPhases(
   phases: Phase[],
   project: any,
   structure: IProjectStructureData
-): Promise<void> {
+): Promise<number> {
   try {
     // Build prompt for AI
     const prompt = `
@@ -276,6 +277,8 @@ For dependencies, use task IDs (e.g., "1.1", "2.3") to reference tasks that must
       temperature: 0.2,
       messages: [{ role: 'user', content: prompt }]
     })
+
+    const totalTokens = (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0)
     
     const content = response?.content?.[0]?.text || '{}'
     
@@ -319,11 +322,11 @@ For dependencies, use task IDs (e.g., "1.1", "2.3") to reference tasks that must
       // Fallback: create default tasks for each phase
       addDefaultTasks(phases)
     }
+    return totalTokens
   } catch (error) {
     console.error('Error adding tasks to phases:', error)
-    
-    // Fallback: create default tasks for each phase
     addDefaultTasks(phases)
+    return 0
   }
 }
 
@@ -518,15 +521,10 @@ export async function getDevelopmentPlan(projectId: string): Promise<Development
  */
 export async function getOrCreateDevelopmentPlan(projectId: string): Promise<DevelopmentPlan> {
   try {
-    // Try to get existing plan
     const existingPlan = await getDevelopmentPlan(projectId)
-    
-    if (existingPlan) {
-      return existingPlan
-    }
-    
-    // Generate new plan if none exists
-    return await generateDevelopmentPlan(projectId)
+    if (existingPlan) return existingPlan
+    const { plan } = await generateDevelopmentPlan(projectId)
+    return plan
   } catch (error) {
     console.error('Error getting or creating development plan:', error)
     throw error

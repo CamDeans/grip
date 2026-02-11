@@ -8,7 +8,11 @@ import { LoadingState } from '../common/LoadingState'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card/Card'
 
-export function RegisterForm() {
+interface RegisterFormProps {
+  callbackUrl?: string
+}
+
+export function RegisterForm({ callbackUrl = '/plans' }: RegisterFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -35,7 +39,7 @@ export function RegisterForm() {
       }
 
       showToast('Account created successfully', 'success')
-      router.push('/login?registered=true')
+      router.push(callbackUrl || '/plans')
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Registration failed', 'error')
     } finally {
@@ -122,7 +126,7 @@ export function RegisterForm() {
 
               <div className="text-sm text-center">
                 <Link
-                  href="/login"
+                  href={callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/login'}
                   className="font-medium text-primary hover:text-primary-hover"
                 >
                   Already have an account? Sign in

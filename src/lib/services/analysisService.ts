@@ -1,6 +1,8 @@
 import { ObjectId } from 'mongodb'
 import { clientPromise } from '../mongodb'
 import { getRepositoryFiles, getOrCloneRepository } from '../repository'
+import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/sandbox/treeSitterAnalysis'
+import { buildTechnicalAnalysisPromptFromIdeation } from '@/lib/sandbox/ideationToTechnicalPrompt'
 
 // Cache configuration
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
@@ -69,6 +71,29 @@ export async function analyzeProject(projectId: string, repository: { owner: str
     const client = await clientPromise;
     const db = client.db();
 
+    // Optional: use project ideation to shape tree-sitter analysis (same as sandbox)
+    let repositoryAnalysis: any | null = null
+    let analysisTokensUsed = 0
+    try {
+      const projectDoc = await db.collection('projects').findOne(
+        { _id: projectObjectId },
+        { projection: { ideation: 1 } }
+      ) as { ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string } } | null
+      const { prompt: technicalPrompt, totalTokens: ideationTokens } = await buildTechnicalAnalysisPromptFromIdeation(projectDoc?.ideation ?? null)
+      analysisTokensUsed += ideationTokens
+      const treeResult = await analyzeRepositoryStructureWithTreeSitter(
+        repository.owner,
+        repository.name,
+        projectId,
+        { technicalPrompt: technicalPrompt || undefined }
+      )
+      const { totalTokens: treeTokens, ...analysisForDb } = treeResult
+      analysisTokensUsed += treeTokens ?? 0
+      repositoryAnalysis = analysisForDb
+    } catch (treeErr) {
+      console.warn('Main analysis: tree-sitter repository analysis failed (falling back to basic structure only):', treeErr)
+    }
+
     try {
       console.log('Creating analysis document...');
       const analysis = await db.collection('analyses').insertOne({
@@ -94,6 +119,8 @@ export async function analyzeProject(projectId: string, repository: { owner: str
           components: [],
           features: []
         },
+        // New: sandbox-style tree-sitter analysis + structured JSON for main GRIP
+        repositoryAnalysis: repositoryAnalysis || undefined,
         metrics: {
           linesOfCode: files.reduce((acc, f) => acc + (f.content?.split('\n').length || 0), 0),
           averageFileSize: files.reduce((acc, f) => acc + (f.content?.length || 0), 0) / files.length,
@@ -121,7 +148,8 @@ export async function analyzeProject(projectId: string, repository: { owner: str
           files: files.map(f => f.path),
           totalFiles: files.length,
           languages: getLanguageStats(files)
-        }
+        },
+        totalTokens: analysisTokensUsed
       };
     } catch (dbError) {
       console.error('=== Analysis Service: Database Error ===');
@@ -152,6 +180,7 @@ export async function analyzeProject(projectId: string, repository: { owner: str
             components: [],
             features: []
           },
+          repositoryAnalysis: repositoryAnalysis || undefined,
           createdAt: new Date(),
           updatedAt: new Date()
         };
@@ -168,7 +197,8 @@ export async function analyzeProject(projectId: string, repository: { owner: str
             files: files.map(f => f.path),
             totalFiles: files.length,
             languages: {}
-          }
+          },
+          totalTokens: analysisTokensUsed
         };
       }
       throw dbError;

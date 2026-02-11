@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
+import { requireAppAccess, requireTokenBalance } from '@/lib/access'
+import { addTokenUsage } from '@/lib/tokenUsage'
 import clientPromise from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { analyzeRepositoryStructure } from '@/lib/analysis'
@@ -13,6 +15,10 @@ export async function POST(
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const accessDenied = await requireAppAccess(session)
+    if (accessDenied) return accessDenied
+    const tokenExhausted = await requireTokenBalance(session)
+    if (tokenExhausted) return tokenExhausted
 
     const { id } = await params
     if (!id || !ObjectId.isValid(id)) {
@@ -28,7 +34,7 @@ export async function POST(
       )
     }
 
-    const analysis = await analyzeRepositoryStructure(
+    const { analysis, totalTokens } = await analyzeRepositoryStructure(
       repository.owner,
       repository.name,
       id
@@ -59,6 +65,12 @@ export async function POST(
         },
       }
     )
+
+    if (totalTokens > 0 && session.user?.id) {
+      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+        console.warn('Project analyze: failed to record token usage', err)
+      )
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

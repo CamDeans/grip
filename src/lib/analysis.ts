@@ -42,24 +42,31 @@ interface GitHubFileContent extends Omit<GitHubContent, 'type' | 'content'> {
   submodule_git_url?: undefined
 }
 
-export async function analyzeRepositoryStructure(owner: string, repo: string, projectId: string) {
+export type AnalyzeRepositoryResult = {
+  analysis: {
+    projectId: string
+    fileCount: number
+    directoryStructure: string[]
+    mainLanguages: Record<string, number>
+    components: unknown[]
+    features: unknown[]
+    fileAnalyses: Array<{ path: string; analysis: string }>
+    projectAnalysis: string
+  }
+  totalTokens: number
+}
+
+export async function analyzeRepositoryStructure(owner: string, repo: string, projectId: string): Promise<AnalyzeRepositoryResult> {
   try {
-    // Get repository content
     const content = await getRepositoryContentServer(owner, repo)
-    
-    // Process files
     const files = Array.isArray(content) ? content : [content]
-    
-    // Filter for file content only
-    const fileContents = files.filter((f): f is GitHubFileContent => 
+    const fileContents = files.filter((f): f is GitHubFileContent =>
       f.type === 'file' && 'encoding' in f && typeof f.content === 'string'
     )
 
-    // Analyze important files (limit to first 5 for performance)
     const fileAnalyses = await Promise.all(
       fileContents
         .filter(f => {
-          // Focus on key files like package.json, tsconfig.json, and main source files
           const isConfigFile = /\.(json|ya?ml|env)$/.test(f.path)
           const isSourceFile = /\.(ts|tsx|js|jsx)$/.test(f.path)
           const isRootFile = !f.path.includes('/')
@@ -69,20 +76,23 @@ export async function analyzeRepositoryStructure(owner: string, repo: string, pr
         .map(async (file) => ({
           path: file.path,
           content: file.content,
-          analysis: await analyzeFile(file.content, file.path)
+          response: await analyzeFile(file.content, file.path)
         }))
     )
 
-    // Generate project-level analysis
-    const projectAnalysis = await generateProjectAnalysis(
+    const projectAnalysisResponse = await generateProjectAnalysis(
       fileAnalyses.map(f => ({
         path: f.path,
         content: f.content,
-        analysis: extractTextFromResponse(f.analysis)
+        analysis: extractTextFromResponse(f.response)
       }))
     )
-    
-    // Build analysis structure
+
+    let totalTokens = (projectAnalysisResponse.usage?.input_tokens ?? 0) + (projectAnalysisResponse.usage?.output_tokens ?? 0)
+    for (const f of fileAnalyses) {
+      totalTokens += (f.response.usage?.input_tokens ?? 0) + (f.response.usage?.output_tokens ?? 0)
+    }
+
     const analysis = {
       projectId,
       fileCount: fileContents.length,
@@ -92,12 +102,12 @@ export async function analyzeRepositoryStructure(owner: string, repo: string, pr
       features: [],
       fileAnalyses: fileAnalyses.map(f => ({
         path: f.path,
-        analysis: extractTextFromResponse(f.analysis)
+        analysis: extractTextFromResponse(f.response)
       })),
-      projectAnalysis: extractTextFromResponse(projectAnalysis)
+      projectAnalysis: extractTextFromResponse(projectAnalysisResponse)
     }
-    
-    return analysis
+
+    return { analysis, totalTokens }
   } catch (error) {
     console.error('Repository analysis error:', error)
     throw new Error('Failed to analyze repository')
@@ -192,7 +202,9 @@ function extractTextFromResponse(response: Anthropic.Message) {
   return ''
 }
 
-export async function generateCodeSuggestions(analysis: string) {
+export type GenerateCodeSuggestionsResult = { suggestions: string; totalTokens: number }
+
+export async function generateCodeSuggestions(analysis: string): Promise<GenerateCodeSuggestionsResult> {
   try {
     const anthropic = getAnthropicClient()
     if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
@@ -215,7 +227,11 @@ export async function generateCodeSuggestions(analysis: string) {
       }]
     })
 
-    return extractTextFromResponse(response)
+    const totalTokens = (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0)
+    return {
+      suggestions: extractTextFromResponse(response),
+      totalTokens
+    }
   } catch (error) {
     console.error('Code suggestions error:', error)
     throw new Error('Failed to generate code suggestions')

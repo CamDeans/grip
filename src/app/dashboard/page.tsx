@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ProjectGrid } from '@/components/projects/ProjectGrid'
 import { GradientTitle } from '@/components/ui/GradientTitle'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui'
 import { Skeleton } from '@/components/ui/skeleton'
+import { toast } from '@/components/ui/use-toast'
+import { Coins } from 'lucide-react'
 import { 
   PlusIcon, 
   ChartBarIcon, 
@@ -22,15 +24,51 @@ import {
 interface DashboardStats {
   activeProjects: number;
   completedProjects: number;
+  archivedTabCount?: number;
   totalBuilds: number;
   terminalSessions: number;
 }
 
+const TIER_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  starter: 'Starter',
+  pro: 'Pro',
+  team: 'Team',
+  valued_tester: 'Valued Tester',
+}
+
 export default function DashboardPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [recentProjects, setRecentProjects] = useState<any[]>([])
+  const [access, setAccess] = useState<{
+    tier?: string
+    tokenAllowance: number
+    tokensUsedThisPeriod: number
+    subscriptionPeriodEnd?: string | null
+    isAdmin?: boolean
+  } | null>(null)
+
+  // Post-payment success: show toast and clean URL
+  useEffect(() => {
+    const sub = searchParams.get('subscription')
+    if (sub === 'success') {
+      toast({
+        title: 'Welcome to GRIP',
+        description: 'Your plan is active. You have full access to chat, code generation, and builds. Check your token usage in the sidebar.',
+      })
+      router.replace('/dashboard', { scroll: false })
+    }
+  }, [searchParams, router])
+
+  useEffect(() => {
+    fetch('/api/me/access')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setAccess(d))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -42,11 +80,14 @@ export default function DashboardPage() {
           setStats(statsData)
         }
 
-        // Fetch recent projects
-        const projectsResponse = await fetch('/api/projects?limit=3&sort=recent')
+        // Fetch recent projects (active only — completed/archived show in Archived tab)
+        const projectsResponse = await fetch('/api/projects?limit=10&sort=recent')
         if (projectsResponse.ok) {
           const projectsData = await projectsResponse.json()
-          setRecentProjects(projectsData.projects || [])
+          const active = (projectsData.projects || []).filter(
+            (p: { status?: string }) => (p.status || 'active') === 'active'
+          )
+          setRecentProjects(active.slice(0, 3))
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error)
@@ -88,12 +129,12 @@ export default function DashboardPage() {
           href="/dashboard/projects"
         />
         <StatCard 
-          title="Completed Projects" 
-          value={stats?.completedProjects} 
+          title="Archived" 
+          value={stats?.archivedTabCount ?? 0} 
           icon={<FolderIcon className="h-5 w-5 text-accent-teal" />} 
           loading={isLoading}
           color="teal"
-          href="/dashboard/projects?status=completed"
+          href="/dashboard/projects?status=archived"
         />
         <StatCard 
           title="Build Sessions" 
@@ -213,6 +254,46 @@ export default function DashboardPage() {
             </div>
           </Card>
           
+          <Card className="mt-6">
+            <div className="px-6 py-5 border-b border-border">
+              <h2 className="text-lg font-medium flex items-center gap-2">
+                <Coins className="h-5 w-5 text-primary" />
+                Plan & token usage
+              </h2>
+            </div>
+            <div className="p-6">
+              {access ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-text-primary">
+                    {TIER_LABELS[access.tier || ''] || access.tier || 'Plan'}
+                  </p>
+                  {(access.tokenAllowance ?? 0) > 0 && (
+                    <>
+                      <p className="text-sm text-text-secondary">
+                        {(access.tokensUsedThisPeriod ?? 0).toLocaleString()} / {(access.tokenAllowance ?? 0).toLocaleString()} tokens this period
+                      </p>
+                      {access.subscriptionPeriodEnd && (
+                        <p className="text-xs text-text-muted">
+                          Resets {new Date(access.subscriptionPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                      )}
+                      <div className="h-2 rounded-full bg-background-tertiary overflow-hidden mt-2">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all"
+                          style={{
+                            width: `${(access.tokenAllowance ?? 0) > 0 ? Math.min(100, Math.round(((access.tokensUsedThisPeriod ?? 0) / (access.tokenAllowance ?? 1)) * 100)) : 0}%`,
+                          }}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <Skeleton className="h-16 w-full" />
+              )}
+            </div>
+          </Card>
+
           <Card className="mt-6">
             <div className="px-6 py-5 border-b border-border">
               <h2 className="text-lg font-medium">Help & Resources</h2>

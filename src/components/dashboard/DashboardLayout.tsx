@@ -23,7 +23,9 @@ import { cn } from '@/lib/client-utils'
 import { QuickSearch } from '../search/QuickSearch'
 import { NotificationsPopover } from '../notifications/NotificationsPopover'
 import { Button } from '@/components/ui'
-import { TerminalIcon } from 'lucide-react'
+import { TerminalIcon, FlaskConical } from 'lucide-react'
+import { AppUpdatesToaster } from '@/components/app/AppUpdatesToaster'
+import { TokenUsage } from '@/components/dashboard/TokenUsage'
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -269,7 +271,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <div>
               {renderNavItems()}
             </div>
-            <div className="mt-auto pt-2 pb-4">
+            <div className="mt-auto pt-2 pb-4 space-y-2">
+              <TokenUsage />
               <div className="px-3 py-2">
                 <p className="text-xs uppercase font-medium text-text-secondary tracking-wider">
                   {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
@@ -325,6 +328,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
 
         {/* Main Content */}
+        <AppUpdatesToaster />
         <main className="flex-1 py-8 min-w-0 overflow-x-hidden">
           <div className="mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl min-w-0 overflow-x-hidden animate-fadeIn">
             {children}
