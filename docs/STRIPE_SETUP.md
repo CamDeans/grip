@@ -2,6 +2,8 @@
 
 Steps to connect Stripe so users can subscribe and get token access. Do these in order.
 
+**API version:** The app pins Stripe to API version **2026-01-28.clover** in `src/lib/stripe.ts` so behavior stays consistent across deployments.
+
 ---
 
 ## 1. Create a Stripe account (if you do not have one)
@@ -78,10 +80,8 @@ In your project, open `.env.local` (or your production env) and set:
 - **STRIPE_PRICE_ID_TEAM**  
   Paste the Price ID for the **$99/month** plan.
 
-Optional (for future client-side Stripe use):
-
-- **NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY**  
-  Paste the **Publishable key** (pk_live_... or pk_test_...).
+**Production: do not set the publishable key as a public env var.**  
+GRIP uses **server-only** Stripe Checkout (your server creates a session and redirects the user). The app does **not** use the publishable key in the browser. In production (e.g. on Vercel), **do not** add `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`. Vercel will warn that `NEXT_PUBLIC_*` can expose data; for this key it would be redundant and trigger that warning. If you later add client-side Stripe.js (e.g. Stripe Elements), you can expose the publishable key via a **server API route** that returns it to the front end instead of putting it in a `NEXT_PUBLIC_` variable.
 
 Do not commit these values to git. Keep `.env.local` in `.gitignore`. On your host (e.g. Vercel), add the same variable names and values in the project’s environment settings.
 

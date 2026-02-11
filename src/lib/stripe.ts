@@ -1,7 +1,10 @@
 import Stripe from 'stripe'
 
+/** Pin to Stripe API version 2026-01-28.clover for consistent behavior. */
+const STRIPE_API_VERSION = '2026-01-28.clover' as const
+
 export const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY)
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION })
   : null
 
 export const TIERS = [
