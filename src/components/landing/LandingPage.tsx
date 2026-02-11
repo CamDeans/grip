@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { Button } from '@/components/ui/Button'
 import {
   MessageSquare,
   FolderGit2,
@@ -150,14 +149,23 @@ export function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <span className="text-xl font-bold text-primary">G.R.I.P.</span>
           <div className="flex items-center gap-3">
-            <Link href="/admin/login">
-              <Button variant="ghost" size="sm">Sign in as admin</Button>
+            <Link
+              href="/admin/login"
+              className="inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+            >
+              Sign in as admin
             </Link>
-            <Link href="/login?callbackUrl=%2Fdashboard">
-              <Button variant="ghost" size="sm">Sign in</Button>
+            <Link
+              href="/login"
+              className="inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+            >
+              Sign in
             </Link>
-            <Link href="/get-started">
-              <Button size="sm">Get started</Button>
+            <Link
+              href="/get-started"
+              className="inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium bg-primary text-primary-foreground shadow hover:bg-primary-hover"
+            >
+              Get started
             </Link>
           </div>
         </div>
@@ -186,21 +194,24 @@ export function LandingPage() {
             New here? Create your account first, then sign in and choose a plan to pay via Stripe. We’ll guide you through each step.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link href="/get-started">
-              <Button size="lg" className="gap-2">
-                Get started
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+            <Link
+              href="/get-started"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-md px-8 text-base font-medium bg-primary text-primary-foreground shadow hover:bg-primary-hover"
+            >
+              Get started
+              <ChevronRight className="h-4 w-4" />
             </Link>
-            <Link href="/login?callbackUrl=%2Fdashboard">
-              <Button variant="outline" size="lg">
-                Sign in
-              </Button>
+            <Link
+              href="/login"
+              className="inline-flex h-11 items-center justify-center rounded-md border border-border px-8 text-base font-medium hover:bg-background-hover"
+            >
+              Sign in
             </Link>
-            <Link href="#pricing">
-              <Button variant="outline" size="lg">
-                Pricing
-              </Button>
+            <Link
+              href="#pricing"
+              className="inline-flex h-11 items-center justify-center rounded-md border border-border px-8 text-base font-medium hover:bg-background-hover"
+            >
+              Pricing
             </Link>
           </div>
         </section>
@@ -247,9 +258,6 @@ export function LandingPage() {
                 <p className="text-sm text-text-muted">
                   Light use, side projects. Enough for regular chat and code generation without worrying about limits.
                 </p>
-                <Link href="/get-started" className="mt-4 inline-block">
-                  <Button variant="outline" size="sm" className="w-full">Get started</Button>
-                </Link>
               </div>
               <div className="p-6 rounded-xl border-2 border-primary bg-primary/10 relative">
                 <div className="absolute -top-2.5 left-4 px-2 py-0.5 bg-primary text-primary-foreground text-xs font-semibold rounded">Popular</div>
@@ -262,9 +270,6 @@ export function LandingPage() {
                 <p className="text-sm text-text-muted">
                   Serious builders, daily use. Four times the tokens for heavy development and multiple projects.
                 </p>
-                <Link href="/get-started" className="mt-4 inline-block">
-                  <Button size="sm" className="w-full">Get started</Button>
-                </Link>
               </div>
               <div className="p-6 rounded-xl border-2 border-border bg-background-primary hover:border-primary/40 transition-colors">
                 <div className="flex items-center gap-2 mb-4">
@@ -276,14 +281,20 @@ export function LandingPage() {
                 <p className="text-sm text-text-muted">
                   Small teams, heavy usage. Maximum allowance for shipping multiple apps and experiments.
                 </p>
-                <Link href="/get-started" className="mt-4 inline-block">
-                  <Button variant="outline" size="sm" className="w-full">Get started</Button>
-                </Link>
               </div>
             </div>
             <p className="text-center text-sm text-text-muted mt-6 max-w-xl mx-auto">
               Create your account and sign in first; then you’ll choose a plan and pay via Stripe. Your token allowance is used for all GRIP AI actions (chat, code gen, builds). No hidden fees.
             </p>
+            <div className="text-center mt-6">
+              <Link
+                href="/get-started"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-md px-8 text-base font-medium bg-primary text-primary-foreground shadow hover:bg-primary-hover"
+              >
+                Get started
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -332,11 +343,8 @@ export function LandingPage() {
               ))}
             </div>
             <div className="text-center mt-12">
-              <Link href="/get-started">
-                <Button size="lg" className="gap-2">
-                  Get started
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+              <Link href="#pricing" className="inline-flex h-11 items-center justify-center rounded-md border border-border px-8 text-base font-medium hover:bg-background-hover">
+                See pricing
               </Link>
             </div>
           </div>
@@ -376,11 +384,8 @@ export function LandingPage() {
               })}
             </div>
             <div className="text-center">
-              <Link href="/get-started">
-                <Button size="lg" className="gap-2">
-                  Get started
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+              <Link href="#pricing" className="inline-flex h-11 items-center justify-center rounded-md border border-border px-8 text-base font-medium hover:bg-background-hover">
+                See pricing
               </Link>
             </div>
           </div>
@@ -406,11 +411,8 @@ export function LandingPage() {
               ))}
             </div>
             <div className="text-center mt-8">
-              <Link href="/get-started">
-                <Button size="lg" className="gap-2">
-                  Get started
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+              <Link href="#pricing" className="inline-flex h-11 items-center justify-center rounded-md border border-border px-8 text-base font-medium hover:bg-background-hover">
+                See pricing
               </Link>
             </div>
           </div>
@@ -507,16 +509,18 @@ export function LandingPage() {
               New? Get started and we'll guide you through account, sign-in, and plan. Already have an account? Sign in to go to your dashboard. We’ll guide you through each step.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-4">
-              <Link href="/get-started">
-                <Button size="lg" className="gap-2">
-                  Get started
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+              <Link
+                href="/get-started"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-md px-8 text-base font-medium bg-primary text-primary-foreground shadow hover:bg-primary-hover"
+              >
+                Get started
+                <ChevronRight className="h-4 w-4" />
               </Link>
-              <Link href="/login?callbackUrl=%2Fdashboard">
-                <Button variant="outline" size="lg">
-                  Sign in
-                </Button>
+              <Link
+                href="/login"
+                className="inline-flex h-11 items-center justify-center rounded-md border border-border px-8 text-base font-medium hover:bg-background-hover"
+              >
+                Sign in
               </Link>
             </div>
           </div>
