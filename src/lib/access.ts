@@ -25,11 +25,19 @@ function endOfCurrentMonth(): Date {
   return d
 }
 
+/** Return ObjectId if id is a valid 24-char hex string; otherwise null (avoids throw). */
+function safeObjectId(id: string | undefined): ObjectId | null {
+  if (id == null || typeof id !== 'string') return null
+  if (!/^[a-fA-F0-9]{24}$/.test(id)) return null
+  return new ObjectId(id)
+}
+
 /**
  * Resolve whether the user has access to the main GRIP app (dashboard, projects, chat).
  * - Admin (ADMIN_EMAILS or user.role/admin): full access, no payment required.
  * - Active subscription: hasAccess, tier and token fields from user.
  * - Valued tester (in valued_testers): hasAccess, token allowance 50/month; syncs user document for usage tracking.
+ * Never throws: on any error returns defaultDeny so the user can be redirected to /plans (e.g. Stripe checkout).
  */
 export async function getAppAccess(session: Session | null): Promise<AppAccess> {
   const defaultDeny: AppAccess = {
@@ -41,14 +49,18 @@ export async function getAppAccess(session: Session | null): Promise<AppAccess> 
 
   if (!session?.user?.id) return defaultDeny
 
-  const client = await clientPromise
-  const db = client.db(process.env.MONGODB_DB_NAME || 'test')
   const userId = session.user.id
-  const email = (session.user.email || '').trim().toLowerCase()
+  const oid = safeObjectId(userId)
+  if (!oid) return defaultDeny
 
-  const user = await db.collection('users').findOne(
-    { _id: new ObjectId(userId) }
-  ) as {
+  try {
+    const client = await clientPromise
+    const db = client.db(process.env.MONGODB_DB_NAME || 'test')
+    const email = (session.user.email || '').trim().toLowerCase()
+
+    const user = await db.collection('users').findOne(
+      { _id: oid }
+    ) as {
     stripeSubscriptionId?: string
     tier?: string
     tokenAllowance?: number
@@ -69,7 +81,7 @@ export async function getAppAccess(session: Session | null): Promise<AppAccess> 
     if (user && (needReset || !user.tokenAllowance || allowanceMismatch)) {
       const newEnd = endOfCurrentMonth()
       await db.collection('users').updateOne(
-        { _id: new ObjectId(userId) },
+        { _id: oid },
         {
           $set: {
             tokenAllowance: allowance,
@@ -80,7 +92,7 @@ export async function getAppAccess(session: Session | null): Promise<AppAccess> 
         }
       )
     }
-    const updated = await db.collection('users').findOne({ _id: new ObjectId(userId) }) as {
+    const updated = await db.collection('users').findOne({ _id: oid }) as {
       tokenAllowance?: number
       tokensUsedThisPeriod?: number
       subscriptionPeriodEnd?: Date
@@ -134,7 +146,7 @@ export async function getAppAccess(session: Session | null): Promise<AppAccess> 
       if (needReset && user) {
         const newEnd = endOfCurrentMonth()
         await db.collection('users').updateOne(
-          { _id: new ObjectId(userId) },
+          { _id: oid },
           {
             $set: {
               tokensUsedThisPeriod: 0,
@@ -147,7 +159,7 @@ export async function getAppAccess(session: Session | null): Promise<AppAccess> 
       } else if (!user?.tokenAllowance && user) {
         const newEnd = endOfCurrentMonth()
         await db.collection('users').updateOne(
-          { _id: new ObjectId(userId) },
+          { _id: oid },
           {
             $set: {
               tokenAllowance: allowance,
@@ -160,7 +172,7 @@ export async function getAppAccess(session: Session | null): Promise<AppAccess> 
       }
 
       const updated = await db.collection('users').findOne(
-        { _id: new ObjectId(userId) }
+        { _id: oid }
       ) as { tokenAllowance?: number; tokensUsedThisPeriod?: number; subscriptionPeriodEnd?: Date } | null
       const end = updated?.subscriptionPeriodEnd
         ? new Date(updated.subscriptionPeriodEnd)
@@ -178,7 +190,13 @@ export async function getAppAccess(session: Session | null): Promise<AppAccess> 
     }
   }
 
-  return defaultDeny
+    return defaultDeny
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[getAppAccess]', err)
+    }
+    return defaultDeny
+  }
 }
 
 /**

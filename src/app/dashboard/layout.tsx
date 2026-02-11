@@ -12,7 +12,12 @@ export default async function DashboardRootLayout({
   const session = await getServerAuthSession()
   if (!session) redirect('/login')
   if (isAdminUser(session)) return <DashboardLayoutClient>{children}</DashboardLayoutClient>
-  const access = await getAppAccess(session)
-  if (!access.hasAccess) redirect('/plans')
+  let access
+  try {
+    access = await getAppAccess(session)
+  } catch {
+    redirect('/plans')
+  }
+  if (!access!.hasAccess) redirect('/plans')
   return <DashboardLayoutClient>{children}</DashboardLayoutClient>
 }

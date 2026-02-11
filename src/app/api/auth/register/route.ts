@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     }
 
     const client = await clientPromise
-    const db = client.db()
+    const db = client.db(process.env.MONGODB_DB_NAME || 'test')
 
     // Check if user already exists
     const existingUser = await db.collection('users').findOne({ email })
