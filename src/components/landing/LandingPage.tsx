@@ -153,7 +153,7 @@ export function LandingPage() {
             <Link href="/admin/login">
               <Button variant="ghost" size="sm">Sign in as admin</Button>
             </Link>
-            <Link href="/login">
+            <Link href="/login?callbackUrl=%2Fdashboard">
               <Button variant="ghost" size="sm">Sign in</Button>
             </Link>
             <Link href="/get-started">
@@ -192,14 +192,14 @@ export function LandingPage() {
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </Link>
-            <Link href="#pricing">
+            <Link href="/login?callbackUrl=%2Fdashboard">
               <Button variant="outline" size="lg">
-                See plans & pricing
+                Sign in
               </Button>
             </Link>
-            <Link href="#how-it-works">
+            <Link href="#pricing">
               <Button variant="outline" size="lg">
-                See the flow
+                Pricing
               </Button>
             </Link>
           </div>
@@ -284,14 +284,6 @@ export function LandingPage() {
             <p className="text-center text-sm text-text-muted mt-6 max-w-xl mx-auto">
               Create your account and sign in first; then you’ll choose a plan and pay via Stripe. Your token allowance is used for all GRIP AI actions (chat, code gen, builds). No hidden fees.
             </p>
-            <div className="text-center mt-6">
-              <Link href="/get-started">
-                <Button size="lg" className="gap-2">
-                  Get started — create account, then choose plan
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </Link>
-            </div>
           </div>
         </section>
 
@@ -340,9 +332,9 @@ export function LandingPage() {
               ))}
             </div>
             <div className="text-center mt-12">
-              <Link href="#pricing">
+              <Link href="/get-started">
                 <Button size="lg" className="gap-2">
-                  See plans & pricing
+                  Get started
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </Link>
@@ -384,9 +376,9 @@ export function LandingPage() {
               })}
             </div>
             <div className="text-center">
-              <Link href="#pricing">
+              <Link href="/get-started">
                 <Button size="lg" className="gap-2">
-                  See plans
+                  Get started
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </Link>
@@ -414,9 +406,9 @@ export function LandingPage() {
               ))}
             </div>
             <div className="text-center mt-8">
-              <Link href="#pricing">
+              <Link href="/get-started">
                 <Button size="lg" className="gap-2">
-                  Choose a plan
+                  Get started
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </Link>
@@ -512,7 +504,7 @@ export function LandingPage() {
               Create a project, link a repo for reference, and chat with GRIP to generate new code and turn your idea into a runnable app. Experiment safely in sandbox playgrounds. Choose a paid plan—your token allowance covers all AI usage so you can ship without surprises.
             </p>
             <p className="text-sm text-text-muted mb-6 max-w-lg mx-auto">
-              Step 1: Create your account. Step 2: Sign in. Step 3: Choose a plan and pay via Stripe. We’ll guide you through each step.
+              New? Get started and we'll guide you through account, sign-in, and plan. Already have an account? Sign in to go to your dashboard. We’ll guide you through each step.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-4">
               <Link href="/get-started">
@@ -521,14 +513,9 @@ export function LandingPage() {
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/login">
+              <Link href="/login?callbackUrl=%2Fdashboard">
                 <Button variant="outline" size="lg">
                   Sign in
-                </Button>
-              </Link>
-              <Link href="#pricing">
-                <Button variant="outline" size="lg">
-                  See plans & pricing
                 </Button>
               </Link>
             </div>
