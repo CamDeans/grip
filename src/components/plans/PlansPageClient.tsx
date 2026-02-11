@@ -43,6 +43,9 @@ export function PlansPageClient() {
         <div className="text-center mb-12">
           <h1 className="logo text-3xl sm:text-4xl mb-2">G.R.I.P.</h1>
           <p className="text-text-secondary mb-2">Choose a plan to access the app</p>
+          <p className="text-sm text-text-muted max-w-xl mx-auto mb-2">
+            You're signed in. Pick a plan below and click Subscribe—you'll complete payment securely via Stripe, then land in your dashboard with full access.
+          </p>
           <p className="text-sm text-text-muted max-w-xl mx-auto">
             Your subscription includes a monthly token allowance for chat, code generation, and builds. Tokens reset each billing cycle.
           </p>

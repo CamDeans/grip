@@ -14,7 +14,9 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
+  const rawCallback = searchParams.get('callbackUrl')
+  const callbackUrl = rawCallback || '/dashboard'
+  const isPlansFlow = rawCallback === '/plans' || decodeURIComponent(rawCallback || '') === '/plans'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,6 +51,14 @@ export function LoginForm() {
           <p className="text-sm text-text-secondary mt-1">
             Your AI development partner for turning ideas into runnable products
           </p>
+          {isPlansFlow && (
+            <div className="mt-4 p-3 rounded-lg border border-primary/30 bg-primary/5 text-left max-w-sm mx-auto">
+              <p className="text-xs font-medium text-text-primary mb-1">Choosing a plan?</p>
+              <p className="text-xs text-text-secondary">
+                Sign in here. After that you'll go to the plans page to pick Starter, Pro, or Team and complete payment via Stripe. New? Create an account first, then come back to sign in.
+              </p>
+            </div>
+          )}
         </div>
 
         <Card className="border-border shadow-md">
@@ -57,7 +67,9 @@ export function LoginForm() {
               Sign in
             </CardTitle>
             <CardDescription className="text-text-secondary">
-              Use your email or continue with GitHub.
+              {isPlansFlow
+                ? 'Sign in to continue to the plans page and subscribe.'
+                : 'Use your email or continue with GitHub.'}
             </CardDescription>
           </CardHeader>
           <CardContent>

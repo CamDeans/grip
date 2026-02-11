@@ -38,8 +38,12 @@ export function RegisterForm({ callbackUrl = '/plans' }: RegisterFormProps) {
         throw new Error(data.error || 'Registration failed')
       }
 
-      showToast('Account created successfully', 'success')
-      router.push(callbackUrl || '/plans')
+      showToast('Account created successfully. Sign in to continue to your plan.', 'success')
+      if (callbackUrl && callbackUrl.includes('plans')) {
+        router.push('/login?callbackUrl=%2Fplans')
+      } else {
+        router.push(callbackUrl || '/dashboard')
+      }
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Registration failed', 'error')
     } finally {
@@ -62,6 +66,11 @@ export function RegisterForm({ callbackUrl = '/plans' }: RegisterFormProps) {
           <p className="text-sm text-text-secondary mt-1">
             Get started with G.R.I.P. and build your next project
           </p>
+          {callbackUrl && callbackUrl.includes('plans') && (
+            <p className="text-xs text-text-muted mt-3 max-w-sm mx-auto">
+              Step 1 of 3: Create your account. Next you'll sign in, then choose a plan and pay via Stripe.
+            </p>
+          )}
         </div>
         <Card className="border-border shadow-md">
           <CardHeader className="pb-4">
@@ -69,7 +78,9 @@ export function RegisterForm({ callbackUrl = '/plans' }: RegisterFormProps) {
               Sign up
             </CardTitle>
             <CardDescription className="text-text-secondary">
-              Enter your details to create an account.
+              {callbackUrl && callbackUrl.includes('plans')
+                ? 'Enter your details. After this you\'ll sign in and then choose your plan.'
+                : 'Enter your details to create an account.'}
             </CardDescription>
           </CardHeader>
           <CardContent>

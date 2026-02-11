@@ -156,7 +156,7 @@ export function LandingPage() {
             <Link href="/login">
               <Button variant="ghost" size="sm">Sign in</Button>
             </Link>
-            <Link href="/plans">
+            <Link href="/get-started">
               <Button size="sm">Get started</Button>
             </Link>
           </div>
@@ -179,11 +179,14 @@ export function LandingPage() {
           <p className="text-sm text-text-muted max-w-xl mx-auto mb-10">
             Create projects, link repos for reference, chat with GRIP to generate new code that's automatically saved, experiment safely in sandbox playgrounds, watch builds run automatically, preview in StackBlitz, and export or deploy. Built for developers and makers who want to move fast.
           </p>
-          <p className="text-xs text-text-muted max-w-lg mx-auto mb-6">
+          <p className="text-xs text-text-muted max-w-lg mx-auto mb-2">
             Paid plans only—no freemium. Your subscription covers real AI usage so you get predictable pricing and enough tokens to ship.
           </p>
+          <p className="text-xs text-text-muted max-w-lg mx-auto mb-6">
+            New here? Create your account first, then sign in and choose a plan to pay via Stripe. We’ll guide you through each step.
+          </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link href="/register">
+            <Link href="/get-started">
               <Button size="lg" className="gap-2">
                 Get started
                 <ChevronRight className="h-4 w-4" />
@@ -244,7 +247,7 @@ export function LandingPage() {
                 <p className="text-sm text-text-muted">
                   Light use, side projects. Enough for regular chat and code generation without worrying about limits.
                 </p>
-                <Link href="/plans" className="mt-4 inline-block">
+                <Link href="/get-started" className="mt-4 inline-block">
                   <Button variant="outline" size="sm" className="w-full">Get started</Button>
                 </Link>
               </div>
@@ -259,7 +262,7 @@ export function LandingPage() {
                 <p className="text-sm text-text-muted">
                   Serious builders, daily use. Four times the tokens for heavy development and multiple projects.
                 </p>
-                <Link href="/plans" className="mt-4 inline-block">
+                <Link href="/get-started" className="mt-4 inline-block">
                   <Button size="sm" className="w-full">Get started</Button>
                 </Link>
               </div>
@@ -273,18 +276,18 @@ export function LandingPage() {
                 <p className="text-sm text-text-muted">
                   Small teams, heavy usage. Maximum allowance for shipping multiple apps and experiments.
                 </p>
-                <Link href="/plans" className="mt-4 inline-block">
+                <Link href="/get-started" className="mt-4 inline-block">
                   <Button variant="outline" size="sm" className="w-full">Get started</Button>
                 </Link>
               </div>
             </div>
             <p className="text-center text-sm text-text-muted mt-6 max-w-xl mx-auto">
-              After signup you’ll choose a plan and pay via Stripe. Your token allowance is used for all GRIP AI actions (chat, code gen, builds). No hidden fees.
+              Create your account and sign in first; then you’ll choose a plan and pay via Stripe. Your token allowance is used for all GRIP AI actions (chat, code gen, builds). No hidden fees.
             </p>
             <div className="text-center mt-6">
-              <Link href="/plans">
+              <Link href="/get-started">
                 <Button size="lg" className="gap-2">
-                  Choose a plan
+                  Get started — create account, then choose plan
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </Link>
@@ -508,21 +511,24 @@ export function LandingPage() {
             <p className="text-text-secondary mb-8">
               Create a project, link a repo for reference, and chat with GRIP to generate new code and turn your idea into a runnable app. Experiment safely in sandbox playgrounds. Choose a paid plan—your token allowance covers all AI usage so you can ship without surprises.
             </p>
+            <p className="text-sm text-text-muted mb-6 max-w-lg mx-auto">
+              Step 1: Create your account. Step 2: Sign in. Step 3: Choose a plan and pay via Stripe. We’ll guide you through each step.
+            </p>
             <div className="flex flex-wrap items-center justify-center gap-4">
-              <Link href="#pricing">
+              <Link href="/get-started">
                 <Button size="lg" className="gap-2">
-                  See plans & pricing
+                  Get started
                   <ChevronRight className="h-4 w-4" />
-                </Button>
-              </Link>
-              <Link href="/plans">
-                <Button variant="outline" size="lg">
-                  Subscribe
                 </Button>
               </Link>
               <Link href="/login">
                 <Button variant="outline" size="lg">
                   Sign in
+                </Button>
+              </Link>
+              <Link href="#pricing">
+                <Button variant="outline" size="lg">
+                  See plans & pricing
                 </Button>
               </Link>
             </div>
