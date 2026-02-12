@@ -129,7 +129,7 @@ export async function PATCH(
   }
 }
 
-/** DELETE /api/projects/[id] - Permanently delete project */
+/** DELETE /api/projects/[id] - Permanently delete project or sandbox experiment */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -143,18 +143,44 @@ export async function DELETE(
       return new NextResponse(JSON.stringify({ error: 'Not authenticated' }), { status: 401 })
     }
 
-    const project = await db.collection('projects').findOne({ _id: new ObjectId(id) })
-    if (!project) {
-      return new NextResponse(JSON.stringify({ error: 'Project not found' }), { status: 404 })
-    }
-    const projectUserId = (project as { userId?: string | { toString(): string } }).userId
-    const projectUserIdStr = projectUserId != null ? (typeof projectUserId === 'object' && 'toString' in projectUserId ? projectUserId.toString() : String(projectUserId)) : null
-    if (projectUserIdStr && projectUserIdStr !== userId) {
-      return new NextResponse(JSON.stringify({ error: 'Forbidden' }), { status: 403 })
+    const oid = new ObjectId(id)
+
+    // 1. Try main project first
+    const project = await db.collection('projects').findOne({ _id: oid })
+    if (project) {
+      const projectUserId = (project as { userId?: string | { toString(): string } }).userId
+      const projectUserIdStr = projectUserId != null ? (typeof projectUserId === 'object' && 'toString' in projectUserId ? projectUserId.toString() : String(projectUserId)) : null
+      if (projectUserIdStr && projectUserIdStr !== userId) {
+        return new NextResponse(JSON.stringify({ error: 'Forbidden' }), { status: 403 })
+      }
+      await db.collection('projectFiles').deleteMany({ $or: [{ projectId: oid }, { projectId: id }] })
+      await db.collection('projectStates').deleteMany({ projectId: oid })
+      await db.collection('chatHistory').deleteMany({ $or: [{ projectId: oid }, { projectId: id }] })
+      await db.collection('developmentPlans').deleteMany({ projectId: oid })
+      await db.collection('planMetadata').deleteMany({ projectId: oid })
+      await db.collection('planBackups').deleteMany({ projectId: oid })
+      await db.collection('projectStructures').deleteMany({ projectId: oid })
+      await db.collection('sandboxProjects').deleteMany({ parentProjectId: oid })
+      await db.collection('projects').deleteOne({ _id: oid })
+      return NextResponse.json({ success: true, message: 'Project deleted' })
     }
 
-    await db.collection('projects').deleteOne({ _id: new ObjectId(id) })
-    return NextResponse.json({ success: true, message: 'Project deleted' })
+    // 2. Try sandbox experiment
+    const sandboxProject = await db.collection('sandboxProjects').findOne({ _id: oid })
+    if (sandboxProject) {
+      const sandboxUserId = (sandboxProject as { userId?: string }).userId
+      if (sandboxUserId && sandboxUserId !== userId) {
+        return new NextResponse(JSON.stringify({ error: 'Forbidden' }), { status: 403 })
+      }
+      await db.collection('legalSandboxFiles').deleteMany({ projectId: oid })
+      await db.collection('sandboxChatHistory').deleteMany({ projectId: oid })
+      await db.collection('sandboxAnalyses').deleteMany({ projectId: oid })
+      await db.collection('legalSandboxPlans').deleteMany({ projectId: oid })
+      await db.collection('sandboxProjects').deleteOne({ _id: oid })
+      return NextResponse.json({ success: true, message: 'Sandbox experiment deleted' })
+    }
+
+    return new NextResponse(JSON.stringify({ error: 'Project not found' }), { status: 404 })
   } catch (error: unknown) {
     console.error('Error deleting project:', error)
     return new NextResponse(

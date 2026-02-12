@@ -197,14 +197,16 @@ This project has sandbox experiments (isolated builds for testing). The user can
     prompt += `\n- **Plan-generated files** (from the project plan) are required for the build. Use them and elaborate on them (implement, wire up, extend). If the build needs more files than the plan lists, add those files and reference them so the user gets the best outcome.\n\n`
   }
 
-  // Current build progress (tracked from user saves and chat) — keep GRIP and user aligned
+  // Current build progress (tracked from user saves and chat) — phase-level work, one run per phase
   if (projectStateContext?.phases?.length) {
-    prompt += `\n## GRIP works only on phases — always route back to Overview for next steps\n`
-    prompt += `- You work ONLY on the current phase. Do not suggest or implement work for future phases until the user has returned to the Overview page and confirmed the current phase is done.\n`
-    prompt += `- When you and the user agree that the current phase is complete (all steps done), you MUST route the user back to the project Overview page for next steps and realignment. Say clearly: "Phase [name] is complete. Return to the Overview page to review the phases and confirm. Then you can start the next phase from there so we stay in sync." Do not start the next phase in chat until the user has returned to Overview and indicated they are ready.\n`
-    prompt += `- This keeps both you and the user aligned: the Overview page is the single place for realignment before the next phase.\n\n`
+    prompt += `\n## CRITICAL: Work by full phase — one response per phase, build until success\n`
+    prompt += `- You MUST complete the **entire current phase** in **one response**: output ALL code blocks and files needed for the current phase in a single message. Do NOT split the phase into multiple back-and-forth steps (e.g. one message for package.json, another for App.tsx). Output everything for the current phase at once so we run the automated build once per phase and minimize token usage.\n`
+    prompt += `- The system will apply your code blocks and run the build automatically. We will **run the build until it succeeds** for this phase (retries with fixes if needed). Do NOT consider the phase complete until you see or we report "We ran the build; it succeeded." Only then say the phase is done and direct the user to the Overview for the next phase.\n`
+    prompt += `- In **every response** you MUST report clearly: (1) **What you worked on** — list the files you created or updated and what each does; (2) **Phase and steps done** — which phase (e.g. "Phase 1: Setup") and which steps in it are now complete; (3) **What is left** — remaining steps in this phase (if any) or "This phase is complete; next is Phase N: [name]." so the user knows exactly where things stand.\n`
+    prompt += `- If there are 5 phases, the user should see roughly **5 build runs in chat** (one per phase completion), not many small runs. Complete each phase in one go, then we run build until success, then you summarize and direct to Overview for the next phase.\n`
+    prompt += `- When the current phase is complete (build succeeded), you MUST route the user back: "Phase [name] is complete. Return to the Overview page to review and confirm, then start the next phase from there." Do not start the next phase in chat until the user has returned to Overview.\n\n`
     prompt += `## Current build progress (tracked from user saves and chat)\n`
-    prompt += `Use this to stay aligned with what the user has actually completed. Do not suggest steps that are already completed.\n`
+    prompt += `Use this to stay aligned. Do not repeat work for steps already completed.\n`
     prompt += `Current phase: ${projectStateContext.currentPhase || '—'}\n\n`
     projectStateContext.phases.forEach((phase) => {
       prompt += `### ${phase.name} (${phase.status})\n`

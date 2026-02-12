@@ -18,6 +18,7 @@ export interface Project {
   language?: string
   languageColor?: string
   status?: 'active' | 'completed' | 'archived'
+  isSandbox?: boolean
 }
 
 const sampleProject = {
@@ -37,9 +38,10 @@ const sampleProject = {
 interface ProjectGridProps {
   columns?: 1 | 2 | 3 | 4
   projects?: Project[]
+  onDelete?: (projectId: string) => void
 }
 
-export function ProjectGrid({ columns = 3, projects: projectsProp }: ProjectGridProps) {
+export function ProjectGrid({ columns = 3, projects: projectsProp, onDelete }: ProjectGridProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [isLoading, setIsLoading] = useState(!projectsProp)
   const { data: session } = useSession()
@@ -93,7 +95,7 @@ export function ProjectGrid({ columns = 3, projects: projectsProp }: ProjectGrid
   return (
     <DashboardGrid columns={columns}>
       {projects.map((project) => (
-        <ProjectCard key={project._id} {...project} />
+        <ProjectCard key={project._id} {...project} isSandbox={project.isSandbox} onDelete={onDelete} />
       ))}
     </DashboardGrid>
   )

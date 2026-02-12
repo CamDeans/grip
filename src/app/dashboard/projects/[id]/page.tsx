@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui'
-import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, ChevronDown, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle, Plus, RefreshCw } from 'lucide-react'
+import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, ChevronDown, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { toast as sonnerToast } from 'sonner'
 import Link from 'next/link'
@@ -587,6 +587,28 @@ export default function ProjectOverviewPage() {
                           <ChevronRight className="w-4 h-4 ml-1" />
                         </Button>
                       </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={async () => {
+                          if (!confirm(`Permanently delete the experiment "${sandbox.title}" and all its data? This cannot be undone.`)) return
+                          try {
+                            const res = await fetch(`/api/projects/${sandbox._id}`, { method: 'DELETE' })
+                            if (!res.ok) {
+                              const data = await res.json().catch(() => ({}))
+                              throw new Error(data.error || 'Delete failed')
+                            }
+                            sonnerToast.success('Experiment deleted')
+                            setSandboxes(prev => prev.filter(s => s._id !== sandbox._id))
+                          } catch (e) {
+                            sonnerToast.error(e instanceof Error ? e.message : 'Failed to delete experiment')
+                          }
+                        }}
+                        aria-label="Delete experiment"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
                 ))}

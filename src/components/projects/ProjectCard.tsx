@@ -6,6 +6,7 @@ import {
   FolderIcon, 
   ClockIcon,
   ChatBubbleLeftIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline'
 import { GradientTitle } from '@/components/ui/GradientTitle'
 
@@ -22,6 +23,8 @@ interface ProjectCardProps {
   language?: string
   languageColor?: string
   status?: 'active' | 'completed' | 'archived'
+  isSandbox?: boolean
+  onDelete?: (projectId: string) => void
 }
 
 const statusStyles: Record<string, string> = {
@@ -39,9 +42,20 @@ export function ProjectCard({
   language,
   languageColor = '#4c6ef5',
   status = 'active',
+  isSandbox = false,
+  onDelete,
 }: ProjectCardProps) {
   const isSampleProject = _id === 'sample'
   const href = `/dashboard/projects/${_id}`
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!onDelete || isSampleProject) return
+    const label = isSandbox ? 'sandbox experiment' : 'project'
+    if (!confirm(`Permanently delete this ${label} and all its data? This cannot be undone.`)) return
+    onDelete(_id)
+  }
 
   const cardContent = (
     <>
@@ -59,12 +73,27 @@ export function ProjectCard({
                     {status}
                   </span>
                 )}
+                {isSandbox && (
+                  <span className="text-xs font-medium rounded-full px-2 py-0.5 border shrink-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20">
+                    Experiment
+                  </span>
+                )}
               </div>
               <p className="mt-1 text-sm text-text-secondary line-clamp-2 break-words">
                 {description}
               </p>
             </div>
           </div>
+          {!isSampleProject && onDelete && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="shrink-0 p-2 rounded-md text-text-muted hover:text-destructive hover:bg-destructive/10 transition-colors"
+              aria-label={isSandbox ? 'Delete experiment' : 'Delete project'}
+            >
+              <TrashIcon className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">

@@ -219,7 +219,21 @@ export default function ProjectsPage() {
               language: project.language || 'TypeScript',
               languageColor: project.languageColor || '#3178c6',
               status: (project.status || 'active') as 'active' | 'completed' | 'archived',
+              isSandbox: (project as { isSandbox?: boolean }).isSandbox,
             } as ProjectGridProject))} 
+            onDelete={async (projectId) => {
+              try {
+                const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' })
+                if (!res.ok) {
+                  const data = await res.json().catch(() => ({}))
+                  throw new Error(data.error || 'Delete failed')
+                }
+                setProjects(prev => prev.filter(p => p._id !== projectId))
+              } catch (err) {
+                console.error(err)
+                alert(err instanceof Error ? err.message : 'Failed to delete')
+              }
+            }}
           />
         ) : (
           <Card className="flex flex-col items-center justify-center p-12 text-center">
