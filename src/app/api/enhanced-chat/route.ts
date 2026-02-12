@@ -450,6 +450,7 @@ Based on the repository analysis, you can help with:
 
 ## StackBlitz only after a clean build (critical for automation)
 - We apply your code blocks and run the build automatically after each response. Do NOT suggest "Run in StackBlitz" or "test in StackBlitz" until the automated build has succeeded. Do NOT repeat "Applied: ..." or "We ran the build; it succeeded"—the system appends that line after your message when files were applied.
+- **MANDATORY: No cut-off or broken code.** The system checks every applied file for code breaks (unclosed braces/brackets/backticks, trailing incomplete lines, truncation). The build is NOT marked successful until all files pass this check. If the system reports "cut-off or incomplete code" or "Unclosed backtick" or "Unbalanced brackets", you MUST output the COMPLETE file(s) again in code blocks with no truncation—do not leave code mid-statement or with missing closing characters.
 - When the last run reported errors (e.g. "We ran the build; it reported errors"): fix the code in your response (output full files in code blocks). We will apply them and run the build again. Do NOT tell the user to test in StackBlitz until you see or we report "We ran the build; it succeeded."
 - Only after "We ran the build; it succeeded" should you say to use StackBlitz (e.g. "Use **Run in StackBlitz** in the Preview tab to see the app, or paste any errors here."). Keep it to one short line; do not repeat the "Applied" or build line—the system adds it.
 - If the user pastes build or runtime errors (e.g. from StackBlitz): fix the code (output full files in code blocks). Say one line: "The file(s) above will be applied and we'll run the build again. Use **Run in StackBlitz** to preview or paste errors back." Do not suggest npm install or terminal commands first.
@@ -771,15 +772,89 @@ function extractCodeBlocksWithPaths(message: string): Array<{ path: string; cont
   return out
 }
 
-/** Save all extracted code blocks directly to project files (projectFiles or legalSandboxFiles based on project type). */
+/**
+ * Validate file content for obvious cut-off or broken code. Returns list of issue messages (empty if OK).
+ * Used before considering the automated build "successful" so we don't end the loop with truncated code.
+ */
+function validateFileContentForCutOff(path: string, content: string): string[] {
+  const issues: string[] = []
+  const ext = path.replace(/^.*\./, '').toLowerCase()
+  const isCode = /^(tsx?|jsx?|js|mjs|cjs|css|html|json|py|yml|yaml)$/.test(ext) || path.endsWith('.config.js') || path.endsWith('.config.ts')
+
+  if (!content || content.length < 2) return issues
+
+  // Odd number of backticks → likely unclosed template/code fence
+  const backticks = (content.match(/`/g) || []).length
+  if (backticks % 2 !== 0) {
+    issues.push('Unclosed backtick or template literal (odd number of `)')
+  }
+
+  // Trailing incomplete line: last non-empty line ends with continuation characters
+  const lines = content.split(/\r?\n/)
+  const lastNonEmpty = lines.map(l => l.trim()).filter(Boolean).pop()
+  if (lastNonEmpty) {
+    const tail = lastNonEmpty.slice(-3)
+    if (/\+\s*$/.test(lastNonEmpty) || /,\s*$/.test(lastNonEmpty) || /\\\s*$/.test(lastNonEmpty)) {
+      issues.push('File ends with incomplete line (trailing + , or \\)')
+    }
+    if (lastNonEmpty.endsWith('...') || lastNonEmpty.endsWith('${')) {
+      issues.push('File ends with possible truncation (... or unclosed ${)')
+    }
+  }
+
+  if (!isCode) return issues
+
+  // Balance braces/brackets/parens (simple count; can false-positive on strings, but catches cut-off)
+  let open = 0
+  let inSingle = false
+  let inDouble = false
+  let inBacktick = false
+  let i = 0
+  const s = content
+  while (i < s.length) {
+    const c = s[i]
+    if (inBacktick) {
+      if (c === '`') inBacktick = false
+      else if (c === '\\') i++
+      i++
+      continue
+    }
+    if (inSingle) {
+      if (c === "'" && s[i - 1] !== '\\') inSingle = false
+      i++
+      continue
+    }
+    if (inDouble) {
+      if (c === '"' && s[i - 1] !== '\\') inDouble = false
+      i++
+      continue
+    }
+    if (c === '`') { inBacktick = true; i++; continue }
+    if (c === "'") { inSingle = true; i++; continue }
+    if (c === '"') { inDouble = true; i++; continue }
+    if (c === '{' || c === '[' || c === '(') open++
+    if (c === '}' || c === ']' || c === ')') open--
+    i++
+  }
+  if (open !== 0) {
+    issues.push(`Unbalanced brackets/braces/parens (difference: ${open})`)
+  }
+
+  return issues
+}
+
+/** Save all extracted code blocks and validate for cut-off. Returns saved paths and any code-break issues. */
 async function saveCodeBlocksToProject(
   projectId: string,
   message: string,
   isSandbox: boolean = false
-): Promise<{ saved: string[] }> {
+): Promise<{ saved: string[]; codeBreakErrors: Array<{ path: string; issues: string[] }> }> {
   const blocks = extractCodeBlocksWithPaths(message)
   const saved: string[] = []
+  const codeBreakErrors: Array<{ path: string; issues: string[] }> = []
   for (const { path, content } of blocks) {
+    const issues = validateFileContentForCutOff(path, content)
+    if (issues.length > 0) codeBreakErrors.push({ path, issues })
     if (isSandbox) {
       const { upsertLegalSandboxFile } = await import('@/lib/services/legalSandboxService')
       const res = await upsertLegalSandboxFile(projectId, path, content)
@@ -789,7 +864,7 @@ async function saveCodeBlocksToProject(
       if (res.ok) saved.push(path)
     }
   }
-  return { saved }
+  return { saved, codeBreakErrors }
 }
 
 /** Parse grip-update-ideation block from message, update project ideation, return cleaned message. */
@@ -1306,7 +1381,7 @@ export async function POST(request: NextRequest) {
     aiMessage = mergeReadmeBlocks(aiMessage)
 
     // Save all code blocks with explicit file paths directly to project files (sandbox or main)
-    const { saved: appliedPaths } = await saveCodeBlocksToProject(projectId, aiMessage, isSandbox)
+    const { saved: appliedPaths, codeBreakErrors: appliedCodeBreakErrors } = await saveCodeBlocksToProject(projectId, aiMessage, isSandbox)
 
     // Advance project state steps so Build progress (Overview + enhanced chat) reflects applied code
     if (!isSandbox && appliedPaths.length > 0) {
@@ -1353,13 +1428,21 @@ export async function POST(request: NextRequest) {
 
     if (runAfterApply && appliedPaths.length > 0) {
       try {
+        // Code-break check: do not consider build successful if any applied file has cut-off/incomplete code
+        const codeBreakForApplied = appliedCodeBreakErrors.filter((e) => appliedPaths.includes(e.path))
+        const codeBreakMessages =
+          codeBreakForApplied.length > 0
+            ? codeBreakForApplied.flatMap((e) => e.issues.map((i) => `[${e.path}] ${i}`))
+            : []
+
         let result = await runBuildAndPersistErrors()
         buildRan = true
-        buildSucceeded = result.success
+        buildSucceeded = result.success && codeBreakMessages.length === 0
         runErrors = result.errors
+        if (codeBreakMessages.length > 0) runErrors = [...runErrors, ...codeBreakMessages]
         buildRunCount = 1
 
-        // Loop: if build failed, ask GRIP to fix and re-run until success or max attempts (no stall — user sees result only when done)
+        // Loop: if build failed or code-break issues, ask GRIP to fix and re-run until success or max attempts (no stall — user sees result only when done)
         let fixAttempt = 0
         while (!buildSucceeded && runErrors.length > 0 && fixAttempt < MAX_BUILD_FIX_ATTEMPTS) {
           fixAttempt++
@@ -1373,8 +1456,10 @@ export async function POST(request: NextRequest) {
               }
             : project
 
-          const buildFailedUserMessage =
-            `The automated build failed. Please fix the following errors and output the corrected file(s) in code blocks with the exact path above each block. Do not suggest the user run commands or test in StackBlitz until the build succeeds.\n\nBuild errors:\n\`\`\`\n${runErrors.join('\n').slice(0, 6000)}${runErrors.join('\n').length > 6000 ? '\n...(truncated)' : ''}\n\`\`\``
+          const isCodeBreak = runErrors.some((e) => e.startsWith('[') && (e.includes('Unclosed') || e.includes('Unbalanced') || e.includes('incomplete') || e.includes('truncation')))
+          const buildFailedUserMessage = isCodeBreak
+            ? `The automated build cannot be marked successful because one or more applied files have possible cut-off or incomplete code. You MUST output the COMPLETE file(s) again in code blocks (exact path above each block) with no truncation. Fix the following and then we will re-run the build.\n\nCode break / cut-off issues:\n\`\`\`\n${runErrors.join('\n').slice(0, 6000)}${runErrors.join('\n').length > 6000 ? '\n...(truncated)' : ''}\n\`\`\``
+            : `The automated build failed. Please fix the following errors and output the corrected file(s) in code blocks with the exact path above each block. Do not suggest the user run commands or test in StackBlitz until the build succeeds.\n\nBuild errors:\n\`\`\`\n${runErrors.join('\n').slice(0, 6000)}${runErrors.join('\n').length > 6000 ? '\n...(truncated)' : ''}\n\`\`\``
 
           const historyForRetry = [
             ...history.map(m => ({ role: m.role, content: m.content })),
@@ -1410,7 +1495,7 @@ export async function POST(request: NextRequest) {
           } catch (_) {}
           nextMessage = mergeReadmeBlocks(nextMessage)
 
-          const { saved: appliedPathsRetry } = await saveCodeBlocksToProject(projectId, nextMessage, isSandbox)
+          const { saved: appliedPathsRetry, codeBreakErrors: codeBreakErrorsRetry } = await saveCodeBlocksToProject(projectId, nextMessage, isSandbox)
           lastAppliedPaths = appliedPathsRetry
           aiMessage = nextMessage
 
@@ -1424,10 +1509,13 @@ export async function POST(request: NextRequest) {
           }
 
           if (appliedPathsRetry.length === 0) break
+          const codeBreakForRetry = codeBreakErrorsRetry.filter((e) => appliedPathsRetry.includes(e.path))
+          const codeBreakMessagesRetry = codeBreakForRetry.flatMap((e) => e.issues.map((i) => `[${e.path}] ${i}`))
           result = await runBuildAndPersistErrors()
           buildRunCount++
-          buildSucceeded = result.success
+          buildSucceeded = result.success && codeBreakMessagesRetry.length === 0
           runErrors = result.errors
+          if (codeBreakMessagesRetry.length > 0) runErrors = [...runErrors, ...codeBreakMessagesRetry]
         }
       } catch (runErr) {
         console.warn('Enhanced chat: run-after-apply failed:', runErr)
