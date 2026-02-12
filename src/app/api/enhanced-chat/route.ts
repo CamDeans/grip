@@ -9,7 +9,7 @@ import { anthropicService } from '@/lib/services/anthropicService'
 import { getOrBuildRepoContextDocument } from '@/lib/services/repoContextService'
 import { listProjectFiles } from '@/lib/services/fileStorageService'
 import { getProjectPlan } from '@/lib/services/projectPlanningService'
-import { getProjectState } from '@/lib/services/projectStateService'
+import { getProjectState, recordFileSaveAndAdvanceStep } from '@/lib/services/projectStateService'
 import { createProjectFolder, saveProjectFile } from '@/lib/services/gripProjectActions'
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 import { runMainProject } from '@/lib/runMainProject'
@@ -1196,6 +1196,16 @@ export async function POST(request: NextRequest) {
     // Save all code blocks with explicit file paths directly to project files (sandbox or main)
     const { saved: appliedPaths } = await saveCodeBlocksToProject(projectId, aiMessage, isSandbox)
 
+    // Advance project state steps so Build progress (Overview + enhanced chat) reflects applied code
+    if (!isSandbox && appliedPaths.length > 0) {
+      for (const p of appliedPaths) {
+        const lastSlash = p.lastIndexOf('/')
+        const filePath = lastSlash >= 0 ? p.slice(0, lastSlash) : ''
+        const filename = lastSlash >= 0 ? p.slice(lastSlash + 1) : p
+        await recordFileSaveAndAdvanceStep(projectId, filePath, filename)
+      }
+    }
+
     // Run backend build after applying files. If it fails, loop: re-ask GRIP with errors until build succeeds or max attempts.
     let runErrors: string[] = []
     const runAfterApply = runAfterApplyRaw !== false // default: run when files changed
@@ -1284,6 +1294,15 @@ export async function POST(request: NextRequest) {
           const { saved: appliedPathsRetry } = await saveCodeBlocksToProject(projectId, nextMessage, isSandbox)
           lastAppliedPaths = appliedPathsRetry
           aiMessage = nextMessage
+
+          if (!isSandbox && appliedPathsRetry.length > 0) {
+            for (const p of appliedPathsRetry) {
+              const lastSlash = p.lastIndexOf('/')
+              const filePath = lastSlash >= 0 ? p.slice(0, lastSlash) : ''
+              const filename = lastSlash >= 0 ? p.slice(lastSlash + 1) : p
+              await recordFileSaveAndAdvanceStep(projectId, filePath, filename)
+            }
+          }
 
           if (appliedPathsRetry.length === 0) break
           result = await runBuildAndPersistErrors()

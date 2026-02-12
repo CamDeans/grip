@@ -767,6 +767,12 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     return () => clearInterval(interval)
   }, [projectId, fetchProjectState])
 
+  // Refetch project state when a new assistant message is added so Build progress reflects steps advanced by API
+  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null
+  useEffect(() => {
+    if (projectId && lastMessage?.role === 'assistant') fetchProjectState()
+  }, [projectId, lastMessage?.id, fetchProjectState])
+
   const handleSyncWithGrip = useCallback(() => {
     fetchProjectState()
     refreshContext?.()
