@@ -13,6 +13,7 @@ import { getProjectState } from '@/lib/services/projectStateService'
 import { createProjectFolder, saveProjectFile } from '@/lib/services/gripProjectActions'
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 import { runMainProject } from '@/lib/runMainProject'
+import { MANDATORY_GRIP_BUILD_QUALITY } from '@/lib/constants/buildQualityPlan'
 
 // Phase 2, Step 2: Create Project Data Fetcher for enhanced chat
 
@@ -34,7 +35,8 @@ const buildSystemPrompt = (
   savedFiles?: Array<{ path: string; filename: string }>,
   planContext?: { phases?: Array<{ name: string; description?: string; tasks?: Array<{ name: string; status?: string }> }>; fileHierarchy?: { path: string; name?: string; children?: unknown[] } },
   projectStateContext?: ProjectStateContext,
-  structuredSummary?: string
+  structuredSummary?: string,
+  sandboxExperimentsSummary?: string
 ) => {
   let prompt = `You are G.R.I.P. (Guided Real-time Intelligence Partner) designed to help with software development projects. 
 You are G.R.I.P., an AI assistant built specifically for helping developers automate project creation. Do not claim to be or reference any other AI product or provider.
@@ -83,7 +85,14 @@ Use plain text for each field; you may merge the user's plain-English answer wit
 `
     }
 
-    if (projectContext.ideation) {
+    // Prefer enhanced build requirements (from ideation enhancement) so GRIP gets best version
+    const buildReqs = projectContext.enhancedBuildRequirements?.fullPromptText
+    if (buildReqs) {
+      prompt += `
+### Build requirements (use for scope and quality)
+${buildReqs}
+`
+    } else if (projectContext.ideation) {
       prompt += `
 ### Project Goals
 ${projectContext.ideation.goals}
@@ -97,6 +106,8 @@ ${projectContext.ideation.keyFeatures}
 ### Technical Requirements
 ${projectContext.ideation.technicalRequirements}
 `
+    }
+    if (projectContext.ideation) {
       const techReq = (projectContext.ideation.technicalRequirements || '').trim().toLowerCase()
       if (techReq === 'unsure' || techReq === 'not sure' || techReq === 'unknown') {
         prompt += `
@@ -104,7 +115,17 @@ ${projectContext.ideation.technicalRequirements}
 `
       }
     }
+    // Sandbox experiments (main project only): so GRIP can reference them in overview and context
+    if (sandboxExperimentsSummary && sandboxExperimentsSummary.trim()) {
+      prompt += `
+## Sandbox experiments (project overview)
+This project has sandbox experiments (isolated builds for testing). The user can create or open them from the project Overview. ${sandboxExperimentsSummary}
+`
+    }
   }
+
+  // Mandatory build quality so GRIP follows same bar (latest libs, modern UX/UI, token efficiency)
+  prompt += `\n${MANDATORY_GRIP_BUILD_QUALITY}\n\n`
 
   // Development plan (phases and tasks) and file hierarchy so GRIP uses the same plan and paths
   if (planContext) {
@@ -180,12 +201,20 @@ ${projectContext.ideation.technicalRequirements}
     prompt += `\n`
   }
 
-  // Run errors (StackBlitz/export/deploy): user pasted build/runtime errors — GRIP must fix the actual project files
+  // Run errors (StackBlitz/export/deploy/terminal): user pasted or automation reported build/runtime errors — GRIP must fix until clean build
   const lastRunErrors = projectContext?.lastRunErrors
   if (lastRunErrors && (Array.isArray(lastRunErrors.errors) ? lastRunErrors.errors.length > 0 : typeof lastRunErrors.raw === 'string' && lastRunErrors.raw.length > 0)) {
-    const sourceLabel = lastRunErrors.source === 'stackblitz' ? 'StackBlitz' : lastRunErrors.source === 'export' ? 'Export/GitHub' : lastRunErrors.source === 'deploy' ? 'Deploy/Vercel' : lastRunErrors.source
-    prompt += `\n## StackBlitz / run errors (treat as high priority)\n`
-    prompt += `The user ran the project in ${sourceLabel} and pasted build or runtime errors below. You MUST:\n`
+    const sourceLabel = lastRunErrors.source === 'terminal'
+      ? 'automated build (we ran the build after your last response)'
+      : lastRunErrors.source === 'stackblitz'
+        ? 'StackBlitz'
+        : lastRunErrors.source === 'export'
+          ? 'Export/GitHub'
+          : lastRunErrors.source === 'deploy'
+            ? 'Deploy/Vercel'
+            : String(lastRunErrors.source ?? 'run')
+    prompt += `\n## Build/run errors (treat as high priority — fix before suggesting StackBlitz)\n`
+    prompt += `The user ran the project (${sourceLabel}) and build or runtime errors were reported below. You MUST:\n`
     prompt += `1. Parse file paths from the errors (e.g. "ERROR in ./src/engine/GameEngine.ts:434" → fix \`src/engine/GameEngine.ts\`; "ENOENT: .../assets/favicon.png" → fix config or the missing asset).\n`
     prompt += `2. For each broken file: output the COMPLETE fixed file in a single code block with the exact path on the line above it (e.g. \`src/engine/GameEngine.ts\` or \`app.json\`), so the user can click "Save to project" and save to that path. NEVER use \`snippet.txt\` or generic names for these fixes—always use the path from the error.\n`
     prompt += `3. For ENOENT/missing files: update app.json, app.config.js, or the file that references the missing path; do not ask the user to run mkdir or touch.\n`
@@ -387,12 +416,12 @@ Based on the repository analysis, you can help with:
 - Output the COMPLETE updated config file in a single code block with the path above it when you change config. Never suggest "create the missing directory and files" with bash—you create folders and copy files via grip-actions so the system does it and the user does nothing.
 - For Expo/React Native: if \`icon\`, \`splash\`, or \`favicon\` point to missing paths, update app.json/app.config to omit them or use an existing asset path, or use grip-actions to copy the asset to the expected path.
 
-## StackBlitz first — assume all users preview in-browser (no local install)
-- The app is designed for non-devs and ease: assume all users will use **StackBlitz** first to run and test their project. Do NOT prompt for npm install, npm run dev, or any local/terminal run by default.
-- When the next step is for the user to preview the app, say **Run in StackBlitz** explicitly (e.g. "Save the file(s) above, then **Run in StackBlitz** to see the app."). The app will open StackBlitz for the user automatically—no button press needed.
-- After providing or updating code, tell the user to save the file(s) and then **Run in StackBlitz** to see the app run. No install required—StackBlitz runs the project in the browser.
-- If the user pastes build or runtime errors (e.g. from StackBlitz): fix the code (output full files in code blocks so they can save), then say "Save the file(s) above, then try **Run in StackBlitz** again in the Preview tab and tell me if you still see errors." Do not suggest running npm install or terminal commands first.
-- Only suggest terminal commands (npm install, npm run dev, Run & Debug) when the user explicitly says they want to run locally, export to GitHub, or run in an IDE. For normal flow, always direct them to **Preview → Run in StackBlitz** for testing.
+## StackBlitz only after a clean build (critical for automation)
+- We run the build automatically after each response when you output code (save to project). Do NOT suggest "Run in StackBlitz" or "test in StackBlitz" until the automated build has succeeded.
+- When the last run reported errors (e.g. "We ran the build; it reported errors"): fix the code in your response (output full files in code blocks). We will run the build again after your response. Do NOT tell the user to test in StackBlitz until you see or we report "We ran the build; it succeeded."
+- Only after "We ran the build; it succeeded" should you say to test in StackBlitz (e.g. "The build succeeded. Use **Run in StackBlitz** in the Preview tab to see the app.").
+- If the user pastes build or runtime errors (e.g. from StackBlitz): fix the code (output full files in code blocks so they can save), then say "Save the file(s) above; we'll run the build again. If it succeeds, then use **Run in StackBlitz**." Do not suggest running npm install or terminal commands first.
+- Only suggest terminal commands (npm install, npm run dev, Run & Debug) when the user explicitly says they want to run locally, export to GitHub, or run in an IDE. For normal flow, direct them to **Preview → Run in StackBlitz** only after the build succeeds.
  - When the repo contains both a **frontend** and a **backend/API** (for example: separate folders named "frontend"/"backend" or "client"/"server", directories like "api" or "server", or multiple package.json files), you MUST make sure there is a **single dev/start script from the project root** that starts everything needed (both frontend and backend) so **Run in StackBlitz** spins up the whole stack at once. Prefer tools like concurrently, npm-run-all, workspaces, or a custom dev script that orchestrates both servers. Do **not** leave this for the user to request later—always add and/or update the scripts so StackBlitz runs real frontend + backend using the repo code and data.
 
 ## Terminal / Run & Debug (only when user wants local or export)
@@ -940,6 +969,7 @@ export async function POST(request: NextRequest) {
           updatedAt: sandboxProject.updatedAt,
           isSandbox: true,
           parentProjectId: sandboxProject.parentProjectId,
+          lastRunErrors: (sandboxProject as { lastRunErrors?: unknown }).lastRunErrors,
         }
       } else {
         return NextResponse.json({ error: 'Project not found' }, { status: 404 })
@@ -1055,8 +1085,34 @@ export async function POST(request: NextRequest) {
       console.warn('Enhanced chat: could not load project state for context', stateErr)
     }
 
+    // Sandbox experiments for main project: include in GRIP context so overview and chat stay aligned
+    let sandboxExperimentsSummary = ''
+    if (project && !isSandbox && session?.user?.id) {
+      try {
+        const client = await clientPromise
+        const db = client.db('test')
+        const sandboxesList = await db
+          .collection('sandboxProjects')
+          .find({
+            parentProjectId: new ObjectId(projectId),
+            userId: session.user.id,
+          })
+          .sort({ updatedAt: -1 })
+          .limit(20)
+          .toArray() as Array<{ title?: string }>
+        if (sandboxesList.length > 0) {
+          const titles = sandboxesList.map((s) => s.title || 'Untitled').join(', ')
+          sandboxExperimentsSummary = `Experiments (${sandboxesList.length}): ${titles}. User can open any from Overview or create new ones there.`
+        } else {
+          sandboxExperimentsSummary = 'No experiments yet. User can create one from Overview → Sandbox Experiments.'
+        }
+      } catch (sandboxErr) {
+        console.warn('Enhanced chat: could not load sandbox experiments for context', sandboxErr)
+      }
+    }
+
     // Build system prompt with context
-    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary)
+    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary)
 
     // Production readiness: fail gracefully when AI is not configured
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
@@ -1152,6 +1208,25 @@ export async function POST(request: NextRequest) {
         buildSucceeded = runResult.success
         if (!runResult.success && runResult.errors.length > 0) {
           runErrors = runResult.errors
+          // Persist so next message gets these errors in system prompt (GRIP keeps fixing until clean build)
+          const lastRunErrorsPayload = {
+            source: 'terminal',
+            errors: runResult.errors,
+            raw: runResult.output?.slice(0, 15000) ?? runResult.errors.join('\n'),
+            at: new Date(),
+          }
+          const projectCollection = isSandbox ? 'sandboxProjects' : 'projects'
+          await db.collection(projectCollection).updateOne(
+            { _id: new ObjectId(projectId) },
+            { $set: { lastRunErrors: lastRunErrorsPayload, updatedAt: new Date() } }
+          )
+        } else if (runResult.success) {
+          // Clear lastRunErrors so we do not keep showing old errors; next turn can suggest StackBlitz
+          const projectCollection = isSandbox ? 'sandboxProjects' : 'projects'
+          await db.collection(projectCollection).updateOne(
+            { _id: new ObjectId(projectId) },
+            { $unset: { lastRunErrors: '' }, $set: { updatedAt: new Date() } }
+          )
         }
       } catch (runErr) {
         console.warn('Enhanced chat: run-after-apply failed:', runErr)
@@ -1166,6 +1241,11 @@ export async function POST(request: NextRequest) {
           : ' **We ran the build; it reported errors (see below).** I\'ll use them as the next step to fix the code.'
         : ' Use **Run in StackBlitz** or your local dev environment to preview, or tell me what to change or paste any errors.'
       aiMessage = aiMessage + (aiMessage ? '\n\n' : '') + appliedLine + buildLine
+      // Append actual errors to message so user and history have them; GRIP can fix on next turn
+      if (runErrors.length > 0) {
+        const errorBlock = '\n\n**Build errors:**\n```\n' + runErrors.join('\n').slice(0, 8000) + (runErrors.join('\n').length > 8000 ? '\n...(truncated)' : '') + '\n```'
+        aiMessage = aiMessage + errorBlock
+      }
     }
 
     // Save AI response

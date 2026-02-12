@@ -153,10 +153,10 @@ export async function enhanceProjectStructure(
       return { structure, totalTokens: 0 }
     }
     
-    const { features, totalTokens } = await extractFeaturesFromIdeation(
-      project.ideation?.keyFeatures || '',
-      project.ideation?.technicalRequirements || ''
-    )
+    // Prefer enhanced build requirements (from ideation enhancement) for clearer feature extraction
+    const keyFeatures = project.enhancedBuildRequirements?.keyFeaturesNormalized ?? project.ideation?.keyFeatures ?? ''
+    const technicalReqs = project.enhancedBuildRequirements?.technicalRequirementsNormalized ?? project.ideation?.technicalRequirements ?? ''
+    const { features, totalTokens } = await extractFeaturesFromIdeation(keyFeatures, technicalReqs)
 
     const enhancedHierarchy = addFeaturesDirectories(structure.fileHierarchy, features)
 

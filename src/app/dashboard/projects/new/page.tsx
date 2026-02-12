@@ -19,7 +19,6 @@ import {
   SparklesIcon,
   WrenchScrewdriverIcon,
   ArrowLeftIcon,
-  InformationCircleIcon,
   QuestionMarkCircleIcon,
   CheckCircleIcon,
   ChevronDownIcon,
@@ -196,34 +195,6 @@ export default function NewProjectPage() {
         }
       />
 
-      {/* What you'll do — step-by-step for non-devs */}
-      <Card className="mb-6 border-primary/20 bg-primary/5">
-        <div className="px-6 py-4 border-b border-border">
-          <h2 className="text-base font-medium flex items-center gap-2">
-            <InformationCircleIcon className="h-5 w-5 text-primary shrink-0" />
-            What you’ll do
-          </h2>
-          <p className="text-sm text-text-secondary mt-1">
-            Two steps on this page (details + context), then open Develop to chat with G.R.I.P. and bring your idea to life.
-          </p>
-        </div>
-        <div className="px-6 py-4">
-          <ol className="space-y-2 text-sm text-text-primary">
-            <li className="flex gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">1</span>
-              <span><strong>Project details</strong> — Name and short description. Optionally link any public GitHub repo as reference (you don't need to own it); G.R.I.P. uses it for patterns only and never copies code.</span>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">2</span>
-              <span><strong>Project context</strong> — Goals, who it's for, main features, and any must-haves in plain language (e.g. "works on phones", "simple to use"). G.R.I.P. turns this into a plan.</span>
-            </li>
-            <li className="flex gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">3</span>
-              <span><strong>Chat with G.R.I.P.</strong> — After creating the project, open <strong>Develop</strong> and chat. G.R.I.P. will write code, create files, and guide you (e.g. “add a login page” or “make it work on mobile.”</span>
-            </li>
-          </ol>
-        </div>
-      </Card>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {currentStep === 'details' ? (

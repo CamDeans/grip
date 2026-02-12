@@ -7,6 +7,9 @@ import { generateDevelopmentPlan, getOrCreateDevelopmentPlan, DevelopmentPlan } 
 import { analyzeProjectDependencies, getProjectDependencyTree, getFileDependencies, getFileDependents } from './dependencyResolverService'
 import { storeProjectStructure, getProjectStructure, linkPlanToStructure, storeFileGenerationPlan } from './planStorageService'
 import { syncProjectStateFromPlan } from './projectStateService'
+import { enhanceIdeationForBuild } from './ideationEnhancementService'
+import { buildTechnicalPromptFromEnhancedRequirements } from '@/lib/sandbox/ideationToTechnicalPrompt'
+import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/sandbox/treeSitterAnalysis'
 
 /**
  * Project Planning Service - Integrates all Phase 3 components into a unified API
@@ -65,6 +68,7 @@ function getRecommendedDependenciesFromIdeation(project: { ideation?: { technica
  * Generate a complete project plan
  * This is the main function that orchestrates the entire planning process
  * 
+ * 0. (Mandatory) Enhance user ideation into build requirements so plan and build get best input.
  * 1. Analyze the project
  * 2. Generate project structure
  * 3. Generate development plan
@@ -77,7 +81,64 @@ function getRecommendedDependenciesFromIdeation(project: { ideation?: { technica
 export async function generateProjectPlan(projectId: string): Promise<PlanningResult> {
   try {
     console.log(`Generating complete project plan for: ${projectId}`)
-    
+
+    const client = await clientPromise
+    const db = client.db()
+    let enhancementTokens = 0
+
+    // Step 0: Enhance ideation into build requirements (mandatory so AI gets best version; reduces token waste)
+    const projectForIdeation = await db.collection('projects').findOne(
+      { _id: new ObjectId(projectId) },
+      { projection: { ideation: 1 } }
+    ) as { ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string } } | null
+    if (projectForIdeation?.ideation) {
+      const enhancedResult = await enhanceIdeationForBuild(projectForIdeation.ideation)
+      if (enhancedResult) {
+        enhancementTokens = enhancedResult.totalTokens
+        await db.collection('projects').updateOne(
+          { _id: new ObjectId(projectId) },
+          {
+            $set: {
+              enhancedBuildRequirements: enhancedResult.enhanced,
+              enhancedBuildRequirementsAt: new Date(),
+              updatedAt: new Date()
+            }
+          }
+        )
+        console.log('Step 0: Ideation enhanced into build requirements')
+      }
+    }
+
+    // Step 0b: Align tree-link analysis with enhanced build requirements (before build)
+    // If project has a repo and we have enhanced build requirements, re-run tree-sitter with enhanced prompt and update analysis
+    let treeAnalysisTokens = 0
+    const projectForTree = await db.collection('projects').findOne(
+      { _id: new ObjectId(projectId) },
+      { projection: { repository: 1, enhancedBuildRequirements: 1 } }
+    ) as { repository?: { owner: string; name: string }; enhancedBuildRequirements?: { fullPromptText: string; [k: string]: string } } | null
+    if (projectForTree?.repository && projectForTree?.enhancedBuildRequirements) {
+      try {
+        const technicalPrompt = buildTechnicalPromptFromEnhancedRequirements(projectForTree.enhancedBuildRequirements)
+        if (technicalPrompt) {
+          const treeResult = await analyzeRepositoryStructureWithTreeSitter(
+            projectForTree.repository.owner,
+            projectForTree.repository.name,
+            projectId,
+            { technicalPrompt }
+          )
+          treeAnalysisTokens = treeResult?.totalTokens ?? 0
+          const { totalTokens: _t, ...analysisForDb } = treeResult
+          await db.collection('analyses').updateOne(
+            { projectId: new ObjectId(projectId) },
+            { $set: { repositoryAnalysis: analysisForDb, updatedAt: new Date() } }
+          )
+          console.log('Step 0b: Tree-link analysis re-run with enhanced build requirements')
+        }
+      } catch (treeErr) {
+        console.warn('Tree-link analysis alignment failed (non-fatal):', treeErr)
+      }
+    }
+
     // Step 1 & 2: Analyze project and create structure
     console.log('Step 1 & 2: Analyzing project and creating structure')
     const { structureId, analysis } = await analyzeAndCreateProjectStructure(projectId)
@@ -94,7 +155,7 @@ export async function generateProjectPlan(projectId: string): Promise<PlanningRe
 
     console.log('Step 4: Generating development plan')
     const { plan, totalTokens: planTokens } = await generateDevelopmentPlan(projectId)
-    const totalTokens = structureTokens + planTokens
+    const totalTokens = enhancementTokens + treeAnalysisTokens + structureTokens + planTokens
     
     // Step 5: Link plan to structure
     console.log('Step 5: Linking plan to structure')
@@ -112,8 +173,6 @@ export async function generateProjectPlan(projectId: string): Promise<PlanningRe
       console.warn('Project state sync from plan failed (non-fatal):', syncErr)
     }
     
-    const client = await clientPromise
-    const db = client.db()
     const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) })
     const recommendedPackages = getRecommendedDependenciesFromIdeation(project as { ideation?: { technicalRequirements?: string; keyFeatures?: string } } | null)
     

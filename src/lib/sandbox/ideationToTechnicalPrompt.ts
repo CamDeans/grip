@@ -76,3 +76,42 @@ User ideation:
     return { prompt: '', totalTokens: 0 }
   }
 }
+
+/**
+ * Build a technical analysis prompt from enhanced build requirements (no AI call).
+ * Used after ideation enhancement so tree-sitter analysis aligns with enhanced requirements
+ * before the build process begins.
+ */
+export type EnhancedBuildRequirements = {
+  clarifiedGoals: string
+  targetAudienceSummary: string
+  keyFeaturesNormalized: string
+  technicalRequirementsNormalized: string
+  techStackRecommendations: string
+  uxUiPrinciples: string
+  qualityBar: string
+  fullPromptText: string
+}
+
+export function buildTechnicalPromptFromEnhancedRequirements(
+  enhanced: EnhancedBuildRequirements | null | undefined
+): string {
+  if (!enhanced) return ''
+  const parts = [
+    `Goals and outcome: ${enhanced.clarifiedGoals || '(none)'}`,
+    `Target audience: ${enhanced.targetAudienceSummary || '(none)'}`,
+    `Key features (normalized): ${enhanced.keyFeaturesNormalized || '(none)'}`,
+    `Technical requirements: ${enhanced.technicalRequirementsNormalized || '(none)'}`,
+    enhanced.techStackRecommendations ? `Tech stack (use latest stable): ${enhanced.techStackRecommendations}` : '',
+    enhanced.uxUiPrinciples ? `UX/UI bar: ${enhanced.uxUiPrinciples}` : '',
+    enhanced.qualityBar ? `Quality bar: ${enhanced.qualityBar}` : ''
+  ].filter(Boolean)
+  if (parts.length === 0) return ''
+  return [
+    'Use this as the technical analysis prompt to guide repository analysis and code generation. Align analysis with:',
+    '',
+    parts.join('\n'),
+    '',
+    'L3 file structure: assume multi-page app (app/ or pages/ with nested routes), shared layouts, clear navigation. UX/UI: clear IA, sensible flows, hierarchy, feedback, a11y, responsive. Quality: production-minded, one complete user flow in first build.'
+  ].join('\n')
+}

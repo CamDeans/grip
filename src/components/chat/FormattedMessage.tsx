@@ -570,23 +570,29 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                 </div>
               )}
               {savedInfo && projectId && (
-                <div className="px-3 py-2 bg-success/10 border-t border-border text-xs flex flex-wrap items-center gap-2">
-                  <FileCheck className="h-3.5 w-3.5 text-success shrink-0" />
-                  <span className="text-text-secondary">
-                    {updatedFileContent[blockIndex] ? (
-                      <>
-                        <span className="font-semibold text-success">File contents updated.</span>
-                        {' '}Saved to project: <code className="font-mono text-success">{savedFilePath(savedInfo.path, savedInfo.filename)}</code>
-                      </>
-                    ) : (
-                      <>
-                        Saved to project: <code className="font-mono text-success">{savedFilePath(savedInfo.path, savedInfo.filename)}</code>
-                      </>
-                    )}
-                  </span>
+                <div className="px-3 py-2 bg-success/10 border-t border-border text-xs flex flex-col gap-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <FileCheck className="h-3.5 w-3.5 text-success shrink-0" />
+                    <span className="font-semibold text-success">Automation complete</span>
+                    <span className="text-text-muted">— file saved to project</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-text-secondary">
+                      {updatedFileContent[blockIndex] ? (
+                        <>
+                          <span className="font-medium text-success">File contents updated.</span>
+                          {' '}<code className="font-mono text-success">{savedFilePath(savedInfo.path, savedInfo.filename)}</code>
+                        </>
+                      ) : (
+                        <code className="font-mono text-success">{savedFilePath(savedInfo.path, savedInfo.filename)}</code>
+                      )}
+                    </span>
+                    <span className="text-text-muted">·</span>
+                    <span className="text-text-muted">Expand above to view code</span>
+                  </div>
                   <Link
                     href={`/dashboard/projects/${projectId}#generated-files`}
-                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                    className="inline-flex items-center gap-1 text-primary hover:underline w-fit"
                   >
                     View in Generated files
                     <ExternalLink className="h-3 w-3" />

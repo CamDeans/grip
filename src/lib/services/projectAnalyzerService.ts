@@ -24,6 +24,17 @@ interface ProjectIdeation {
   technicalRequirements: string
 }
 
+interface EnhancedBuildRequirements {
+  clarifiedGoals: string
+  targetAudienceSummary: string
+  keyFeaturesNormalized: string
+  technicalRequirementsNormalized: string
+  techStackRecommendations: string
+  uxUiPrinciples: string
+  qualityBar: string
+  fullPromptText: string
+}
+
 interface Project {
   _id: ObjectId
   title: string
@@ -33,6 +44,7 @@ interface Project {
     name: string
   }
   ideation?: ProjectIdeation
+  enhancedBuildRequirements?: EnhancedBuildRequirements
 }
 
 interface TechStackInfo {
@@ -431,14 +443,24 @@ export async function analyzeProject(projectId: string): Promise<AnalysisResult>
       }
     }
     
+    // Prefer enhanced build requirements (from ideation enhancement) so analysis aligns with best build input
+    const ideationForAnalysis: ProjectIdeation | undefined = project.enhancedBuildRequirements
+      ? {
+          goals: project.enhancedBuildRequirements.clarifiedGoals,
+          targetAudience: project.enhancedBuildRequirements.targetAudienceSummary,
+          keyFeatures: project.enhancedBuildRequirements.keyFeaturesNormalized,
+          technicalRequirements: project.enhancedBuildRequirements.technicalRequirementsNormalized
+        }
+      : project.ideation
+
     // Analyze tech stack
     const techStack = await determineTechStack(repoFiles)
     
-    // Generate recommended file structure
-    const fileStructure = generateFileStructure(techStack, project.ideation, repoFiles)
+    // Generate recommended file structure (aligned with enhanced build requirements when present)
+    const fileStructure = generateFileStructure(techStack, ideationForAnalysis, repoFiles)
     
-    // Generate dependencies
-    const dependencies = generateDependencies(techStack, project.ideation)
+    // Generate dependencies (aligned with enhanced build requirements when present)
+    const dependencies = generateDependencies(techStack, ideationForAnalysis)
     
     // Generate build commands
     const buildCommands = generateBuildCommands(techStack)
@@ -452,14 +474,12 @@ export async function analyzeProject(projectId: string): Promise<AnalysisResult>
       'Follow consistent coding style and naming conventions'
     ]
     
-    // Add ideation-specific recommendations
-    if (project.ideation) {
-      const { goals, keyFeatures } = project.ideation
-      
+    // Add ideation/enhanced build-requirements-specific recommendations
+    if (ideationForAnalysis) {
+      const { goals, keyFeatures } = ideationForAnalysis
       if (goals) {
         recommendations.push(`Focus development on achieving project goals: ${goals.substring(0, 50)}...`)
       }
-      
       if (keyFeatures) {
         recommendations.push(`Prioritize key features implementation: ${keyFeatures.substring(0, 50)}...`)
       }

@@ -1,16 +1,22 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui'
-import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle } from 'lucide-react'
+import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, ChevronDown, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle, Plus } from 'lucide-react'
 import { toast as sonnerToast } from 'sonner'
 import Link from 'next/link'
 import { useRouter, useParams } from 'next/navigation'
 import { Modal } from '@/components/ui/Modal'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface Project {
   _id: string
@@ -68,6 +74,7 @@ export default function ProjectOverviewPage() {
   const [hasPlan, setHasPlan] = useState<boolean | null>(null)
   const [sandboxes, setSandboxes] = useState<SandboxExperiment[]>([])
   const [loadingSandboxes, setLoadingSandboxes] = useState(false)
+  const [creatingSandbox, setCreatingSandbox] = useState(false)
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const projectId = params?.id || ''
@@ -215,11 +222,11 @@ export default function ProjectOverviewPage() {
 
   // Fetch project state (phases), analysis status, and plan for Get started + Phases
   // Works for both main and sandbox projects
-  useEffect(() => {
+  const refetchPhaseStatus = useCallback(() => {
     if (!projectId) return
     const stateUrl = `/api/projects/${projectId}/state`
     const analysisUrl = `/api/projects/${projectId}/analysis/status`
-    const planUrl = project?.isSandbox 
+    const planUrl = project?.isSandbox
       ? `/api/projects/${projectId}/legal-sandbox/plan`
       : `/api/projects/${projectId}/plan`
     Promise.all([
@@ -232,6 +239,19 @@ export default function ProjectOverviewPage() {
       setHasPlan(!!plan)
     })
   }, [projectId, project?.isSandbox])
+
+  useEffect(() => {
+    refetchPhaseStatus()
+  }, [refetchPhaseStatus])
+
+  // When user revisits the overview page (tab focus or navigation back), refetch phase status so it's up to date
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refetchPhaseStatus()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [refetchPhaseStatus])
 
   // Auto-run plan + sync so user can get to Develop without pressing buttons (smoother flow)
   // Skip for sandbox projects - they use their own plan flow
@@ -304,6 +324,7 @@ export default function ProjectOverviewPage() {
   const readyForDevelop = hasPlan === true || (projectState?.phases?.length ?? 0) > 0
 
   const handleCreateSandbox = async (title?: string, copyFiles: boolean = false) => {
+    setCreatingSandbox(true)
     try {
       const res = await fetch(`/api/projects/${projectId}/create-sandbox`, {
         method: 'POST',
@@ -325,6 +346,8 @@ export default function ProjectOverviewPage() {
       }
     } catch (e) {
       sonnerToast.error(e instanceof Error ? e.message : 'Failed to create sandbox')
+    } finally {
+      setCreatingSandbox(false)
     }
   }
 
@@ -390,17 +413,76 @@ export default function ProjectOverviewPage() {
       {/* Show sandbox card for main projects only (not sandbox projects themselves) */}
       {project && project.isSandbox !== true && (
         <Card className="border-2 border-primary/30 bg-primary/5">
-          <CardHeader>
-            <CardTitle className="text-xl font-bold flex items-center gap-2">
-              <FlaskConical className="w-5 h-5 text-primary" />
-              Sandbox Experiments
-            </CardTitle>
-            <CardDescription>
-              Create isolated environments to experiment with new features, architectures, or refactors without affecting your main project.
-              Sandboxes use <strong>clean-room code generation</strong> and <strong>legal-safe practices</strong>—perfect for risky experiments.
-            </CardDescription>
+          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1.5">
+              <CardTitle className="text-xl font-bold flex items-center gap-2">
+                <FlaskConical className="w-5 h-5 text-primary" />
+                Sandbox Experiments
+              </CardTitle>
+              <CardDescription>
+                Create isolated environments to experiment with new features, architectures, or refactors without affecting your main project.
+                Sandboxes use <strong>clean-room code generation</strong> and <strong>legal-safe practices</strong>—perfect for risky experiments.
+              </CardDescription>
+            </div>
+            <div className="flex flex-col xs:flex-row gap-2 shrink-0 w-full sm:w-auto">
+              <Button
+                variant="default"
+                size="default"
+                className="w-full sm:w-auto"
+                disabled={creatingSandbox}
+                onClick={() => handleCreateSandbox(undefined, false)}
+              >
+                {creatingSandbox ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4 mr-2" />
+                )}
+                {creatingSandbox ? 'Creating…' : 'Create new sandbox'}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="default" className="w-full sm:w-auto" disabled={creatingSandbox}>
+                    <ChevronDown className="w-4 h-4 mr-2" />
+                    More options
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={() => handleCreateSandbox(undefined, false)} disabled={creatingSandbox}>
+                    <FlaskConical className="w-4 h-4 mr-2" />
+                    Start empty experiment
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleCreateSandbox(undefined, true)} disabled={creatingSandbox}>
+                    <GitBranch className="w-4 h-4 mr-2" />
+                    Copy files from project
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Primary CTA: one clear way to start */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-lg bg-primary/10 border border-primary/20">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Start a sandbox experiment</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  One click creates an empty sandbox. Use <strong>More options</strong> above to copy your project files into a new experiment.
+                </p>
+              </div>
+              <Button
+                variant="default"
+                size="lg"
+                className="shrink-0"
+                disabled={creatingSandbox}
+                onClick={() => handleCreateSandbox(undefined, false)}
+              >
+                {creatingSandbox ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <FlaskConical className="w-4 h-4 mr-2" />
+                )}
+                {creatingSandbox ? 'Creating…' : 'Start experiment'}
+              </Button>
+            </div>
             {/* Use cases */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-background/50 rounded-lg border border-border">
               <div className="flex items-start gap-3">
@@ -528,20 +610,40 @@ export default function ProjectOverviewPage() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 text-text-secondary border-2 border-dashed border-border rounded-lg">
+              <div className="text-center py-8 px-4 text-text-secondary border-2 border-dashed border-border rounded-lg">
                 <FlaskConical className="w-8 h-8 mx-auto mb-2 text-text-muted" />
                 <p className="text-sm font-medium mb-1">No sandbox experiments yet</p>
-                <p className="text-xs">Create one to start experimenting safely without affecting your main project.</p>
+                <p className="text-xs mb-4">Create one to start experimenting safely without affecting your main project.</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button
+                    onClick={() => handleCreateSandbox(undefined, false)}
+                    variant="outline"
+                    size="sm"
+                    disabled={creatingSandbox}
+                  >
+                    {creatingSandbox ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FlaskConical className="w-4 h-4 mr-2" />}
+                    Start empty experiment
+                  </Button>
+                  <Button
+                    onClick={() => handleCreateSandbox(undefined, true)}
+                    variant="default"
+                    size="sm"
+                    disabled={creatingSandbox}
+                  >
+                    {creatingSandbox ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <GitBranch className="w-4 h-4 mr-2" />}
+                    Copy files & start
+                  </Button>
+                </div>
               </div>
             )}
 
-            {/* Create new sandbox */}
-            <div className="pt-4 border-t border-border">
+            {/* Create another sandbox */}
+            <div className="pt-4 border-t border-border bg-background/40 rounded-lg p-4 -mx-1">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex-1">
                   <h4 className="text-sm font-semibold mb-1 flex items-center gap-2">
-                    <Zap className="w-4 h-4" />
-                    Create New Experiment
+                    <Plus className="w-4 h-4" />
+                    {sandboxes.length === 0 ? 'Create your first experiment' : 'Create another experiment'}
                   </h4>
                   <p className="text-xs text-text-secondary">
                     Start with an empty sandbox or copy your current files to experiment with modifications.
@@ -552,16 +654,18 @@ export default function ProjectOverviewPage() {
                     onClick={() => handleCreateSandbox(undefined, false)}
                     variant="outline"
                     size="sm"
+                    disabled={creatingSandbox}
                   >
-                    <FlaskConical className="w-4 h-4 mr-2" />
+                    {creatingSandbox ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FlaskConical className="w-4 h-4 mr-2" />}
                     Empty Sandbox
                   </Button>
                   <Button
                     onClick={() => handleCreateSandbox(undefined, true)}
                     variant="default"
                     size="sm"
+                    disabled={creatingSandbox}
                   >
-                    <GitBranch className="w-4 h-4 mr-2" />
+                    {creatingSandbox ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <GitBranch className="w-4 h-4 mr-2" />}
                     Copy Files
                   </Button>
                 </div>

@@ -1114,11 +1114,13 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
               projectFiles={message.role === 'assistant' ? projectFiles : undefined}
               onFileSaved={
                 projectId
-                  ? () =>
+                  ? () => {
+                      refreshContext()
                       fetch(`/api/project-files?projectId=${projectId}&limit=500`)
                         .then((r) => (r.ok ? r.json() : []))
                         .then((files: Array<{ id: string; path: string; filename: string }>) => setProjectFiles(files))
                         .catch(() => setProjectFiles([]))
+                    }
                   : undefined
               }
             />
@@ -1205,6 +1207,11 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {projectFiles.length > 0 && (
+              <span className="text-[10px] text-text-muted" title="Files saved to this project (from chat or plan)">
+                {projectFiles.length} file{projectFiles.length !== 1 ? 's' : ''} in project
+              </span>
+            )}
             {progressLastSynced && (
               <span className="text-[10px] text-text-muted" title="Auto-updates every 45s">
                 Synced {progressLastSynced.toLocaleTimeString()}

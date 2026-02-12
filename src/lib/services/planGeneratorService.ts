@@ -4,6 +4,7 @@ import { Anthropic } from '@anthropic-ai/sdk'
 import { getOrCreateProjectStructure } from './structureGeneratorService'
 import { IProjectStructureData } from '@/lib/models/ProjectStructure'
 import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
+import { MANDATORY_GRIP_BUILD_QUALITY } from '@/lib/constants/buildQualityPlan'
 
 /**
  * Plan Generator Service - Creates development plan with tasks
@@ -216,6 +217,13 @@ async function addTasksToPhases(
   structure: IProjectStructureData
 ): Promise<number> {
   try {
+    // Prefer enhanced build requirements (from ideation enhancement step) so AI gets best input
+    const buildReqsText = project.enhancedBuildRequirements?.fullPromptText
+      ? project.enhancedBuildRequirements.fullPromptText
+      : project.ideation
+        ? `Project Goals: ${project.ideation.goals ?? ''}\nKey Features: ${project.ideation.keyFeatures ?? ''}\nTechnical Requirements: ${project.ideation.technicalRequirements ?? ''}`
+        : ''
+
     // Build prompt for AI
     const prompt = `
 I'm creating a development plan for a software project. Please help me generate tasks for each phase.
@@ -223,11 +231,9 @@ Here's the project information:
 
 Project Title: ${project.title}
 Project Description: ${project.description}
-${project.ideation ? `
-Project Goals: ${project.ideation.goals}
-Key Features: ${project.ideation.keyFeatures}
-Technical Requirements: ${project.ideation.technicalRequirements}
-` : ''}
+${buildReqsText ? `\nBuild requirements (use these for task scope and quality):\n${buildReqsText}\n` : ''}
+
+${MANDATORY_GRIP_BUILD_QUALITY}
 
 Here are the phases I've defined:
 ${phases.map(phase => `- Phase ${phase.id}: ${phase.name} - ${phase.description}`).join('\n')}
