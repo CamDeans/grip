@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { IProjectStateData } from '@/lib/models/ProjectState'
 import { TrackingButton } from '@/components/ui/TrackingButton'
+import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { useInteractionTracking } from '@/hooks/useInteractionTracking'
 
 // Add error handling interfaces
@@ -274,7 +275,7 @@ export default function AIChat() {
       
       // Add AI response to UI
       setMessages(prev => [...prev, aiMessage])
-      
+      refreshTokenUsage()
       // Save AI message to chat history
       if (projectId) {
         const saveResult = await addChatMessage(projectId, aiMessage)

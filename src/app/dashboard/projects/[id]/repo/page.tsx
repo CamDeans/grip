@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/input'
 import { FolderOpen, FileCode, ChevronRight, ChevronDown, Loader2, Save, Search, Sparkles, Layers, Pencil, Trash2, FolderMinus, FolderPlus, Copy, ClipboardPaste, Square, CheckSquare, ImageIcon } from 'lucide-react'
 import { toast as sonnerToast } from 'sonner'
+import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { cn } from '@/lib/utils'
 import { isImagePath, getImageMimeType } from '@/lib/imageValidation'
 
@@ -23,6 +24,7 @@ function SummarizeButton({ projectId }: { projectId: string }) {
           const res = await fetch(`/api/projects/${projectId}/repo/summarize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
           const data = await res.json()
           if (!res.ok) throw new Error(data.error || 'Failed')
+          refreshTokenUsage()
           sonnerToast.success(data.message || `Summarized ${data.summarized} files`)
         } catch (e) {
           sonnerToast.error(e instanceof Error ? e.message : 'Summarize failed')

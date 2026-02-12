@@ -10,6 +10,7 @@ import { Button } from '@/components/ui'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Label } from '@/components/ui/Label'
+import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { toast } from '@/components/ui/use-toast'
 import { 
   PlusIcon, 
@@ -132,6 +133,7 @@ export default function NewProjectPage() {
       }
 
       const { project } = responseData
+      refreshTokenUsage()
 
       // Show toast notification for successful project creation
       toast({
@@ -163,6 +165,8 @@ export default function NewProjectPage() {
             description: "Repository analysis encountered some issues, but your project was created.",
             variant: "destructive"
           })
+        } else {
+          refreshTokenUsage()
         }
       }
 

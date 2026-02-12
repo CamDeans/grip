@@ -10,6 +10,7 @@ import { FilePreview } from './FilePreview'
 import { CopyIcon, CheckIcon, Save, Loader2, FileCheck, ExternalLink, FilePenLine, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { Input } from '@/components/ui/input'
+import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { toast as sonnerToast } from 'sonner'
 
 // Phase 8, Step 5: Enhanced message formatting for code and technical content
@@ -322,6 +323,7 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                                     })
                                     const data = await res.json()
                                     if (!res.ok) throw new Error(data.error || 'Update failed')
+                                    refreshTokenUsage()
                                     if (typeof data.content === 'string' && data.content) {
                                       setUpdatedFileContent((prev) => ({ ...prev, [blockIndex]: data.content }))
                                     }
@@ -448,6 +450,7 @@ export function FormattedMessage({ message, className, projectId, projectFiles, 
                                 })
                                 const data = await res.json()
                                 if (!res.ok) throw new Error(data.error || 'Update failed')
+                                refreshTokenUsage()
                                 const path = updateFileState.path.trim()
                                 const filename = updateFileState.filename.trim()
                                 const fileId = data.file?.id

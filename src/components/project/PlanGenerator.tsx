@@ -13,6 +13,7 @@ import {
   WandIcon,
   Loader2Icon
 } from 'lucide-react'
+import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { toast } from '@/components/ui/use-toast'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
@@ -62,7 +63,7 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
 
       const planData = await response.json()
       setPlan(planData)
-      
+      refreshTokenUsage()
       // After generating a plan, fetch files that can be generated
       fetchFilesToGenerate()
       

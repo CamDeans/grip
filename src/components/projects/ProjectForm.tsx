@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { RepoSelector } from './RepoSelector'
 import { Button } from '@/components/ui'
 
@@ -54,6 +55,7 @@ export function ProjectForm({ owner, repo }: ProjectFormProps) {
 
       if (!projectResponse.ok) throw new Error('Failed to create project')
       const { project } = await projectResponse.json()
+      refreshTokenUsage()
 
       // If there's a repository, trigger analysis
       if (formData.repository) {
@@ -68,6 +70,8 @@ export function ProjectForm({ owner, repo }: ProjectFormProps) {
 
         if (!analysisResponse.ok) {
           console.error('Analysis failed but project was created')
+        } else {
+          refreshTokenUsage()
         }
       }
 

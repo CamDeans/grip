@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react'
+import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { ChatMessage, ErrorState } from '@/types/chat'
 import { ProjectContext } from '@/types/project'
 import { ObjectId } from 'mongodb'
@@ -325,7 +326,7 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
       
       if (response.ok) {
         console.log('Repository analysis started successfully')
-        
+        refreshTokenUsage()
         // Set up polling for analysis completion
         const checkAnalysisStatus = async () => {
           try {
@@ -614,9 +615,7 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
       setIsTyping(false)
 
       // Refresh tokenomics in sidebar so user sees updated usage without page refresh
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('grip-token-update'))
-      }
+      refreshTokenUsage()
 
       // After a build ran, refresh project context so next message sends updated lastRunErrors and GRIP can fix
       if (data.buildRan === true) {

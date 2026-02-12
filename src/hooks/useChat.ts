@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { AIMessage } from '@/types'
 
 export function useChat() {
@@ -30,7 +31,7 @@ export function useChat() {
       }
 
       const data = await response.json()
-
+      refreshTokenUsage()
       // Add AI response
       const aiMessage: AIMessage = {
         id: Math.random().toString(36).slice(2),

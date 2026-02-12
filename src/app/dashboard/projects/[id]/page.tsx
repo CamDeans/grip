@@ -6,6 +6,7 @@ import { LoadingState } from '@/components/ui/LoadingState'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui'
 import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, ChevronDown, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle, Plus, RefreshCw } from 'lucide-react'
+import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { toast as sonnerToast } from 'sonner'
 import Link from 'next/link'
 import { useRouter, useParams } from 'next/navigation'
@@ -267,6 +268,7 @@ export default function ProjectOverviewPage() {
       try {
         const planRes = await fetch(`/api/projects/${projectId}/plan`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
         if (!planRes.ok) return
+        refreshTokenUsage()
         const syncRes = await fetch(`/api/projects/${projectId}/plan/sync-state`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
         if (!syncRes.ok) return
         const filesRes = await fetch(`/api/projects/${projectId}/files/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })

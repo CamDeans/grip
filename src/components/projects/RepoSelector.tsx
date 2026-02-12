@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { MagnifyingGlassIcon, SparklesIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui'
+import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { generateKeywords } from '@/lib/services/aiService'
 
 interface Repository {
@@ -75,6 +76,7 @@ export function RepoSelector({
       const keywords = await generateKeywords(projectTitle, projectDescription)
       setGeneratedKeywords(keywords)
       setShowKeywordsPopup(true)
+      refreshTokenUsage()
     } catch (error) {
       console.error('Error generating keywords:', error)
       alert('Failed to generate keywords. Please try again.')
