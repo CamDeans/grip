@@ -87,20 +87,20 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string
         // Resolve admin: from DB (user.role / user.isAdmin) or from ADMIN_EMAILS env
         try {
-          const client = await clientPromise
-          const db = client.db(process.env.MONGODB_DB_NAME || "test")
           const uid = token.id as string
-          if (uid) {
+          const isAdminByEmail =
+            process.env.ADMIN_EMAILS &&
+            session.user?.email &&
+            process.env.ADMIN_EMAILS.split(',').map((e: string) => e.trim().toLowerCase()).includes(session.user.email.trim().toLowerCase())
+          if (isAdminByEmail) {
+            (session.user as { role?: string }).role = 'admin'
+          } else if (uid && /^[a-fA-F0-9]{24}$/.test(uid)) {
+            const client = await clientPromise
+            const db = client.db(process.env.MONGODB_DB_NAME || "test")
             const dbUser = await db.collection('users').findOne({
               _id: new ObjectId(uid)
-            }) as { role?: string; isAdmin?: boolean; email?: string } | null
+            }) as { role?: string; isAdmin?: boolean } | null
             if (dbUser?.role === 'admin' || dbUser?.isAdmin === true) {
-              (session.user as { role?: string }).role = 'admin'
-            } else if (
-              process.env.ADMIN_EMAILS &&
-              session.user?.email &&
-              process.env.ADMIN_EMAILS.split(',').map((e: string) => e.trim().toLowerCase()).includes(session.user.email.trim().toLowerCase())
-            ) {
               (session.user as { role?: string }).role = 'admin'
             }
           }

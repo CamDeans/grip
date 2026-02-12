@@ -157,6 +157,112 @@
   animation: fadeIn 0.3s ease-out forwards;
 }
 
+/* Landing hero: GRIP tagline — bold, gradient shift + glow (AI / future-of-coding) */
+@keyframes grip-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 1px var(--primary),
+                0 0 24px -4px var(--primary),
+                0 0 48px -8px var(--primary);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 2px var(--primary),
+                0 0 32px -2px var(--primary),
+                0 0 64px -4px var(--primary);
+    opacity: 0.98;
+  }
+}
+
+@keyframes grip-gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.grip-hero-tagline {
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: linear-gradient(
+    90deg,
+    var(--primary) 0%,
+    var(--primary-hover) 35%,
+    var(--primary) 50%,
+    var(--primary-hover) 65%,
+    var(--primary) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: grip-gradient-shift 3.5s ease-in-out infinite;
+}
+
+.grip-hero-tagline-badge {
+  animation: grip-glow-pulse 2.5s ease-in-out infinite;
+}
+
+/* Typing-effect cursor: stay visible when parent uses gradient text */
+.grip-typing-cursor {
+  -webkit-text-fill-color: initial;
+  color: var(--primary);
+}
+
+/* Carry glow + gradient through entire landing page */
+.grip-section-badge {
+  box-shadow: 0 0 0 1px var(--primary),
+              0 0 20px -6px var(--primary),
+              0 0 40px -12px var(--primary);
+  animation: grip-glow-pulse 3s ease-in-out infinite;
+}
+
+.grip-section-title {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  background: linear-gradient(
+    90deg,
+    var(--primary) 0%,
+    var(--primary-hover) 40%,
+    var(--primary) 60%,
+    var(--primary-hover) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: grip-gradient-shift 4s ease-in-out infinite;
+}
+
+.grip-card-glow {
+  box-shadow: 0 0 0 1px var(--border),
+              0 4px 24px -8px var(--primary);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.grip-card-glow:hover {
+  box-shadow: 0 0 0 2px var(--primary),
+              0 0 24px -8px var(--primary),
+              0 8px 32px -12px var(--primary);
+}
+
+.grip-cta-glow {
+  box-shadow: 0 0 0 1px var(--primary),
+              0 0 24px -6px var(--primary),
+              0 4px 14px -4px rgba(0, 0, 0, 0.2);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.grip-cta-glow:hover {
+  box-shadow: 0 0 0 2px var(--primary),
+              0 0 32px -4px var(--primary),
+              0 0 48px -8px var(--primary),
+              0 8px 24px -4px rgba(0, 0, 0, 0.2);
+}
+
 /* Responsive layout helpers */
 @layer utilities {
   .main-container {

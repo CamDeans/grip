@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+import { motion, useInView } from 'framer-motion'
+import { useRef, useState, useEffect } from 'react'
 import {
   MessageSquare,
   FolderGit2,
@@ -20,6 +22,137 @@ import {
   Coins,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+const fadeInUp = {
+  initial: { opacity: 0, y: 24 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+}
+
+const stagger = (delay = 0.05) => ({
+  animate: {
+    transition: { staggerChildren: delay, delayChildren: 0.1 },
+  },
+})
+
+function AnimatedSection({ children }: { children: React.ReactNode }) {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: '-60px' })
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 28 }}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 28 }}
+      transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+/** Types out text with a blinking cursor. */
+function TypingEffect({
+  text,
+  speed = 70,
+  delay = 0,
+  cursorChar = '|',
+  className,
+}: {
+  text: string
+  speed?: number
+  delay?: number
+  cursorChar?: string
+  className?: string
+}) {
+  const [display, setDisplay] = useState('')
+  const [showCursor, setShowCursor] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    const start = () => {
+      let i = 0
+      setDisplay('')
+      const type = () => {
+        if (cancelled || i >= text.length) return
+        setDisplay(text.slice(0, i + 1))
+        i++
+        setTimeout(type, speed)
+      }
+      setTimeout(type, delay)
+    }
+    start()
+    return () => { cancelled = true }
+  }, [text, speed, delay])
+
+  useEffect(() => {
+    const t = setInterval(() => setShowCursor((c) => !c), 530)
+    return () => clearInterval(t)
+  }, [])
+
+  return (
+    <span className={cn('inline', className)}>
+      {display}
+      <span className={cn('grip-typing-cursor inline-block align-middle transition-opacity duration-150', showCursor ? 'opacity-100' : 'opacity-30')}>
+        {cursorChar}
+      </span>
+    </span>
+  )
+}
+
+/** Rotates through phrases with type + pause + delete effect. */
+function RotatingTypingEffect({
+  phrases,
+  typingSpeed = 80,
+  pauseMs = 2200,
+  deleteSpeed = 45,
+  className,
+}: {
+  phrases: string[]
+  typingSpeed?: number
+  pauseMs?: number
+  deleteSpeed?: number
+  className?: string
+}) {
+  const [phraseIndex, setPhraseIndex] = useState(0)
+  const [display, setDisplay] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showCursor, setShowCursor] = useState(true)
+
+  const current = phrases[phraseIndex % phrases.length]
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isDeleting) {
+      if (display.length < current.length) {
+        const t = setTimeout(() => setDisplay(current.slice(0, display.length + 1)), typingSpeed)
+        return () => { clearTimeout(t); cancelled = true }
+      }
+      const t = setTimeout(() => setIsDeleting(true), pauseMs)
+      return () => clearTimeout(t)
+    }
+    if (display.length > 0) {
+      const t = setTimeout(() => setDisplay(display.slice(0, -1)), deleteSpeed)
+      return () => clearTimeout(t)
+    }
+    setIsDeleting(false)
+    setPhraseIndex((i) => i + 1)
+    return () => { cancelled = true }
+  }, [current, display, isDeleting, typingSpeed, pauseMs, deleteSpeed])
+
+  useEffect(() => {
+    const t = setInterval(() => setShowCursor((c) => !c), 530)
+    return () => clearInterval(t)
+  }, [])
+
+  return (
+    <span className={cn('inline min-h-[1.5em]', className)}>
+      {display}
+      <span className={cn('inline-block text-primary align-middle transition-opacity duration-150', showCursor ? 'opacity-100' : 'opacity-30')}>
+        |
+      </span>
+    </span>
+  )
+}
 
 const FLOW_STEPS = [
   {
@@ -117,7 +250,7 @@ function MockBrowserFrame({
   return (
     <div
       className={cn(
-        'rounded-lg border border-border bg-background-secondary/80 overflow-hidden shadow-lg',
+        'grip-card-glow rounded-lg border border-border bg-background-secondary/80 overflow-hidden',
         className
       )}
     >
@@ -173,14 +306,80 @@ export function LandingPage() {
 
       <main className="flex-1">
         {/* Hero */}
-        <section className="px-4 py-16 sm:py-20 text-center max-w-4xl mx-auto">
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary mb-6">
-            <Sparkles className="h-3.5 w-3.5" />
-            Guided Real-time Intelligence Partner
-          </div>
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-text-primary mb-4 tracking-tight">
+        <section className="relative px-4 py-16 sm:py-20 text-center max-w-4xl mx-auto overflow-hidden">
+          {/* Background orbs — bold, eye-catching */}
+          <motion.div
+            aria-hidden
+            className="absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-primary/25 blur-[120px] pointer-events-none"
+            animate={{
+              x: [0, 40, 0],
+              y: [0, -30, 0],
+              scale: [1, 1.1, 1],
+            }}
+            transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.div
+            aria-hidden
+            className="absolute bottom-1/4 -right-32 w-80 h-80 rounded-full bg-primary/20 blur-[100px] pointer-events-none"
+            animate={{
+              x: [0, -50, 0],
+              y: [0, 20, 0],
+              scale: [1, 1.15, 1],
+            }}
+            transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.div
+            aria-hidden
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-64 rounded-full bg-primary/10 blur-[80px] pointer-events-none"
+            animate={{ opacity: [0.4, 0.7, 0.4] }}
+            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+          />
+
+          <div className="relative z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-full border-2 border-primary/50 bg-primary/15 px-4 py-2.5 mb-8 grip-hero-tagline-badge shadow-[0_0_40px_-8px_var(--primary)]'
+            )}
+          >
+            <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+            <span className="grip-hero-tagline font-extrabold">
+              <TypingEffect
+                text="Guided Real-time Intelligence Partner"
+                speed={55}
+                delay={400}
+                className="grip-hero-tagline"
+              />
+            </span>
+          </motion.div>
+          <motion.h1
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="text-4xl sm:text-5xl md:text-6xl font-bold text-text-primary mb-3 tracking-tight"
+          >
             Your AI development partner
-          </h1>
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.8 }}
+            className="text-lg sm:text-xl text-primary font-semibold min-h-[2rem] mb-4"
+          >
+            <RotatingTypingEffect
+              phrases={[
+                'From idea to ship.',
+                'Clean-room code generation.',
+                'One flow. No juggling tools.',
+                'Reference repos. Generate new code.',
+              ]}
+              typingSpeed={70}
+              pauseMs={2400}
+              deleteSpeed={40}
+            />
+          </motion.p>
           <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto mb-2">
             Turn GitHub repos and ideas into runnable, deployable products. Clean-room code generation—reference repos for patterns, generate new code. No juggling tools—one flow from idea to ship.
           </p>
@@ -196,35 +395,37 @@ export function LandingPage() {
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
               href="/get-started"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-md px-8 text-base font-medium bg-primary text-primary-foreground shadow hover:bg-primary-hover"
+              className="grip-cta-glow inline-flex h-11 items-center justify-center gap-2 rounded-md px-8 text-base font-medium bg-primary text-primary-foreground hover:scale-[1.03] active:scale-[0.98] transition-all duration-300"
             >
               Get started
               <ChevronRight className="h-4 w-4" />
             </Link>
             <Link
               href="/login"
-              className="inline-flex h-11 items-center justify-center rounded-md border border-border px-8 text-base font-medium hover:bg-background-hover"
+              className="inline-flex h-11 items-center justify-center rounded-md border-2 border-primary/30 px-8 text-base font-medium hover:border-primary/50 hover:shadow-[0_0_20px_-8px_var(--primary)] transition-all duration-300"
             >
               Sign in
             </Link>
             <Link
               href="#pricing"
-              className="inline-flex h-11 items-center justify-center rounded-md border border-border px-8 text-base font-medium hover:bg-background-hover"
+              className="inline-flex h-11 items-center justify-center rounded-md border-2 border-primary/30 px-8 text-base font-medium hover:border-primary/50 hover:shadow-[0_0_20px_-8px_var(--primary)] transition-all duration-300"
             >
               Pricing
             </Link>
+          </div>
           </div>
         </section>
 
         {/* Pricing — paid tiers & token usage */}
         <section id="pricing" className="px-4 py-16 sm:py-20 border-t border-border bg-background-secondary/30">
+          <AnimatedSection>
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-12">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary mb-4">
+              <div className="grip-section-badge inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/15 px-3 py-1.5 text-xs font-semibold text-primary mb-4">
                 <DollarSign className="h-3.5 w-3.5" />
                 Simple pricing
               </div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-text-primary mb-4">
+              <h2 className="grip-section-title text-2xl sm:text-3xl font-extrabold text-center mb-4">
                 Plans & token usage
               </h2>
               <p className="text-text-secondary max-w-2xl mx-auto mb-2">
@@ -248,7 +449,7 @@ export function LandingPage() {
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-6 rounded-xl border-2 border-border bg-background-primary hover:border-primary/40 transition-colors">
+              <div className="grip-card-glow p-6 rounded-xl border-2 border-border bg-background-primary hover:border-primary/40 hover:scale-[1.02] transition-all duration-300">
                 <div className="flex items-center gap-2 mb-4">
                   <Coins className="h-6 w-6 text-primary" />
                   <h3 className="font-semibold text-lg text-text-primary">Starter</h3>
@@ -259,8 +460,8 @@ export function LandingPage() {
                   Light use, side projects. Enough for regular chat and code generation without worrying about limits.
                 </p>
               </div>
-              <div className="p-6 rounded-xl border-2 border-primary bg-primary/10 relative">
-                <div className="absolute -top-2.5 left-4 px-2 py-0.5 bg-primary text-primary-foreground text-xs font-semibold rounded">Popular</div>
+              <div className="grip-card-glow p-6 rounded-xl border-2 border-primary bg-primary/10 relative hover:scale-[1.02] transition-all duration-300">
+                <div className="absolute -top-2.5 left-4 px-2 py-0.5 bg-primary text-primary-foreground text-xs font-semibold rounded shadow-[0_0_12px_-2px_var(--primary)]">Popular</div>
                 <div className="flex items-center gap-2 mb-4">
                   <Coins className="h-6 w-6 text-primary" />
                   <h3 className="font-semibold text-lg text-text-primary">Pro</h3>
@@ -271,7 +472,7 @@ export function LandingPage() {
                   Serious builders, daily use. Four times the tokens for heavy development and multiple projects.
                 </p>
               </div>
-              <div className="p-6 rounded-xl border-2 border-border bg-background-primary hover:border-primary/40 transition-colors">
+              <div className="grip-card-glow p-6 rounded-xl border-2 border-border bg-background-primary hover:border-primary/40 transition-all duration-300">
                 <div className="flex items-center gap-2 mb-4">
                   <Coins className="h-6 w-6 text-primary" />
                   <h3 className="font-semibold text-lg text-text-primary">Team</h3>
@@ -289,19 +490,21 @@ export function LandingPage() {
             <div className="text-center mt-6">
               <Link
                 href="/get-started"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md px-8 text-base font-medium bg-primary text-primary-foreground shadow hover:bg-primary-hover"
+                className="grip-cta-glow inline-flex h-11 items-center justify-center gap-2 rounded-md px-8 text-base font-medium bg-primary text-primary-foreground hover:scale-[1.03] active:scale-[0.98]"
               >
                 Get started
                 <ChevronRight className="h-4 w-4" />
               </Link>
             </div>
           </div>
+          </AnimatedSection>
         </section>
 
         {/* How it works — full app flow */}
         <section id="how-it-works" className="px-4 py-16 sm:py-20 border-t border-border bg-background-secondary/30">
+          <AnimatedSection>
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl sm:text-3xl font-bold text-text-primary text-center mb-4">
+            <h2 className="grip-section-title text-2xl sm:text-3xl font-extrabold text-center mb-4">
               How GRIP works
             </h2>
             <p className="text-text-secondary text-center max-w-xl mx-auto mb-12">
@@ -343,17 +546,19 @@ export function LandingPage() {
               ))}
             </div>
             <div className="text-center mt-12">
-              <Link href="#pricing" className="inline-flex h-11 items-center justify-center rounded-md border border-border px-8 text-base font-medium hover:bg-background-hover">
+              <Link href="#pricing" className="grip-cta-glow inline-flex h-11 items-center justify-center rounded-md border-2 border-primary/50 bg-primary/10 px-8 text-base font-medium text-primary hover:bg-primary/20 transition-all duration-300">
                 See pricing
               </Link>
             </div>
           </div>
+          </AnimatedSection>
         </section>
 
         {/* Use cases — user POV */}
         <section className="px-4 py-16 sm:py-20 border-t border-border bg-background-secondary/30">
+          <AnimatedSection>
           <div className="max-w-5xl mx-auto">
-            <h2 className="text-2xl sm:text-3xl font-bold text-text-primary text-center mb-4">
+            <h2 className="grip-section-title text-2xl sm:text-3xl font-extrabold text-center mb-4">
               Use cases
             </h2>
             <p className="text-text-secondary text-center max-w-xl mx-auto mb-12">
@@ -365,7 +570,7 @@ export function LandingPage() {
                 return (
                   <div
                     key={i}
-                    className="group relative p-6 rounded-xl border border-border bg-background-primary hover:border-primary/50 hover:shadow-lg transition-all duration-200"
+                    className="grip-card-glow group relative p-6 rounded-xl border border-border bg-background-primary hover:border-primary/50 transition-all duration-300"
                   >
                     <div className="flex items-start gap-4">
                       <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:bg-primary/20 transition-colors">
@@ -384,17 +589,19 @@ export function LandingPage() {
               })}
             </div>
             <div className="text-center">
-              <Link href="#pricing" className="inline-flex h-11 items-center justify-center rounded-md border border-border px-8 text-base font-medium hover:bg-background-hover">
+              <Link href="#pricing" className="grip-cta-glow inline-flex h-11 items-center justify-center rounded-md border-2 border-primary/50 bg-primary/10 px-8 text-base font-medium text-primary hover:bg-primary/20 transition-all duration-300">
                 See pricing
               </Link>
             </div>
           </div>
+          </AnimatedSection>
         </section>
 
         {/* Mock images — each page */}
         <section className="px-4 py-16 sm:py-20 border-t border-border bg-background-secondary/30">
+          <AnimatedSection>
           <div className="max-w-5xl mx-auto">
-            <h2 className="text-2xl sm:text-3xl font-bold text-text-primary text-center mb-4">
+            <h2 className="grip-section-title text-2xl sm:text-3xl font-extrabold text-center mb-4">
               See the app
             </h2>
             <p className="text-text-secondary text-center max-w-xl mx-auto mb-12">
@@ -411,22 +618,23 @@ export function LandingPage() {
               ))}
             </div>
             <div className="text-center mt-8">
-              <Link href="#pricing" className="inline-flex h-11 items-center justify-center rounded-md border border-border px-8 text-base font-medium hover:bg-background-hover">
+              <Link href="#pricing" className="grip-cta-glow inline-flex h-11 items-center justify-center rounded-md border-2 border-primary/50 bg-primary/10 px-8 text-base font-medium text-primary hover:bg-primary/20 transition-all duration-300">
                 See pricing
               </Link>
             </div>
           </div>
+          </AnimatedSection>
         </section>
 
         {/* Sandbox Playground Section */}
         <section id="sandbox-playground" className="px-4 py-16 sm:py-20 border-t border-border bg-background-secondary/30">
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-12">
-              <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-400 mb-4">
+              <div className="grip-section-badge inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400 mb-4 shadow-[0_0_20px_-6px_var(--primary)]">
                 <FlaskConical className="h-3.5 w-3.5" />
                 Safe Experimentation
               </div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-text-primary mb-4">
+              <h2 className="grip-section-title text-2xl sm:text-3xl font-extrabold text-center mb-4">
                 Sandbox Playground
               </h2>
               <p className="text-text-secondary max-w-xl mx-auto">
@@ -434,21 +642,21 @@ export function LandingPage() {
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-6 rounded-xl border border-border bg-background-secondary/50">
+              <div className="grip-card-glow p-6 rounded-xl border border-border bg-background-secondary/50">
                 <GitBranch className="h-8 w-8 text-primary mb-3" />
                 <h3 className="font-semibold text-text-primary mb-2">Architecture Experiments</h3>
                 <p className="text-sm text-text-secondary">
                   Try new patterns or structures (e.g., migrating from pages/ to app/ routes) without breaking your main project.
                 </p>
               </div>
-              <div className="p-6 rounded-xl border border-border bg-background-secondary/50">
+              <div className="grip-card-glow p-6 rounded-xl border border-border bg-background-secondary/50">
                 <Zap className="h-8 w-8 text-primary mb-3" />
                 <h3 className="font-semibold text-text-primary mb-2">Risky Refactors</h3>
                 <p className="text-sm text-text-secondary">
                   Test major changes or new dependencies in isolation. When you're happy with the results, promote changes back to main.
                 </p>
               </div>
-              <div className="p-6 rounded-xl border border-border bg-background-secondary/50">
+              <div className="grip-card-glow p-6 rounded-xl border border-border bg-background-secondary/50">
                 <Shield className="h-8 w-8 text-primary mb-3" />
                 <h3 className="font-semibold text-text-primary mb-2">Legal-Safe Mode</h3>
                 <p className="text-sm text-text-secondary">
@@ -467,25 +675,25 @@ export function LandingPage() {
         {/* Three pillars — keep original value props */}
         <section className="px-4 py-16 sm:py-20 border-t border-border">
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl sm:text-3xl font-bold text-text-primary text-center mb-12">
+            <h2 className="grip-section-title text-2xl sm:text-3xl font-extrabold text-center mb-12">
               Why GRIP
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 text-center sm:text-left">
-              <div className="flex flex-col items-center sm:items-start p-6 rounded-xl border border-border bg-background-secondary/50">
+              <div className="grip-card-glow flex flex-col items-center sm:items-start p-6 rounded-xl border border-border bg-background-secondary/50">
                 <FolderGit2 className="h-10 w-10 text-primary mb-4" aria-hidden />
                 <h3 className="font-semibold text-text-primary mb-2">Reference repos, generate new code</h3>
                 <p className="text-sm text-text-secondary">
                   Connect a GitHub repo for reference. GRIP analyzes structure, patterns, and dependencies—then generates clean-room code that follows those patterns. No code copying, only new implementation.
                 </p>
               </div>
-              <div className="flex flex-col items-center sm:items-start p-6 rounded-xl border border-border bg-background-secondary/50">
+              <div className="grip-card-glow flex flex-col items-center sm:items-start p-6 rounded-xl border border-border bg-background-secondary/50">
                 <MessageSquare className="h-10 w-10 text-primary mb-4" aria-hidden />
                 <h3 className="font-semibold text-text-primary mb-2">Chat with GRIP</h3>
                 <p className="text-sm text-text-secondary">
                   Get code, file generation, and step-by-step guidance. Code is automatically saved to your project, builds run automatically, and progress stays in sync.
                 </p>
               </div>
-              <div className="flex flex-col items-center sm:items-start p-6 rounded-xl border border-border bg-background-secondary/50">
+              <div className="grip-card-glow flex flex-col items-center sm:items-start p-6 rounded-xl border border-border bg-background-secondary/50">
                 <Zap className="h-10 w-10 text-primary mb-4" aria-hidden />
                 <h3 className="font-semibold text-text-primary mb-2">Ship it</h3>
                 <p className="text-sm text-text-secondary">
@@ -499,7 +707,7 @@ export function LandingPage() {
         {/* Final CTA */}
         <section className="px-4 py-16 sm:py-20 border-t border-border bg-primary/5">
           <div className="max-w-2xl mx-auto text-center">
-            <h2 className="text-2xl sm:text-3xl font-bold text-text-primary mb-4">
+            <h2 className="grip-section-title text-2xl sm:text-3xl font-extrabold mb-4">
               Ready to build with GRIP?
             </h2>
             <p className="text-text-secondary mb-8">
@@ -511,14 +719,14 @@ export function LandingPage() {
             <div className="flex flex-wrap items-center justify-center gap-4">
               <Link
                 href="/get-started"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md px-8 text-base font-medium bg-primary text-primary-foreground shadow hover:bg-primary-hover"
+                className="grip-cta-glow inline-flex h-11 items-center justify-center gap-2 rounded-md px-8 text-base font-medium bg-primary text-primary-foreground hover:scale-[1.03] active:scale-[0.98] transition-all duration-300"
               >
                 Get started
                 <ChevronRight className="h-4 w-4" />
               </Link>
               <Link
                 href="/login"
-                className="inline-flex h-11 items-center justify-center rounded-md border border-border px-8 text-base font-medium hover:bg-background-hover"
+                className="inline-flex h-11 items-center justify-center rounded-md border-2 border-primary/30 px-8 text-base font-medium hover:border-primary/50 hover:shadow-[0_0_20px_-8px_var(--primary)] transition-all duration-300"
               >
                 Sign in
               </Link>

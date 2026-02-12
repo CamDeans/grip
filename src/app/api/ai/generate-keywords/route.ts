@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateKeywordsServer } from '@/lib/services/aiService'
-import { getServerSession } from 'next-auth/next'
+import { getServerAuthSession } from '@/lib/auth'
 import { rateLimit } from '@/lib/api-utils/rate-limit'
 import { requireAppAccess, requireTokenBalance } from '@/lib/access'
 import { addTokenUsage } from '@/lib/tokenUsage'
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession()
+    const session = await getServerAuthSession()
     if (!session) {
       return NextResponse.json(
         { message: 'Unauthorized' },
