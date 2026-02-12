@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb'
 import { AIMessage } from '@/types/chat'
 import type { IProjectStateData } from '../models/ProjectState'
 import type { DevelopmentPlan } from './planGeneratorService'
+import { getDevelopmentPlan } from './planGeneratorService'
 
 // Check if we're on the client side
 const isClient = typeof window !== 'undefined'
@@ -374,6 +375,73 @@ export async function syncProjectStateFromPlan(projectId: string, plan: Developm
     return updateProjectState(projectId, { phases: mergedPhases, currentPhase })
   }
   return ensureProjectState(projectId, planPhases)
+}
+
+/**
+ * Reconcile project state with actual progress: infer completed steps from project file count
+ * so Overview and GRIP show the right phase when state was never advanced (e.g. before API applied code).
+ * Only advances (never downgrades) completed step count.
+ */
+export async function reconcileProjectStateFromFiles(projectId: string): Promise<boolean> {
+  if (isClient) return false
+  try {
+    const state = await getProjectState(projectId)
+    if (!state?.phases?.length) return false
+
+    const plan = await getDevelopmentPlan(projectId)
+    if (!plan?.phases?.length) return false
+
+    const client = await clientPromise
+    const db = client.db('test')
+    const fileCount = await db.collection('projectFiles').countDocuments({
+      projectId: new ObjectId(projectId),
+    })
+
+    const totalSteps = state.phases.reduce(
+      (sum: number, p: { steps?: unknown[] }) => sum + (p.steps?.length ?? 0),
+      0
+    )
+    const currentCompleted = state.phases.reduce(
+      (sum: number, p: { steps?: { status: string }[] }) =>
+        sum + (p.steps?.filter((s) => s.status === 'completed').length ?? 0),
+      0
+    )
+    const inferredCompleted = Math.min(fileCount, totalSteps)
+    const newCompleted = Math.max(currentCompleted, inferredCompleted)
+    if (newCompleted <= currentCompleted && currentCompleted > 0) return false
+
+    let stepIndex = 0
+    const newPhases = state.phases.map((phase: { name: string; steps: Array<{ id: number; title: string; status: string; action?: string; dependencies?: string[]; progress?: string; result?: string }> }) => {
+      const steps = (phase.steps || []).map((step) => {
+        const isCompleted = stepIndex < newCompleted
+        const isInProgress = stepIndex === newCompleted
+        stepIndex++
+        return {
+          ...step,
+          status: (isCompleted ? 'completed' : isInProgress ? 'in_progress' : 'pending') as 'pending' | 'in_progress' | 'completed',
+          progress: isCompleted ? '100%' : step.progress ?? '0%',
+        }
+      })
+      const allCompleted = steps.every((s) => s.status === 'completed')
+      const hasInProgress = steps.some((s) => s.status === 'in_progress')
+      const phaseStatus = (allCompleted ? 'completed' : hasInProgress ? 'in_progress' : 'pending') as 'pending' | 'in_progress' | 'completed'
+      return {
+        name: phase.name,
+        status: phaseStatus,
+        steps,
+      }
+    })
+
+    let currentPhase = state.currentPhase
+    const firstIncomplete = newPhases.find((p: { status: string }) => p.status !== 'completed')
+    if (firstIncomplete) currentPhase = firstIncomplete.name
+    else if (newPhases.length > 0) currentPhase = newPhases[newPhases.length - 1].name
+
+    return updateProjectState(projectId, { phases: newPhases, currentPhase })
+  } catch (e) {
+    console.warn('reconcileProjectStateFromFiles:', e)
+    return false
+  }
 }
 
 export async function ensureProjectState(projectId: string, phases: IProjectStateData['phases']): Promise<boolean> {
