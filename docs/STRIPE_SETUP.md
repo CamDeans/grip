@@ -41,15 +41,15 @@ GRIP has three plans: Starter, Pro, Team. In Stripe you can either create three 
     - **Pricing model:** Recurring.  
     - **Price:** $19.00 USD.  
     - **Billing period:** Monthly.  
-    - **Price description (optional):** `Starter – 50,000 tokens/month`  
+    - **Price description (optional):** `Starter – 650,000 tokens/month`  
     - Save. **Copy the Price ID** (starts with price_). This is your **Starter** price ID.
   - **Price 2:**  
     - Add another price: $49.00 USD, Monthly.  
-    - Description (optional): `Pro – 200,000 tokens/month`  
+    - Description (optional): `Pro – 1.7M tokens/month`  
     - Save. **Copy the Price ID.** This is your **Pro** price ID.
   - **Price 3:**  
     - Add another price: $99.00 USD, Monthly.  
-    - Description (optional): `Team – 500,000 tokens/month`  
+    - Description (optional): `Team – 3.4M tokens/month`  
     - Save. **Copy the Price ID.** This is your **Team** price ID.
 
 ### Option B: Three separate products
@@ -124,7 +124,7 @@ The checkout success and cancel URLs are built from **NEXTAUTH_URL** (or the req
 - In your app, go to the plans page and click Subscribe on a tier. Complete Checkout with Stripe’s test card (e.g. 4242 4242 4242 4242).
 - After payment, confirm:
   - You are redirected to the dashboard with a success state.
-  - The user has access and the correct token allowance (50,000 for Starter, 200,000 for Pro, 500,000 for Team).
+  - The user has access and the correct token allowance (650,000 for Starter, 1,700,000 for Pro, 3,400,000 for Team).
 - In Stripe Dashboard → **Developers** → **Webhooks**, open your endpoint and check that **checkout.session.completed** and **invoice.paid** (on renewal) show as delivered. If they fail, fix the URL or signing secret.
 
 ---

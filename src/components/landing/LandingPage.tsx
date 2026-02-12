@@ -312,7 +312,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How do I choose a plan?',
-    a: 'Create your account and sign in first; then you\'ll choose a plan and pay via Stripe. Starter ($19/mo, 50k tokens), Pro ($49/mo, 200k tokens), or Team ($99/mo, 500k tokens). Your token allowance covers all AI usage so you can ship without surprises.',
+    a: 'Create your account and sign in first; then you\'ll choose a plan and pay via Stripe. Starter ($19/mo, 650k tokens), Pro ($49/mo, 1.7M tokens), or Team ($99/mo, 3.4M tokens). Your token allowance covers all AI usage so you can ship without surprises.',
   },
 ]
 
@@ -493,7 +493,7 @@ export function LandingPage() {
                   <h3 className="font-semibold text-lg text-text-primary">Starter</h3>
                 </div>
                 <p className="text-2xl font-bold text-primary mb-1">$19<span className="text-sm font-normal text-text-muted">/month</span></p>
-                <p className="text-sm text-text-secondary mb-4">50,000 tokens/month</p>
+                <p className="text-sm text-text-secondary mb-4">650,000 tokens/month</p>
                 <p className="text-sm text-text-muted">
                   Light use, side projects. Enough for regular chat and code generation without worrying about limits.
                 </p>
@@ -505,9 +505,9 @@ export function LandingPage() {
                   <h3 className="font-semibold text-lg text-text-primary">Pro</h3>
                 </div>
                 <p className="text-2xl font-bold text-primary mb-1">$49<span className="text-sm font-normal text-text-muted">/month</span></p>
-                <p className="text-sm text-text-secondary mb-4">200,000 tokens/month</p>
+                <p className="text-sm text-text-secondary mb-4">1.7M tokens/month</p>
                 <p className="text-sm text-text-muted">
-                  Serious builders, daily use. Four times the tokens for heavy development and multiple projects.
+                  Serious builders, daily use. Heavy development and multiple projects with plenty of headroom.
                 </p>
               </div>
               <div className="grip-card-glow p-6 rounded-xl border-2 border-border bg-background-primary hover:border-primary/40 transition-all duration-300">
@@ -516,7 +516,7 @@ export function LandingPage() {
                   <h3 className="font-semibold text-lg text-text-primary">Team</h3>
                 </div>
                 <p className="text-2xl font-bold text-primary mb-1">$99<span className="text-sm font-normal text-text-muted">/month</span></p>
-                <p className="text-sm text-text-secondary mb-4">500,000 tokens/month</p>
+                <p className="text-sm text-text-secondary mb-4">3.4M tokens/month</p>
                 <p className="text-sm text-text-muted">
                   Small teams, heavy usage. Maximum allowance for shipping multiple apps and experiments.
                 </p>

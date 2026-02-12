@@ -7,10 +7,11 @@ export const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION })
   : null
 
+// Token economics: 1,030,051 tokens = $4.47 (Claude). Cost/token ≈ $4.34/1M. Tier allowances set so token cost ≤ 15% of revenue (85% margin).
 export const TIERS = [
-  { id: 'starter', name: 'Starter', priceCents: 1900, tokensPerMonth: 50_000, stripePriceId: process.env.STRIPE_PRICE_ID_STARTER },
-  { id: 'pro', name: 'Pro', priceCents: 4900, tokensPerMonth: 200_000, stripePriceId: process.env.STRIPE_PRICE_ID_PRO },
-  { id: 'team', name: 'Team', priceCents: 9900, tokensPerMonth: 500_000, stripePriceId: process.env.STRIPE_PRICE_ID_TEAM },
+  { id: 'starter', name: 'Starter', priceCents: 1900, tokensPerMonth: 650_000, stripePriceId: process.env.STRIPE_PRICE_ID_STARTER },
+  { id: 'pro', name: 'Pro', priceCents: 4900, tokensPerMonth: 1_700_000, stripePriceId: process.env.STRIPE_PRICE_ID_PRO },
+  { id: 'team', name: 'Team', priceCents: 9900, tokensPerMonth: 3_400_000, stripePriceId: process.env.STRIPE_PRICE_ID_TEAM },
 ] as const
 
 export type TierId = typeof TIERS[number]['id']

@@ -7,9 +7,9 @@ import { Coins } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
 
 const TIERS = [
-  { id: 'starter', name: 'Starter', price: '$19', priceLabel: '/month', tokens: '50,000 tokens/month', description: 'Light use, side projects. Enough for regular chat and code generation without worrying about limits.', popular: false },
-  { id: 'pro', name: 'Pro', price: '$49', priceLabel: '/month', tokens: '200,000 tokens/month', description: 'Serious builders, daily use. Four times the tokens for heavy development and multiple projects.', popular: true },
-  { id: 'team', name: 'Team', price: '$99', priceLabel: '/month', tokens: '500,000 tokens/month', description: 'Small teams, heavy usage. Maximum allowance for shipping multiple apps and experiments.', popular: false },
+  { id: 'starter', name: 'Starter', price: '$19', priceLabel: '/month', tokens: '650,000 tokens/month', description: 'Light use, side projects. Enough for regular chat and code generation without worrying about limits.', popular: false },
+  { id: 'pro', name: 'Pro', price: '$49', priceLabel: '/month', tokens: '1.7M tokens/month', description: 'Serious builders, daily use. Heavy development and multiple projects with plenty of headroom.', popular: true },
+  { id: 'team', name: 'Team', price: '$99', priceLabel: '/month', tokens: '3.4M tokens/month', description: 'Small teams, heavy usage. Maximum allowance for shipping multiple apps and experiments.', popular: false },
 ] as const
 
 export function PlansPageClient() {

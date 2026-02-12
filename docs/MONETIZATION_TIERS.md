@@ -6,9 +6,9 @@ No freemium; all paid tiers to cover real AI API usage.
 
 | Tier     | Price   | Tokens/month | Use case              |
 |----------|---------|--------------|------------------------|
-| Starter  | $19/mo  | 50,000       | Light use, side projects |
-| Pro     | $49/mo  | 200,000      | Serious builders, daily use |
-| Team    | $99/mo  | 500,000      | Small teams, heavy usage |
+| Starter  | $19/mo  | 650,000      | Light use, side projects |
+| Pro     | $49/mo  | 1,700,000    | Serious builders, daily use |
+| Team    | $99/mo  | 3,400,000    | Small teams, heavy usage |
 
 - **Competitive**: Comparable to other AI dev tools; clear value per dollar.
 - **Profitable**: Margins after AI API cost and 55% admin payout.

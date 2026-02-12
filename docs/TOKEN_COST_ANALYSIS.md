@@ -4,9 +4,9 @@
 
 | Tier     | Price   | Tokens/month | Price per 1K tokens | Use case              |
 |----------|---------|--------------|---------------------|------------------------|
-| Starter  | $19/mo  | 50,000       | $0.38               | Light use, side projects |
-| Pro      | $49/mo  | 200,000      | $0.245              | Serious builders, daily use |
-| Team     | $99/mo  | 500,000      | $0.198              | Small teams, heavy usage |
+| Starter  | $19/mo  | 650,000      | ~$0.029             | Light use, side projects |
+| Pro      | $49/mo  | 1,700,000    | ~$0.029             | Serious builders, daily use |
+| Team     | $99/mo  | 3,400,000    | ~$0.029             | Small teams, heavy usage |
 
 **Source:** Defined in `src/lib/stripe.ts` and documented in `docs/MONETIZATION_TIERS.md`
 
@@ -59,22 +59,22 @@ If that rate continued: **~4.85M × (30/4) ≈ 36M tokens/month** (order of magn
 
 | Tier     | Tokens/month | Cost/month | Revenue | Gross Profit | Margin |
 |----------|--------------|------------|---------|--------------|--------|
-| Starter  | 50,000       | $0.45      | $19     | $18.55       | 97.6%  |
-| Pro      | 200,000      | $1.80      | $49     | $47.20       | 96.3%  |
-| Team     | 500,000      | $4.50      | $99     | $94.50       | 95.5%  |
+| Starter  | 650,000      | ~$2.82     | $19     | ~$16.18      | ~85%   |
+| Pro      | 1,700,000    | ~$7.38     | $49     | ~$41.62      | ~85%   |
+| Team     | 3,400,000    | ~$14.76    | $99     | ~$84.24      | ~85%   |
 
 ### After 55% Admin Payout
 
 | Tier     | Revenue | Admin (55%) | App (45%) | API Cost | Net Profit |
 |----------|---------|-------------|-----------|----------|------------|
-| Starter  | $19     | $10.45      | $8.55     | $0.45    | **$8.10**  |
-| Pro      | $49     | $26.95      | $22.05    | $1.80    | **$20.25** |
-| Team     | $99     | $54.45      | $44.55    | $4.50    | **$40.05** |
+| Starter  | $19     | $10.45      | $8.55     | ~$2.82   | **~$5.73** |
+| Pro      | $49     | $26.95      | $22.05    | ~$7.38   | **~$14.67** |
+| Team     | $99     | $54.45      | $44.55    | ~$14.76  | **~$29.79** |
 
-**Net profit per subscription (Sonnet 4, 100% allowance used):**
-- Starter: **$8.10/month**
-- Pro: **$20.25/month**
-- Team: **$40.05/month**
+**Net profit per subscription (actual cost ~$4.34/1M tokens, 100% allowance used):**
+- Starter: **~$5.73/month**
+- Pro: **~$14.67/month**
+- Team: **~$29.79/month**
 
 If you use a **blended $16/1M** (e.g. 80% Sonnet, 20% Opus), costs roughly double; you’re still profitable (Starter ~$7.74, Pro ~$18.85, Team ~$36.15).
 
@@ -86,19 +86,19 @@ If you use a **blended $16/1M** (e.g. 80% Sonnet, 20% Opus), costs roughly doubl
 
 | Tier     | Tokens/month | Cost     | Revenue | Net Profit |
 |----------|--------------|----------|---------|------------|
-| Starter  | 50,000       | $0.45    | $19     | $8.10      |
-| Pro      | 200,000      | $1.80    | $49     | $20.25     |
-| Team     | 500,000      | $4.50    | $99     | $40.05     |
+| Starter  | 650,000      | ~$2.82   | $19     | ~$5.73     |
+| Pro      | 1,700,000    | ~$7.38   | $49     | ~$14.67    |
+| Team     | 3,400,000     | ~$14.76  | $99     | ~$29.79    |
 
 **✅ Profitable** at 100% usage with Sonnet 4.
 
 ### If you shift to Opus 4.1 ($45/1M)
 
-| Tier     | Cost/month | Revenue | Net Profit |
-|----------|------------|---------|------------|
-| Starter  | $2.25      | $19     | $6.30      |
-| Pro      | $9.00      | $49     | $13.05     |
-| Team     | $22.50     | $99     | $22.05     |
+| Tier     | Tokens/month | Cost/month | Revenue | Net Profit |
+|----------|--------------|------------|---------|------------|
+| Starter  | 650,000      | ~$29.25    | $19     | (loss)     |
+| Pro      | 1,700,000    | ~$76.50    | $49     | (loss)     |
+| Team     | 3,400,000    | ~$153      | $99     | (loss)     |
 
 **✅ Still profitable**, but margins drop.
 
@@ -120,15 +120,15 @@ If you use a **blended $16/1M** (e.g. 80% Sonnet, 20% Opus), costs roughly doubl
 - **Break-even API cost** = App share. If API cost = $8.55 for a Starter user, profit = $0.
 - **Well above break-even** = API cost is **much lower** than App share, so **net profit is a large share of App share**.
 
-### In numbers (Sonnet 4 @ $9/1M, 100% allowance used)
+### In numbers (actual ~$4.34/1M tokens, 100% allowance used)
 
 | Tier    | Revenue | App share (45%) | API cost | Net profit | % of App share that is profit |
 |---------|---------|------------------|----------|------------|-------------------------------|
-| Starter | $19     | $8.55            | $0.45    | $8.10      | **94.7%** of App share is profit |
-| Pro     | $49     | $22.05           | $1.80    | $20.25     | **91.8%** of App share is profit |
-| Team    | $99     | $44.55           | $4.50    | $40.05     | **89.9%** of App share is profit |
+| Starter | $19     | $8.55            | ~$2.82   | ~$5.73     | **~67%** of App share is profit |
+| Pro     | $49     | $22.05           | ~$7.38   | ~$14.67    | **~67%** of App share is profit |
+| Team    | $99     | $44.55           | ~$14.76  | ~$29.79    | **~67%** of App share is profit |
 
-So “well above break-even” here means: **API cost is only ~5–10% of App share**; the rest is net profit. You could absorb a **~10× increase** in API cost (e.g. from $9/1M to $90/1M) before Starter hits break-even.
+So “well above break-even” here means: **API cost is ~33% of App share** at current allowances and cost; the rest is net profit. You retain healthy margin at actual cost (~$4.34/1M). You could absorb a **~2× increase** in API cost before Starter hits break-even.
 
 ### Formula for future reviews
 
@@ -138,7 +138,7 @@ So “well above break-even” here means: **API cost is only ~5–10% of App sh
 
 2. **Actual API cost per tier (at 100% usage)**  
    `Cost = (Tokens per tier / 1,000,000) × $ per 1M tokens`  
-   Example: Starter 50K tokens @ $9/1M → $0.45.
+   Example: Starter 650K tokens @ ~$4.34/1M → ~$2.82.
 
 3. **Net profit**  
    `Net profit = App share − API cost = Revenue × 0.45 − Cost`
@@ -226,9 +226,9 @@ Use this whenever you review usage and pricing (e.g. monthly or quarterly).
 ### Where Token Numbers Came From
 
 **Source:** `src/lib/stripe.ts` defines:
-- Starter: 50,000 tokens/month
-- Pro: 200,000 tokens/month
-- Team: 500,000 tokens/month
+- Starter: 650,000 tokens/month
+- Pro: 1,700,000 tokens/month
+- Team: 3,400,000 tokens/month
 
 **Rationale (from MONETIZATION_TIERS.md):**
 - "Competitive": Comparable to other AI dev tools
