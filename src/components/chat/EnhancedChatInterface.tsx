@@ -678,9 +678,7 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
   }, [isTyping, messages.length, messages])
 
   // Auto-open StackBlitz when GRIP says "Run in StackBlitz" in chat. We only open a new tab (never navigate away).
-  // On revisit: last message in history may mention StackBlitz, so we try to open once; the browser often blocks
-  // (no user gesture on page load). That's expected — we show "Popup blocked" and the user can click the button.
-  // When GRIP says it during the conversation, the new tab usually opens; if blocked, the button (user click) always works.
+  // On revisit: we try once but do not show "Popup blocked" — that toast is only for when the user clicks and it's blocked.
   useEffect(() => {
     if (!projectId || isTyping || messages.length === 0) return
     const last = messages[messages.length - 1]
@@ -695,9 +693,8 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     const win = window.open(url, '_blank', 'noopener,noreferrer')
     if (win) {
       sonnerToast.success('Opening StackBlitz', { description: 'A new tab is opening. Stay here in chat — paste any errors back for GRIP to fix.' })
-    } else {
-      sonnerToast.warning('Popup blocked', { description: 'Click "Open StackBlitz again" below to open StackBlitz in a new tab.' })
     }
+    // If blocked (win is null): do not show toast here — user may be returning to the page. Show "Popup blocked" only when they click "Open StackBlitz again" and it fails.
   }, [projectId, isTyping, messages.length, messages])
 
   // Add rate limiting and request size limits
@@ -1116,6 +1113,7 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
                 projectId
                   ? () => {
                       refreshContext()
+                      fetchProjectState()
                       fetch(`/api/project-files?projectId=${projectId}&limit=500`)
                         .then((r) => (r.ok ? r.json() : []))
                         .then((files: Array<{ id: string; path: string; filename: string }>) => setProjectFiles(files))
@@ -1156,8 +1154,12 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
               <button
                 type="button"
                 onClick={() => {
-                  window.open(`/dashboard/open-stackblitz/${projectId}`, '_blank', 'noopener,noreferrer')
-                  sonnerToast.success('Opening StackBlitz', { description: 'Stay here — paste errors from StackBlitz and send to GRIP.' })
+                  const win = window.open(`/dashboard/open-stackblitz/${projectId}`, '_blank', 'noopener,noreferrer')
+                  if (win) {
+                    sonnerToast.success('Opening StackBlitz', { description: 'Stay here — paste errors from StackBlitz and send to GRIP.' })
+                  } else {
+                    sonnerToast.warning('Popup blocked', { description: 'Allow popups for this site, or copy the Preview URL and open it in a new tab.' })
+                  }
                 }}
                 className="inline-flex items-center gap-2 rounded-md border border-primary/50 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/20 transition-colors"
               >

@@ -319,14 +319,15 @@ export async function recordFileSaveAndAdvanceStep(
 
 /**
  * Sync project state phases and steps from a development plan.
- * Called after generating a plan so chat and UI show the same phases/steps.
+ * When project state already exists, we MERGE: preserve existing phase/step completion
+ * so Overview and enhanced chat reflect what the user and GRIP have already completed.
  */
 export async function syncProjectStateFromPlan(projectId: string, plan: DevelopmentPlan): Promise<boolean> {
   if (isClient) {
     console.warn('Cannot sync project state from client-side')
     return false
   }
-  const phases = plan.phases?.map((phase, phaseIndex) => ({
+  const planPhases = plan.phases?.map((phase, phaseIndex) => ({
     name: phase.name,
     status: (phaseIndex === 0 ? 'in_progress' : phase.status === 'completed' ? 'completed' : phase.status === 'in_progress' ? 'in_progress' : 'pending') as 'pending' | 'in_progress' | 'completed',
     steps: (phase.tasks || []).map((task, stepIndex) => ({
@@ -338,12 +339,41 @@ export async function syncProjectStateFromPlan(projectId: string, plan: Developm
       progress: task.status === 'completed' ? '100%' : '0%'
     }))
   }))
-  if (!phases?.length) return false
+  if (!planPhases?.length) return false
   const existing = await getProjectState(projectId)
-  if (existing) {
-    return updateProjectState(projectId, { phases, currentPhase: phases[0].name })
+  if (existing?.phases?.length) {
+    // Merge: preserve existing phase status and step status so completed work is not overwritten
+    const mergedPhases = planPhases.map((planPhase) => {
+      const existingPhase = existing.phases.find((p: { name: string }) => p.name === planPhase.name)
+      if (!existingPhase) return planPhase
+      const mergedSteps = planPhase.steps.map((planStep) => {
+        const existingStep = existingPhase.steps?.find((s: { id: number }) => s.id === planStep.id)
+        if (!existingStep) return planStep
+        return {
+          ...planStep,
+          status: existingStep.status,
+          progress: existingStep.progress ?? planStep.progress,
+          result: existingStep.result
+        }
+      })
+      const allStepsCompleted = mergedSteps.every((s) => s.status === 'completed')
+      const status = existingPhase.status === 'completed' || allStepsCompleted ? 'completed' : existingPhase.status
+      return {
+        name: planPhase.name,
+        status: status as 'pending' | 'in_progress' | 'completed',
+        steps: mergedSteps
+      }
+    })
+    // Keep existing currentPhase if it still exists in merged phases; otherwise set to first non-completed phase
+    let currentPhase = existing.currentPhase
+    const hasCurrent = mergedPhases.some((p: { name: string }) => p.name === currentPhase)
+    if (!hasCurrent || !currentPhase) {
+      const firstIncomplete = mergedPhases.find((p: { status: string }) => p.status !== 'completed')
+      currentPhase = firstIncomplete?.name ?? mergedPhases[0]?.name ?? ''
+    }
+    return updateProjectState(projectId, { phases: mergedPhases, currentPhase })
   }
-  return ensureProjectState(projectId, phases)
+  return ensureProjectState(projectId, planPhases)
 }
 
 export async function ensureProjectState(projectId: string, phases: IProjectStateData['phases']): Promise<boolean> {
