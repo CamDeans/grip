@@ -58,6 +58,14 @@ When you provide a README (at project completion OR when the user asks for a REA
 - ALWAYS provide: (1) exact file path/filename for every code block (see below), (2) a clear "next step" that matches automation (use Run in StackBlitz to preview or paste errors), (3) never ask the user to "save the block above" as the primary step—the system applies files automatically.
 - NEVER use generic filenames like snippet.json, snippet.txt, or any "snippet.*". Always use the real file path (e.g. package.json, src/App.tsx, .env, .env.local, README.txt). The path above the block is used to apply the file automatically; if you omit it, the user gets a generic name. It is MANDATORY to put the correct filename for every code block (e.g. .env for env vars, .env.local for local overrides, README.txt for plain text readme).
 
+## User instructions to remember (GRIP memory)
+- When the user asks you to **remember** something for future messages (e.g. "remember that I prefer TypeScript", "from now on always use Tailwind", "don't suggest npm install unless I ask"), you MUST save it so it applies in all future responses. Output a **grip-memory** block with a single instruction. Format exactly:
+\`\`\`grip-memory
+{"instruction":"<one clear instruction the user asked to remember>"}
+\`\`\`
+- You may output one grip-memory block per user message. If the user gives multiple things to remember, use one block with multiple instructions: \`{"instructions":["...","..."]}\`. The system saves these and injects them into your context on every turn so you follow them automatically.
+- After the block, briefly confirm you will remember (e.g. "Got it, I'll do that from now on."). Do not repeat the instruction verbatim in every response—the system will remind you; just apply it.
+
 ## Re-ask project-style questions in plain English and convert answers to technical aspects
 - When communicating with the user, treat them as a non-developer. Proactively re-ask or clarify (in plain English) the same kinds of questions as the project creation form: (1) What is the main goal of this project in your own words? (2) Who will use it? Describe them simply. (3) What should the app do? List the main things in simple terms. (4) Any technical preferences or constraints? (e.g. "must work on phones", "needs to be simple", "fast loading").
 - Take the user's plain-English answers and convert them into technical aspects for the project (e.g. "I want it to work on phones" → responsive, mobile-first; "needs to be simple" → minimal UI, clear navigation; "fast" → performance, lazy loading). Use this enriched understanding when writing code and creating files/folders so they align with the user's end-result requests.
@@ -75,6 +83,23 @@ Use plain text for each field; you may merge the user's plain-English answer wit
 - Title: "${projectContext.title}"
 - Description: "${projectContext.description}"
 `
+    // Inject saved user instructions (GRIP memory) so they apply in every response
+    const memories = (projectContext as { gripMemories?: Array<{ instruction: string }> }).gripMemories
+    if (Array.isArray(memories) && memories.length > 0) {
+      const lines = memories
+        .map((m) => (typeof m === 'string' ? m : m?.instruction))
+        .filter(Boolean)
+      if (lines.length > 0) {
+        prompt += `
+## User instructions to remember (apply in every response)
+The user asked you to remember the following. Apply these in all code and advice:
+`
+        lines.forEach((line) => {
+          prompt += `- ${line}\n`
+        })
+        prompt += '\n'
+      }
+    }
 
     if (projectContext.repository) {
       prompt += `- Repository: ${projectContext.repository.owner}/${projectContext.repository.name}
@@ -807,6 +832,57 @@ async function parseAndApplyGripUpdateIdeation(
   }
 }
 
+const MAX_GRIP_MEMORIES = 50
+
+/** Parse grip-memory block(s) from message, append to project's gripMemories, return cleaned message. */
+async function parseAndApplyGripMemory(
+  projectId: string,
+  message: string,
+  isSandbox: boolean
+): Promise<{ cleanedMessage: string; updated: boolean }> {
+  const blockRe = /```grip-memory\n([\s\S]*?)```/g
+  const matches = [...message.matchAll(blockRe)]
+  if (matches.length === 0) return { cleanedMessage: message, updated: false }
+  let cleanedMessage = message
+  const toAdd: Array<{ instruction: string; createdAt: Date }> = []
+  for (const match of matches) {
+    cleanedMessage = cleanedMessage.replace(match[0], '').trim()
+    try {
+      const body = match[1].trim()
+      const parsed = JSON.parse(body) as { instruction?: string; instructions?: string[] }
+      if (typeof parsed.instruction === 'string' && parsed.instruction.trim()) {
+        toAdd.push({ instruction: parsed.instruction.trim(), createdAt: new Date() })
+      }
+      if (Array.isArray(parsed.instructions)) {
+        for (const instr of parsed.instructions) {
+          if (typeof instr === 'string' && instr.trim()) {
+            toAdd.push({ instruction: instr.trim(), createdAt: new Date() })
+          }
+        }
+      }
+    } catch {
+      // skip malformed block
+    }
+  }
+  if (toAdd.length === 0) return { cleanedMessage, updated: false }
+  const client = await clientPromise
+  const db = client.db(process.env.MONGODB_DB_NAME || 'test')
+  const collection = isSandbox ? db.collection('sandboxProjects') : db.collection('projects')
+  await collection.updateOne(
+    { _id: new ObjectId(projectId) },
+    {
+      $push: {
+        gripMemories: {
+          $each: toAdd,
+          $slice: -MAX_GRIP_MEMORIES,
+        },
+      },
+      $set: { updatedAt: new Date() },
+    }
+  )
+  return { cleanedMessage, updated: true }
+}
+
 // Helper function to save chat message to MongoDB
 async function saveChatMessage(projectId: string, message: ChatMessage) {
   try {
@@ -975,6 +1051,7 @@ export async function POST(request: NextRequest) {
           isSandbox: true,
           parentProjectId: sandboxProject.parentProjectId,
           lastRunErrors: (sandboxProject as { lastRunErrors?: unknown }).lastRunErrors,
+          gripMemories: (sandboxProject as { gripMemories?: Array<{ instruction: string }> }).gripMemories ?? [],
         }
       } else {
         return NextResponse.json({ error: 'Project not found' }, { status: 404 })
@@ -1211,6 +1288,18 @@ export async function POST(request: NextRequest) {
       console.warn('Enhanced chat: grip-update-ideation failed', ideationErr)
     }
 
+    // Parse and apply grip-memory so GRIP can save user instructions for future turns
+    try {
+      const { cleanedMessage, updated } = await parseAndApplyGripMemory(projectId, aiMessage, isSandbox)
+      if (updated) {
+        aiMessage = cleanedMessage + (cleanedMessage ? '\n\n' : '') + "I'll remember that for future messages."
+      } else if (cleanedMessage !== aiMessage) {
+        aiMessage = cleanedMessage
+      }
+    } catch (memoryErr) {
+      console.warn('Enhanced chat: grip-memory failed', memoryErr)
+    }
+
     // Merge multiple README blocks into one so the user gets a single "Save to project" button
     aiMessage = mergeReadmeBlocks(aiMessage)
 
@@ -1311,6 +1400,11 @@ export async function POST(request: NextRequest) {
             const { cleanedMessage, updated } = await parseAndApplyGripUpdateIdeation(projectId, nextMessage)
             if (updated) nextMessage = cleanedMessage + (cleanedMessage ? '\n\n' : '') + "I've updated your project details."
             else if (cleanedMessage !== nextMessage) nextMessage = cleanedMessage
+          } catch (_) {}
+          try {
+            const { cleanedMessage: memCleaned, updated: memUpdated } = await parseAndApplyGripMemory(projectId, nextMessage, isSandbox)
+            if (memUpdated) nextMessage = memCleaned + (memCleaned ? '\n\n' : '') + "I'll remember that for future messages."
+            else if (memCleaned !== nextMessage) nextMessage = memCleaned
           } catch (_) {}
           nextMessage = mergeReadmeBlocks(nextMessage)
 
