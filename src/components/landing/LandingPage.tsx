@@ -278,6 +278,26 @@ function MockBrowserFrame({
 
 const FAQ_ITEMS = [
   {
+    q: 'What are the project creation steps?',
+    a: 'Create a project (name + description) → answer ideation questions (goals, audience, key features, technical needs) → optionally link a GitHub repo as reference → GRIP generates a plan and starter files → develop with GRIP in chat (code saved automatically, builds run) → preview in StackBlitz → export to GitHub or deploy to Vercel. You can start from an idea only; GitHub is optional.',
+  },
+  {
+    q: 'Do I need GitHub? Is it required?',
+    a: 'No. GitHub is optional. If you\'re starting from an idea only, skip the repo step and leave it blank—GRIP will still generate a plan and code from your ideation. Link a repo only if you want GRIP to use an existing codebase as a reference for structure and patterns.',
+  },
+  {
+    q: 'Can I use a GitHub repo I don\'t own?',
+    a: 'Yes. You can use any public GitHub repo as reference. It doesn\'t have to be yours. GRIP uses it only to understand structure, patterns, and dependencies so it can help you build your ideation. GRIP never copies code from the repo—all generated code is new, clean-room implementation that follows those patterns.',
+  },
+  {
+    q: 'How does GRIP use the linked repo?',
+    a: 'Reference only. GRIP analyzes the repo\'s structure, file organization, and dependencies to inform your project and generate new code that follows similar patterns. No code is copied from the repo. Your project is built from your ideation; the repo simply helps GRIP match the style and architecture you want.',
+  },
+  {
+    q: 'What use cases does GRIP support?',
+    a: 'Idea-only: describe your project in plain English, skip GitHub, and get a plan and generated code. Idea + reference repo: link any public repo (yours or not) so GRIP can follow its patterns. Non-technical: describe what you want; GRIP guides you and saves code automatically. Safe experimentation: use the Sandbox Playground to try changes without touching your main project, then promote when ready.',
+  },
+  {
     q: 'Why paid plans only?',
     a: 'Paid plans only—no freemium. Your subscription covers real AI usage so you get predictable pricing and enough tokens to ship. No hidden fees; your token allowance is used for all GRIP AI actions (chat, code gen, builds).',
   },

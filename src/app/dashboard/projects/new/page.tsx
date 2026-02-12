@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { RepoSelector } from '@/components/projects/RepoSelector'
@@ -45,7 +46,6 @@ export default function NewProjectPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isFormValid, setIsFormValid] = useState(false)
   const [currentStep, setCurrentStep] = useState<'details' | 'context'>('details')
-  const [faqOpen, setFaqOpen] = useState(false)
   const [githubExplanationOpen, setGithubExplanationOpen] = useState(false)
   const [formData, setFormData] = useState<ProjectFormData>({
     title: '',
@@ -204,22 +204,22 @@ export default function NewProjectPage() {
             What you’ll do
           </h2>
           <p className="text-sm text-text-secondary mt-1">
-            Two short steps. Then G.R.I.P. will work with you in chat to bring your idea to life.
+            Two steps on this page (details + context), then open Develop to chat with G.R.I.P. and bring your idea to life.
           </p>
         </div>
         <div className="px-6 py-4">
           <ol className="space-y-2 text-sm text-text-primary">
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">1</span>
-              <span><strong>Project details</strong> — Give your project a name and a short description. If you have existing code on GitHub, you can link it here (optional).</span>
+              <span><strong>Project details</strong> — Name and short description. Optionally link any public GitHub repo as reference (you don't need to own it); G.R.I.P. uses it for patterns only and never copies code.</span>
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">2</span>
-              <span><strong>Project context</strong> — Describe your goals, who it’s for, main features, and any must-haves (e.g. “works on phones”, “simple to use”). Use plain language; G.R.I.P. will turn that into a plan.</span>
+              <span><strong>Project context</strong> — Goals, who it's for, main features, and any must-haves in plain language (e.g. "works on phones", "simple to use"). G.R.I.P. turns this into a plan.</span>
             </li>
             <li className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">3</span>
-              <span><strong>Chat with G.R.I.P.</strong> — After you create the project, open <strong>Develop</strong> and talk to G.R.I.P. in chat. It will write code, create files, and guide you step by step. You can say things like “add a login page” or “make it work on mobile.”</span>
+              <span><strong>Chat with G.R.I.P.</strong> — After creating the project, open <strong>Develop</strong> and chat. G.R.I.P. will write code, create files, and guide you (e.g. “add a login page” or “make it work on mobile.”</span>
             </li>
           </ol>
         </div>
@@ -270,7 +270,7 @@ export default function NewProjectPage() {
                       aria-expanded={githubExplanationOpen ? 'true' : 'false'}
                       aria-controls="github-explanation-content"
                     >
-                      <span className="font-medium text-text-primary">What is GitHub? How do I find a repo?</span>
+                      <span className="font-medium text-text-primary">GitHub optional — what is it and how do I find a repo?</span>
                       <span className="flex items-center gap-1 shrink-0 text-text-secondary">
                         {githubExplanationOpen ? 'Collapse' : 'Expand'}
                         {githubExplanationOpen ? (
@@ -287,7 +287,7 @@ export default function NewProjectPage() {
                       className={githubExplanationOpen ? 'px-4 pt-4 pb-3 text-xs text-text-secondary border-t border-border' : 'hidden'}
                     >
                       <p>
-                        <strong>What is GitHub?</strong> GitHub is a website where developers store and share code. A <strong>repository</strong> (or “repo”) is one project folder on GitHub (e.g. your-app, my-website). You only need this if you already have code on GitHub that you want G.R.I.P. to build on. If you’re starting from scratch with just an idea, leave this blank and click <strong>Continue</strong>. If you want to find a repo to link: fill in your project title and description above first, then click <strong>Generate Keywords</strong> to get suggested search terms based on your project; click <strong>Use Keywords</strong> to add them to the search box, then click <strong>Search</strong> to find matching repositories.
+                        <strong>GitHub is optional.</strong> A <strong>repository</strong> (repo) is a code project on GitHub. You can link any public repo as reference—you don't need to own it. G.R.I.P. uses it for structure and patterns only and never copies code. Starting from an idea only? Leave this blank and click <strong>Continue</strong>. To find a repo: fill in title and description above, then <strong>Generate Keywords</strong> → <strong>Use Keywords</strong> → <strong>Search</strong>. More in the <Link href="/#faq" className="text-primary hover:underline">FAQ on the home page</Link>.
                       </p>
                     </div>
                   </div>
@@ -327,7 +327,7 @@ export default function NewProjectPage() {
               <div className="mt-3 p-3 rounded-md bg-primary/10 border border-primary/20 flex gap-2">
                 <CheckCircleIcon className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <div className="text-sm text-text-primary">
-                  <strong>Tips for the best result:</strong> Write in plain language (e.g. “I want a simple to-do list” or “It should work on phones”). The more you describe goals, audience, and features, the better G.R.I.P. can match your idea. You can always add or change details later in chat.
+                  <strong>Tips:</strong> Plain language works best (e.g. "simple to-do list", "works on phones"). You can add or change details later in chat or in <strong>Settings</strong>. More in the <Link href="/#faq" className="text-primary hover:underline">FAQ on the home page</Link>.
                 </div>
               </div>
             </div>
@@ -457,64 +457,28 @@ export default function NewProjectPage() {
         )}
       </form>
 
-      {/* FAQ for non-devs — collapsible */}
+      {/* FAQ — link to home page FAQ; only 2 short page-specific answers here */}
       <Card className="mt-8">
-        <button
-          type="button"
-          onClick={() => setFaqOpen((prev) => !prev)}
-          className="w-full px-6 py-4 flex items-center justify-between gap-2 text-left hover:bg-muted/50 transition-colors rounded-t-lg border-b border-border"
-          aria-expanded={faqOpen ? 'true' : 'false'}
-          aria-controls="faq-content"
-        >
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="px-6 py-4 border-b border-border">
+          <h2 className="text-base font-medium flex items-center gap-2">
             <QuestionMarkCircleIcon className="h-5 w-5 text-primary shrink-0" />
-            <h2 className="text-base font-medium" id="faq-heading">
-              Frequently asked questions
-            </h2>
-          </div>
-          <span className="text-sm text-text-secondary shrink-0">
-            {faqOpen ? 'Collapse' : 'Expand'}
-          </span>
-          {faqOpen ? (
-            <ChevronUpIcon className="h-5 w-5 text-text-secondary shrink-0" aria-hidden />
-          ) : (
-            <ChevronDownIcon className="h-5 w-5 text-text-secondary shrink-0" aria-hidden />
-          )}
-        </button>
-        <div
-          id="faq-content"
-          role="region"
-          aria-labelledby="faq-heading"
-          className={faqOpen ? 'px-6 py-4 space-y-5 border-t border-border' : 'hidden'}
-        >
-          <div>
-            <h3 className="text-sm font-medium text-text-primary">What is GitHub and do I need it?</h3>
-            <p className="text-sm text-text-secondary mt-1">
-              GitHub is a website where people store and share code. A <strong>repository</strong> (repo) is one code project on GitHub. You <strong>do not need</strong> GitHub to use G.R.I.P. If you’re starting from an idea only, skip the GitHub step and leave it blank. Use GitHub only if you already have code there that you want G.R.I.P. to build on or improve. If you do want to link a repo: fill in your project title and description first, then use <strong>Generate Keywords</strong> to get suggested search terms based on your project; click <strong>Use Keywords</strong> to add them to the search box and <strong>Search</strong> to find repositories that match.
-            </p>
-          </div>
+            Questions?
+          </h2>
+          <p className="text-sm text-text-secondary mt-1">
+            Full FAQ (GitHub optional, repo reference only, steps, plans) is on the <Link href="/#faq" className="text-primary hover:underline">home page</Link>. Here, two quick answers:
+          </p>
+        </div>
+        <div className="px-6 py-4 space-y-4">
           <div>
             <h3 className="text-sm font-medium text-text-primary">What happens after I create the project?</h3>
             <p className="text-sm text-text-secondary mt-1">
-              You’ll land on your project’s <strong>Overview</strong> page. From there, open the <strong>Develop</strong> tab to chat with G.R.I.P. Describe what you want in plain language (e.g. “add a login page”, “make it work on mobile”). G.R.I.P. will write code, create files, and guide you. You can test the app in the browser (StackBlitz) without installing anything.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-text-primary">How do I get the best result from G.R.I.P.?</h3>
-            <p className="text-sm text-text-secondary mt-1">
-              <strong>Be specific in this form:</strong> The more you describe your goals, audience, and features here, the better G.R.I.P. can plan. <strong>Use plain language:</strong> Say “I want a simple to-do list” or “it should work on phones” — no technical jargon needed. <strong>In chat:</strong> Ask for one thing at a time (e.g. “add a button that saves the recipe”) and say when something isn’t right so G.R.I.P. can fix it.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-text-primary">What if I don’t know technical requirements?</h3>
-            <p className="text-sm text-text-secondary mt-1">
-              You can leave that field blank or write things like “simple to use”, “works on phones”, or “loads quickly”. G.R.I.P. will suggest a sensible setup. You can always add or change requirements later in chat.
+              You land on the project <strong>Overview</strong>. Open <strong>Develop</strong> to chat with G.R.I.P.; it will write code, create files, and guide you. You can preview in StackBlitz without installing anything.
             </p>
           </div>
           <div>
             <h3 className="text-sm font-medium text-text-primary">Can I change my project details later?</h3>
             <p className="text-sm text-text-secondary mt-1">
-              Yes. After creating the project, go to <strong>Settings</strong> to edit the title, description, goals, audience, features, and technical requirements. You can also tell G.R.I.P. in chat about new goals or features and it will update the plan with you.
+              Yes. Use <strong>Settings</strong> to edit title, description, goals, audience, features, and technical requirements. You can also tell G.R.I.P. in chat about new goals or features and it will update the plan with you.
             </p>
           </div>
         </div>
