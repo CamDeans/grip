@@ -4,6 +4,9 @@ import clientPromise from '@/lib/db'
 const DEFAULT_ADMIN_ALLOWANCE = 500_000
 const DEFAULT_VALUED_TESTER_ALLOWANCE = 50
 
+/** Minimum remaining tokens required to start a token-consuming request (avoids overage from a single large call). */
+export const SAFE_MIN_REMAINING_TOKENS = 2_000
+
 export type TokenLimits = {
   adminTokenAllowance: number
   valuedTesterTokenAllowance: number
@@ -40,14 +43,22 @@ export async function setTokenLimits(limits: Partial<TokenLimits>): Promise<void
 
 /**
  * Add token usage for a user this period. Call after a successful AI request.
+ * Caps at allowance so we never record an overage (tokensUsedThisPeriod never exceeds tokenAllowance).
  */
 export async function addTokenUsage(userId: string, amount: number): Promise<void> {
   if (amount <= 0) return
   const client = await clientPromise
   const db = client.db(process.env.MONGODB_DB_NAME || 'test')
+  const user = await db.collection('users').findOne(
+    { _id: new ObjectId(userId) },
+    { projection: { tokenAllowance: 1, tokensUsedThisPeriod: 1 } }
+  ) as { tokenAllowance?: number; tokensUsedThisPeriod?: number } | null
+  const allowance = user?.tokenAllowance ?? 0
+  const used = user?.tokensUsedThisPeriod ?? 0
+  const capped = allowance > 0 ? Math.min(used + amount, allowance) : used + amount
   await db.collection('users').updateOne(
     { _id: new ObjectId(userId) },
-    { $inc: { tokensUsedThisPeriod: amount }, $set: { updatedAt: new Date() } }
+    { $set: { tokensUsedThisPeriod: capped, updatedAt: new Date() } }
   )
 }
 

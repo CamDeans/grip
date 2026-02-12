@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { ObjectId } from 'mongodb'
 import clientPromise from '@/lib/db'
 import { isAdminUser } from '@/lib/utils/auth'
-import { getTokenLimits } from '@/lib/tokenUsage'
+import { getTokenLimits, SAFE_MIN_REMAINING_TOKENS } from '@/lib/tokenUsage'
 
 export type AppAccessSource = 'admin' | 'subscription' | 'valued_tester'
 
@@ -218,8 +218,9 @@ export async function requireAppAccess(
 }
 
 /**
- * Use in token-consuming API routes (chat, enhanced-chat, etc.) to block when user has no tokens left.
- * Returns a NextResponse (403) with message if exhausted; otherwise returns null.
+ * Use in token-consuming API routes (chat, enhanced-chat, etc.) to block when user has no tokens left
+ * or when remaining tokens are below a safe minimum (prevents overage from a single large request).
+ * Returns a NextResponse (403) with message if exhausted or would exceed; otherwise returns null.
  */
 export async function requireTokenBalance(
   session: Session | null
@@ -229,10 +230,20 @@ export async function requireTokenBalance(
   if (!access.hasAccess) return null
   const used = access.tokensUsedThisPeriod ?? 0
   const allowance = access.tokenAllowance ?? 0
+  const remaining = allowance > 0 ? allowance - used : 0
   if (allowance > 0 && used >= allowance) {
     const message = access.isAdmin
       ? "You've reached your token limit. Request more from Admin portal → Token limits."
       : "You've used all your tokens for this period. Your allowance resets at the start of the next billing cycle."
+    return NextResponse.json(
+      { error: 'Token limit reached', message, code: 'TOKENS_EXHAUSTED' },
+      { status: 403 }
+    )
+  }
+  if (allowance > 0 && remaining < SAFE_MIN_REMAINING_TOKENS) {
+    const message = access.isAdmin
+      ? "You're close to your token limit. Request more from Admin portal → Token limits, or wait for the next period."
+      : "You're close to your token limit for this period. Your allowance resets at the start of the next billing cycle."
     return NextResponse.json(
       { error: 'Token limit reached', message, code: 'TOKENS_EXHAUSTED' },
       { status: 403 }
