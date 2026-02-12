@@ -3,7 +3,8 @@ import { ObjectId } from 'mongodb'
 import clientPromise from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { reconcileProjectStateFromFiles } from '@/lib/services/projectStateService'
+import { reconcileProjectStateFromFiles, syncProjectStateFromPlan } from '@/lib/services/projectStateService'
+import { getProjectPlan } from '@/lib/services/projectPlanningService'
 
 // Mock project state data for demo project
 const mockProjectState = {
@@ -158,16 +159,31 @@ export async function GET(
       })
     }
 
-    // Find project state for main projects
+    // Find project state for main projects; if missing, create from plan so new projects get state
     let state = await db.collection('projectStates').findOne({
       projectId: new ObjectId(id)
     })
 
     if (!state) {
-      return new NextResponse(
-        JSON.stringify({ error: 'Project state not found' }),
-        { status: 404 }
-      )
+      try {
+        const planResult = await getProjectPlan(id)
+        if (planResult?.plan) {
+          const synced = await syncProjectStateFromPlan(id, planResult.plan)
+          if (synced) {
+            state = await db.collection('projectStates').findOne({
+              projectId: new ObjectId(id)
+            }) ?? null
+          }
+        }
+      } catch (_) {
+        // ignore
+      }
+      if (!state) {
+        return new NextResponse(
+          JSON.stringify({ error: 'Project state not found' }),
+          { status: 404 }
+        )
+      }
     }
 
     // Reconcile with actual progress (project file count) so Overview and GRIP show the right phase

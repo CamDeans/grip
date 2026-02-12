@@ -33,28 +33,32 @@ export async function GET(
     const client = await clientPromise
     const db = client.db('test')
 
-    console.log('Loading analysis for project:', id)
-
     // First check if project exists
     const project = await db.collection('projects').findOne({
       _id: new ObjectId(id)
     })
 
     if (!project) {
-      console.log('Project not found for analysis:', id)
       return new NextResponse(
         JSON.stringify({ error: 'Project not found' }),
         { status: 404 }
       )
     }
 
-    // Load analysis from the database
-    const analysis = await db.collection('analysis').findOne({
+    // Load analysis from analyses (main) or analysis (legacy) so UI and enhanced-chat use same source
+    let analysis = await db.collection('analyses').findOne({
       projectId: new ObjectId(id)
     })
+    if (!analysis) {
+      analysis = await db.collection('analysis').findOne({
+        projectId: new ObjectId(id)
+      })
+    }
+    if (!analysis && (project as { analysis?: unknown }).analysis) {
+      analysis = (project as { analysis: unknown }).analysis as Record<string, unknown>
+    }
 
     if (!analysis) {
-      // If no analysis exists, return empty structure
       return NextResponse.json({
         projectId: id,
         status: 'not_analyzed',
@@ -64,7 +68,6 @@ export async function GET(
       })
     }
 
-    // Return the analysis data
     return NextResponse.json(analysis)
   } catch (error: any) {
     console.error('Error loading analysis:', error)

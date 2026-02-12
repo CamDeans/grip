@@ -116,8 +116,8 @@ export async function analyzeProject(projectId: string, repository: { owner: str
           fileCount: files.length,
           directoryStructure: files.map(f => f.path),
           mainLanguages: getLanguageStats(files),
-          components: [],
-          features: []
+          components: Array.isArray(repositoryAnalysis?.components) ? repositoryAnalysis.components : [],
+          features: Array.isArray(repositoryAnalysis?.features) ? repositoryAnalysis.features : []
         },
         // New: sandbox-style tree-sitter analysis + structured JSON for main GRIP
         repositoryAnalysis: repositoryAnalysis || undefined,

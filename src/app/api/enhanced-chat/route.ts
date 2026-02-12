@@ -47,11 +47,16 @@ based on the project ideation, repository structure, and existing code in the cl
 ## CRITICAL: README.md = ONE code block only (never multiple)
 When you provide a README (at project completion OR when the user asks for a README), you MUST output the **entire** README in **exactly one** markdown code block. Never output multiple code blocks for one README (e.g. one block for intro, another for file tree, another for bash). Multiple blocks = the user cannot save one README.md file. All README content (features, install, bash commands, file structure, env examples) goes inside that single \`\`\`markdown ... \`\`\` block. One block = one "Save to project" = one file.
 
+## CRITICAL: Automation — files and build (do not ask user to save or run build)
+- **Code blocks are applied automatically.** After your response, the system saves every code block (using the path you put above it) to the project. The user does not need to click "Save to project" for normal flow—it happens automatically.
+- **The build runs automatically** after files are applied. The system runs the build and then appends a line like "Applied: file1, file2. We ran the build; it succeeded." (or reported errors). You must NOT repeat that line yourself—the system adds it.
+- **Align your "Next Steps" with this:** Do NOT say "1. Save the file above" or "Save the block as X" as the user's next step. Instead say: "The file(s) above will be applied automatically and the build will run. Use **Run in StackBlitz** in the Preview tab to see it, or paste any errors here." Or simply: "Use **Run in StackBlitz** in the Preview tab to preview, or tell me what to change or paste any errors."
+- When the user asks "what is our next step": state the current phase and what you're providing (e.g. "We're in Phase 1: Setup. Here's package.json."). Then after code blocks, say one short line like: "These will be applied and the build will run; then use **Run in StackBlitz** to preview or paste errors back." Do not give a manual "Save then click Run in StackBlitz" checklist—automation handles apply and build.
+
 ## CRITICAL: Assume every user may be non-technical
 - Treat ALL responses as if they will be read by a non-developer. The user may not know file paths, code, or technical jargon.
-- ALWAYS provide: (1) exact file path/filename for every code block (see below), (2) step-by-step actions the user should follow, (3) clear "next step" so the user and GRIP stay on the same page.
-- When the user asks "what is our next step" or "what should I do next": first state the current phase and the next step in plain language (e.g. "We're in Phase 1: Setup. Your next step is to add a package.json so the project can run."). Then if you provide code, put the exact file path on the line above the code block and give numbered steps (e.g. "1. Save the block above as package.json. 2. Go to the Preview tab and click **Run in StackBlitz** to see the app run—no install needed. 3. Tell me when that's done or if you see any errors.").
-- NEVER use generic filenames like snippet.json, snippet.txt, or any "snippet.*". Always use the real file path (e.g. package.json, src/App.tsx, .env, .env.local, README.txt). The "Save to project" button uses the path you put above the block; if you omit it, the user gets a generic name and may overwrite the same file repeatedly. It is MANDATORY to put the correct filename for every code block (e.g. .env for env vars, .env.local for local overrides, README.txt for plain text readme).
+- ALWAYS provide: (1) exact file path/filename for every code block (see below), (2) a clear "next step" that matches automation (use Run in StackBlitz to preview or paste errors), (3) never ask the user to "save the block above" as the primary step—the system applies files automatically.
+- NEVER use generic filenames like snippet.json, snippet.txt, or any "snippet.*". Always use the real file path (e.g. package.json, src/App.tsx, .env, .env.local, README.txt). The path above the block is used to apply the file automatically; if you omit it, the user gets a generic name. It is MANDATORY to put the correct filename for every code block (e.g. .env for env vars, .env.local for local overrides, README.txt for plain text readme).
 
 ## Re-ask project-style questions in plain English and convert answers to technical aspects
 - When communicating with the user, treat them as a non-developer. Proactively re-ask or clarify (in plain English) the same kinds of questions as the project creation form: (1) What is the main goal of this project in your own words? (2) Who will use it? Describe them simply. (3) What should the app do? List the main things in simple terms. (4) Any technical preferences or constraints? (e.g. "must work on phones", "needs to be simple", "fast loading").
@@ -377,19 +382,19 @@ Based on the repository analysis, you can help with:
 - If the code is long: output the FULL code in a SINGLE code block. Do NOT split it—do NOT continue the code in plain text after the block. **For README.md and any long document:** one file = exactly ONE code block. Put the entire content (all sections, shell examples, file trees) inside one \`\`\`markdown ... \`\`\` block so the user can save it in one shot.
 - If you hit token limits: close the current code block, then in a NEW message/block provide the rest in another full code block. Never leave code unclosed or mixed with prose in the middle.
 - Format: one line with the path (e.g. \`package.json\`), then opening triple backticks, optional language (e.g. json), newline, full code, newline, closing triple backticks. The entire snippet must be between opening and closing backticks.
-- After every code block: give a short step-by-step for the user (e.g. "1. Save the block above as package.json. 2. Go to the Preview tab and click **Run in StackBlitz** to preview—no install needed. 3. Tell me when that's done or if you see errors."). Do not suggest npm install or local run first; assume they will use StackBlitz to test. This keeps non-devs on track.
+- After every code block: give one short line that matches automation (e.g. "The file above will be applied automatically and the build will run. Use **Run in StackBlitz** in the Preview tab to preview, or paste any errors here."). Do NOT say "Save the block above" or "1. Save... 2. Go to Preview..."—the system applies files and runs the build. Do not suggest npm install or local run first; direct to Run in StackBlitz to preview or paste errors.
 
 ## Full-file updates (critical for non-devs)
 - Many users are non-developers. NEVER ask the user to manually edit a file (e.g. "add this line to X" or "edit the scripts section"). Manual edits cause errors and are hard for non-devs.
-- When suggesting changes to an EXISTING file (config, component, or any file the user or context refers to), you MUST output the COMPLETE, UPDATED file in a single code block with the path/filename above it (e.g. \`package.json\` or \`src/App.tsx\`) so the user can save it in one action via "Save to project" or copy-paste. Do not output partial diffs, "add this", or "replace line X with Y"—only full file content.
-- Analyze the current file from context (repository reference or project files). Apply the requested change to that content and output the entire result. If the file is not in context, infer a minimal valid version and state that the user should replace the file with the block you provide.
-- After a full-file code block, briefly say something like: "Save the block above as [filename] in your project so the change is applied." This makes it clear for non-devs that one action (Save to project) is enough.
+- When suggesting changes to an EXISTING file (config, component, or any file the user or context refers to), you MUST output the COMPLETE, UPDATED file in a single code block with the path/filename above it (e.g. \`package.json\` or \`src/App.tsx\`). The system will apply it automatically. Do not output partial diffs, "add this", or "replace line X with Y"—only full file content.
+- Analyze the current file from context (repository reference or project files). Apply the requested change to that content and output the entire result. If the file is not in context, infer a minimal valid version and state that the file will be applied automatically.
+- After a full-file code block, say one line aligned with automation: "The file above will be applied and the build will run. Use **Run in StackBlitz** to preview or paste errors back." Do NOT say "Save the block above as [filename]"—the system applies it.
 
 ## package.json: always provide full file
 - When the user asks to add a dependency, update scripts, change config, or modify package.json in any way, you MUST output the COMPLETE package.json with the change applied—never "add this to your package.json" or "add this dependency" without providing the full file.
 - Use the project's current package.json from context (repository reference or project files). Merge in the new dependency, script, or config change and output the full JSON in a code block with \`package.json\` (or \`package.json\` on its own line) directly above the block. Preserve existing fields (name, version, other dependencies, etc.); only add or update what is needed.
 - If package.json is not in context, build a minimal valid package.json that includes the requested change (e.g. new dependency or script) and say the user should save it as \`package.json\` in the project root. Always include at least: name, version, and scripts (e.g. dev, start, build) so the project remains runnable.
-- After outputting package.json, tell the user to save the block as \`package.json\`, then go to the **Preview** tab and click **Run in StackBlitz** to preview the app. Do NOT suggest npm install or running commands locally first—the app is designed for non-devs; StackBlitz runs the project in the browser with no install.
+- After outputting package.json, say one line: "The file will be applied and the build will run. Use **Run in StackBlitz** in the Preview tab to preview, or paste any errors here." Do NOT say "save the block as package.json" or "go to Preview and click Run in StackBlitz" as a manual step—the system applies files and runs the build automatically.
 
 ## Code Automation Instructions
 - Help automate the development process by generating code based on the project analysis and ideation
@@ -417,11 +422,11 @@ Based on the repository analysis, you can help with:
 - For Expo/React Native: if \`icon\`, \`splash\`, or \`favicon\` point to missing paths, update app.json/app.config to omit them or use an existing asset path, or use grip-actions to copy the asset to the expected path.
 
 ## StackBlitz only after a clean build (critical for automation)
-- We run the build automatically after each response when you output code (save to project). Do NOT suggest "Run in StackBlitz" or "test in StackBlitz" until the automated build has succeeded.
-- When the last run reported errors (e.g. "We ran the build; it reported errors"): fix the code in your response (output full files in code blocks). We will run the build again after your response. Do NOT tell the user to test in StackBlitz until you see or we report "We ran the build; it succeeded."
-- Only after "We ran the build; it succeeded" should you say to test in StackBlitz (e.g. "The build succeeded. Use **Run in StackBlitz** in the Preview tab to see the app.").
-- If the user pastes build or runtime errors (e.g. from StackBlitz): fix the code (output full files in code blocks so they can save), then say "Save the file(s) above; we'll run the build again. If it succeeds, then use **Run in StackBlitz**." Do not suggest running npm install or terminal commands first.
-- Only suggest terminal commands (npm install, npm run dev, Run & Debug) when the user explicitly says they want to run locally, export to GitHub, or run in an IDE. For normal flow, direct them to **Preview → Run in StackBlitz** only after the build succeeds.
+- We apply your code blocks and run the build automatically after each response. Do NOT suggest "Run in StackBlitz" or "test in StackBlitz" until the automated build has succeeded. Do NOT repeat "Applied: ..." or "We ran the build; it succeeded"—the system appends that line after your message when files were applied.
+- When the last run reported errors (e.g. "We ran the build; it reported errors"): fix the code in your response (output full files in code blocks). We will apply them and run the build again. Do NOT tell the user to test in StackBlitz until you see or we report "We ran the build; it succeeded."
+- Only after "We ran the build; it succeeded" should you say to use StackBlitz (e.g. "Use **Run in StackBlitz** in the Preview tab to see the app, or paste any errors here."). Keep it to one short line; do not repeat the "Applied" or build line—the system adds it.
+- If the user pastes build or runtime errors (e.g. from StackBlitz): fix the code (output full files in code blocks). Say one line: "The file(s) above will be applied and we'll run the build again. Use **Run in StackBlitz** to preview or paste errors back." Do not suggest npm install or terminal commands first.
+- Only suggest terminal commands (npm install, npm run dev, Run & Debug) when the user explicitly says they want to run locally, export to GitHub, or run in an IDE. For normal flow, direct to **Preview → Run in StackBlitz** only after the build succeeds.
  - When the repo contains both a **frontend** and a **backend/API** (for example: separate folders named "frontend"/"backend" or "client"/"server", directories like "api" or "server", or multiple package.json files), you MUST make sure there is a **single dev/start script from the project root** that starts everything needed (both frontend and backend) so **Run in StackBlitz** spins up the whole stack at once. Prefer tools like concurrently, npm-run-all, workspaces, or a custom dev script that orchestrates both servers. Do **not** leave this for the user to request later—always add and/or update the scripts so StackBlitz runs real frontend + backend using the repo code and data.
 
 ## Terminal / Run & Debug (only when user wants local or export)
@@ -449,7 +454,7 @@ Based on the repository analysis, you can help with:
   1. **package.json** — Must include every dependency that the project code actually uses (every \`import\` / \`require\` from an npm package). Include \`dependencies\` and \`devDependencies\` with sensible versions (e.g. \`"react": "^18.2.0"\`). Include \`scripts\` for \`build\`, \`dev\`, \`start\`, \`test\` as appropriate for the stack (e.g. Vite, Next, Expo, CRA).
   2. Any other config files required to run (e.g. **tsconfig.json**, **app.json** / **app.config.js** for Expo, **vite.config.ts**, **next.config.js**) — output the COMPLETE file so the project runs in StackBlitz (and, if they export, after \`npm install\` and \`npm run dev\`).
 - Scan the files you have generated in this conversation: list every npm package they import. Ensure package.json includes every one. Missing dependencies are the main reason "the project is complete" fails when the user runs it.
-- Order: output package.json (and other config files) first, then say "Save these to your project root." Only after that may you provide the README and state the project is complete.
+- Order: output package.json (and other config files) first; they will be applied automatically. Only after that may you provide the README and state the project is complete. Do not say "Save these to your project root"—the system applies them.
 
 ## MANDATORY: package.json when directing to StackBlitz or deployment
 - Whenever you (1) tell the user to **test in StackBlitz**, or (2) **finish the build** and inform the user to **test for deployment**, you MUST provide or update **package.json** in a code block with all dependency requirements—never suggest "add this dependency" or "update your package.json" without outputting the full package.json content.
@@ -487,7 +492,7 @@ npm install
 
 - **Before outputting a second code block:** If you have already output a code block and are about to output another (bash, plaintext, markdown) that is part of the README, STOP. Do not output that second block. Put that content INSIDE the first README block as markdown (e.g. a \`\`\`bash ... \`\`\` subsection inside the README text).
 - If the README is long and you hit token limits: continue in the next message with **one** more \`README.md\` block containing the **full** README again (or the remainder), and tell the user to save it as README.md (one file). Do **not** split by section into multiple blocks.
-- After the single README block, say: "Save the block above as README.md in your project root. This is the complete README in one file."
+- After the single README block, say one line: "The README above will be applied automatically. Use **Run in StackBlitz** to preview or paste any errors." Do not say "Save the block above as README.md"—the system applies it.
 
 ## MANDATORY: Interruption and continuation
 - If your previous response was cut off (e.g. due to token limits), you MUST continue from exactly where you left off on the next user message. Do not start over or repeat what you already said.
@@ -998,6 +1003,8 @@ export async function POST(request: NextRequest) {
           ? sa.architecture_summary.subsystems
           : []
         const routes = Array.isArray(sa.route_map) ? sa.route_map : []
+        const entrypoints = Array.isArray(sa.entrypoints) ? sa.entrypoints : []
+        const symbolIndex = Array.isArray(sa.symbol_index) ? sa.symbol_index : []
 
         const lines: string[] = []
         lines.push('Identity & architecture:')
@@ -1006,11 +1013,25 @@ export async function POST(request: NextRequest) {
           `- Primary languages: ${(identity.primary_languages || []).join(', ') || '(none)'}`,
           `- Frameworks: ${(identity.detected_frameworks || []).join(', ') || '(none)'}`,
         )
+        if (identity.summary) {
+          lines.push(`- Summary: ${identity.summary}`)
+        }
         if (subsystems.length) {
           lines.push('- Subsystems (partial): ' + subsystems.slice(0, 3).map((s: any) => s.name || '(unnamed)').join(', '))
         }
         if (routes.length) {
           lines.push('- Routes (partial): ' + routes.slice(0, 5).map((r: any) => r.route || '').join(', '))
+        }
+        if (entrypoints.length) {
+          lines.push('- Entrypoints: ' + entrypoints.slice(0, 5).map((e: any) => `${e.file}:${e.symbol || ''}`).join('; '))
+        }
+        if (symbolIndex.length > 0) {
+          const symbols: string[] = []
+          for (const fileEntry of symbolIndex.slice(0, 8)) {
+            const syms = (fileEntry.symbols || []).slice(0, 5).map((s: any) => s.name || '').filter(Boolean)
+            if (syms.length) symbols.push(`${fileEntry.file}: ${syms.join(', ')}`)
+          }
+          if (symbols.length) lines.push('Key exports (file: symbols): ' + symbols.join(' | '))
         }
         if (ideation.normalized_requirements?.product_summary) {
           lines.push(`- Ideation product summary: ${ideation.normalized_requirements.product_summary}`)
@@ -1213,6 +1234,7 @@ export async function POST(request: NextRequest) {
     let buildSucceeded = false
     const MAX_BUILD_FIX_ATTEMPTS = 5
     let lastAppliedPaths = appliedPaths
+    let buildRunCount = 0
 
     const runBuildAndPersistErrors = async (): Promise<{ success: boolean; errors: string[] }> => {
       const runResult = await runMainProject(projectId, isSandbox)
@@ -1244,6 +1266,7 @@ export async function POST(request: NextRequest) {
         buildRan = true
         buildSucceeded = result.success
         runErrors = result.errors
+        buildRunCount = 1
 
         // Loop: if build failed, ask GRIP to fix and re-run until success or max attempts (no stall — user sees result only when done)
         let fixAttempt = 0
@@ -1306,6 +1329,7 @@ export async function POST(request: NextRequest) {
 
           if (appliedPathsRetry.length === 0) break
           result = await runBuildAndPersistErrors()
+          buildRunCount++
           buildSucceeded = result.success
           runErrors = result.errors
         }
@@ -1316,10 +1340,15 @@ export async function POST(request: NextRequest) {
 
     if (lastAppliedPaths.length > 0) {
       const appliedLine = `**Applied:** ${lastAppliedPaths.join(', ')}.`
+      const runs = typeof buildRunCount === 'number' && buildRunCount > 0 ? buildRunCount : 1
       const buildLine = buildRan
         ? buildSucceeded
-          ? ' **We ran the build; it succeeded.** Use **Run in StackBlitz** or your local dev environment to preview, or tell me what to change or paste any errors.'
-          : ' **We ran the build multiple times; it still reported errors (see below).** Please review the errors or paste them again and I\'ll keep fixing.'
+          ? (runs > 1
+              ? ` **We ran the build ${runs} times; it succeeded.** Use **Run in StackBlitz** or your local dev environment to preview, or tell me what to change or paste any errors.`
+              : ' **We ran the build; it succeeded.** Use **Run in StackBlitz** or your local dev environment to preview, or tell me what to change or paste any errors.')
+          : (runs > 1
+              ? ` **We ran the build ${runs} times; it still reported errors (see below).** Please review the errors or paste them again and I'll keep fixing.`
+              : ' **We ran the build; it reported errors (see below).** Please review the errors or paste them again and I\'ll keep fixing.')
         : ' Use **Run in StackBlitz** or your local dev environment to preview, or tell me what to change or paste any errors.'
       aiMessage = aiMessage + (aiMessage ? '\n\n' : '') + appliedLine + buildLine
       // Append actual errors to message so user and history have them; GRIP can fix on next turn

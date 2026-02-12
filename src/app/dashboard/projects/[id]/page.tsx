@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui'
-import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, ChevronDown, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle, Plus } from 'lucide-react'
+import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, ChevronDown, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle, Plus, RefreshCw } from 'lucide-react'
 import { toast as sonnerToast } from 'sonner'
 import Link from 'next/link'
 import { useRouter, useParams } from 'next/navigation'
@@ -727,10 +727,29 @@ export default function ProjectOverviewPage() {
       {/* Build phases — start chat with GRIP from here */}
       <Card id="phases" className="border border-border scroll-mt-4">
         <CardHeader className="pb-2">
-          <CardTitle className="text-xl font-bold">Build phases</CardTitle>
-          <CardDescription>
-            Current phase and steps. When you and GRIP agree a phase is done, return here to confirm and begin the next phase. Then start chat to continue.
-          </CardDescription>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-xl font-bold">Build phases</CardTitle>
+              <CardDescription>
+                Current phase and steps. When you and GRIP agree a phase is done, return here to confirm and begin the next phase. Then start chat to continue.
+              </CardDescription>
+            </div>
+            {!project?.isSandbox && projectState?.phases?.length ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  refetchPhaseStatus()
+                  sonnerToast.success('Progress reconciled', { description: 'Phases updated from saved files.' })
+                }}
+                className="shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                Reconcile progress
+              </Button>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {projectState?.phases?.length ? (
