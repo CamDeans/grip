@@ -12,20 +12,24 @@ export function validateMessage(message: string): ValidationResult {
     }
   }
 
-  // Check message length
-  if (message.length > 5000) {
+  // Check message length (allow pasted StackBlitz/build errors and stack traces)
+  const maxLength = 32000
+  if (message.length > maxLength) {
     return {
       isValid: false,
-      error: 'Message is too long (max 5000 characters)'
+      error: `Message is too long (max ${(maxLength / 1000).toFixed(0)}k characters). Consider shortening or splitting.`
     }
   }
 
-  // Check for potentially harmful content
+  // Check for potentially harmful content (allow pasted errors: "data:" in stack traces, "Invalid data", etc.)
   const harmfulPatterns = [
     /<script>/i,
     /javascript:/i,
     /on\w+=/i,
-    /data:/i
+    // Only block executable/dangerous data URIs, not plain "data:" in pasted error text
+    /\bdata:\s*text\/html\s*;/i,
+    /\bdata:\s*application\/javascript\s*;/i,
+    /\bdata:\s*image\/svg\+xml\s*;/i,
   ]
 
   for (const pattern of harmfulPatterns) {

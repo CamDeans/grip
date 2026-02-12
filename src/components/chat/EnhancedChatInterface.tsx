@@ -697,8 +697,8 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     // If blocked (win is null): do not show toast here — user may be returning to the page. Show "Popup blocked" only when they click "Open StackBlitz again" and it fails.
   }, [projectId, isTyping, messages.length, messages])
 
-  // Add rate limiting and request size limits
-  const MAX_MESSAGE_SIZE = 5000; // 5KB
+  // Add rate limiting and request size limits (allow pasted StackBlitz/build errors)
+  const MAX_MESSAGE_SIZE = 32000; // 32k so users can paste error output and stack traces
   const RATE_LIMIT_WINDOW = 1000; // 1 second
   const MAX_REQUESTS_PER_WINDOW = 5;
 
