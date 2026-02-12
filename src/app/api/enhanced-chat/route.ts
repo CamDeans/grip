@@ -1196,49 +1196,111 @@ export async function POST(request: NextRequest) {
     // Save all code blocks with explicit file paths directly to project files (sandbox or main)
     const { saved: appliedPaths } = await saveCodeBlocksToProject(projectId, aiMessage, isSandbox)
 
-    // Optionally run backend build after applying files, mirroring sandbox behavior
+    // Run backend build after applying files. If it fails, loop: re-ask GRIP with errors until build succeeds or max attempts.
     let runErrors: string[] = []
     const runAfterApply = runAfterApplyRaw !== false // default: run when files changed
     let buildRan = false
     let buildSucceeded = false
+    const MAX_BUILD_FIX_ATTEMPTS = 5
+    let lastAppliedPaths = appliedPaths
+
+    const runBuildAndPersistErrors = async (): Promise<{ success: boolean; errors: string[] }> => {
+      const runResult = await runMainProject(projectId, isSandbox)
+      if (!runResult.success && runResult.errors.length > 0) {
+        const lastRunErrorsPayload = {
+          source: 'terminal',
+          errors: runResult.errors,
+          raw: runResult.output?.slice(0, 15000) ?? runResult.errors.join('\n'),
+          at: new Date(),
+        }
+        const projectCollection = isSandbox ? 'sandboxProjects' : 'projects'
+        await db.collection(projectCollection).updateOne(
+          { _id: new ObjectId(projectId) },
+          { $set: { lastRunErrors: lastRunErrorsPayload, updatedAt: new Date() } }
+        )
+      } else if (runResult.success) {
+        const projectCollection = isSandbox ? 'sandboxProjects' : 'projects'
+        await db.collection(projectCollection).updateOne(
+          { _id: new ObjectId(projectId) },
+          { $unset: { lastRunErrors: '' }, $set: { updatedAt: new Date() } }
+        )
+      }
+      return { success: runResult.success, errors: runResult.errors }
+    }
+
     if (runAfterApply && appliedPaths.length > 0) {
       try {
-        const runResult = await runMainProject(projectId, isSandbox)
+        let result = await runBuildAndPersistErrors()
         buildRan = true
-        buildSucceeded = runResult.success
-        if (!runResult.success && runResult.errors.length > 0) {
-          runErrors = runResult.errors
-          // Persist so next message gets these errors in system prompt (GRIP keeps fixing until clean build)
-          const lastRunErrorsPayload = {
-            source: 'terminal',
-            errors: runResult.errors,
-            raw: runResult.output?.slice(0, 15000) ?? runResult.errors.join('\n'),
-            at: new Date(),
+        buildSucceeded = result.success
+        runErrors = result.errors
+
+        // Loop: if build failed, ask GRIP to fix and re-run until success or max attempts (no stall — user sees result only when done)
+        let fixAttempt = 0
+        while (!buildSucceeded && runErrors.length > 0 && fixAttempt < MAX_BUILD_FIX_ATTEMPTS) {
+          fixAttempt++
+          // Re-fetch project so buildSystemPrompt sees lastRunErrors
+          const projectCollection = isSandbox ? 'sandboxProjects' : 'projects'
+          const refetched = await db.collection(projectCollection).findOne({ _id: new ObjectId(projectId) })
+          const projectForPrompt = refetched
+            ? {
+                ...refetched,
+                lastRunErrors: (refetched as { lastRunErrors?: unknown }).lastRunErrors,
+              }
+            : project
+
+          const buildFailedUserMessage =
+            `The automated build failed. Please fix the following errors and output the corrected file(s) in code blocks with the exact path above each block. Do not suggest the user run commands or test in StackBlitz until the build succeeds.\n\nBuild errors:\n\`\`\`\n${runErrors.join('\n').slice(0, 6000)}${runErrors.join('\n').length > 6000 ? '\n...(truncated)' : ''}\n\`\`\``
+
+          const historyForRetry = [
+            ...history.map(m => ({ role: m.role, content: m.content })),
+            { role: 'assistant' as const, content: aiMessage },
+            { role: 'user' as const, content: buildFailedUserMessage },
+          ]
+          const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary)
+
+          const responseRetry = await anthropicService.createMessage(historyForRetry, { system: systemPromptRetry })
+          const tokensRetry = (responseRetry.usage?.promptTokens ?? 0) + (responseRetry.usage?.completionTokens ?? 0)
+          if (tokensRetry > 0 && session.user?.id) {
+            addTokenUsage(session.user.id, tokensRetry).catch(() => {})
           }
-          const projectCollection = isSandbox ? 'sandboxProjects' : 'projects'
-          await db.collection(projectCollection).updateOne(
-            { _id: new ObjectId(projectId) },
-            { $set: { lastRunErrors: lastRunErrorsPayload, updatedAt: new Date() } }
-          )
-        } else if (runResult.success) {
-          // Clear lastRunErrors so we do not keep showing old errors; next turn can suggest StackBlitz
-          const projectCollection = isSandbox ? 'sandboxProjects' : 'projects'
-          await db.collection(projectCollection).updateOne(
-            { _id: new ObjectId(projectId) },
-            { $unset: { lastRunErrors: '' }, $set: { updatedAt: new Date() } }
-          )
+
+          let nextMessage = (responseRetry.content && String(responseRetry.content).trim()) || ''
+          if (!nextMessage || nextMessage.length < 3) break
+          const backtickCountRetry = (nextMessage.match(/```/g) || []).length
+          if (backtickCountRetry % 2 !== 0) nextMessage = nextMessage.trimEnd() + '\n```'
+          try {
+            const { cleanedMessage, executedSummary } = await parseAndExecuteGripActions(projectId, nextMessage)
+            if (executedSummary.length > 0) nextMessage = cleanedMessage + (cleanedMessage ? '\n\n' : '') + '**Done:** ' + executedSummary.join('; ')
+            else if (cleanedMessage !== nextMessage) nextMessage = cleanedMessage
+          } catch (_) {}
+          try {
+            const { cleanedMessage, updated } = await parseAndApplyGripUpdateIdeation(projectId, nextMessage)
+            if (updated) nextMessage = cleanedMessage + (cleanedMessage ? '\n\n' : '') + "I've updated your project details."
+            else if (cleanedMessage !== nextMessage) nextMessage = cleanedMessage
+          } catch (_) {}
+          nextMessage = mergeReadmeBlocks(nextMessage)
+
+          const { saved: appliedPathsRetry } = await saveCodeBlocksToProject(projectId, nextMessage, isSandbox)
+          lastAppliedPaths = appliedPathsRetry
+          aiMessage = nextMessage
+
+          if (appliedPathsRetry.length === 0) break
+          result = await runBuildAndPersistErrors()
+          buildSucceeded = result.success
+          runErrors = result.errors
         }
       } catch (runErr) {
         console.warn('Enhanced chat: run-after-apply failed:', runErr)
       }
     }
 
-    if (appliedPaths.length > 0) {
-      const appliedLine = `**Applied:** ${appliedPaths.join(', ')}.`
+    if (lastAppliedPaths.length > 0) {
+      const appliedLine = `**Applied:** ${lastAppliedPaths.join(', ')}.`
       const buildLine = buildRan
         ? buildSucceeded
           ? ' **We ran the build; it succeeded.** Use **Run in StackBlitz** or your local dev environment to preview, or tell me what to change or paste any errors.'
-          : ' **We ran the build; it reported errors (see below).** I\'ll use them as the next step to fix the code.'
+          : ' **We ran the build multiple times; it still reported errors (see below).** Please review the errors or paste them again and I\'ll keep fixing.'
         : ' Use **Run in StackBlitz** or your local dev environment to preview, or tell me what to change or paste any errors.'
       aiMessage = aiMessage + (aiMessage ? '\n\n' : '') + appliedLine + buildLine
       // Append actual errors to message so user and history have them; GRIP can fix on next turn
@@ -1258,10 +1320,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       message: aiMessage,
       refreshContext: false,
-      appliedPaths,
+      appliedPaths: lastAppliedPaths,
       runErrors: runErrors.length > 0 ? runErrors : undefined,
-      buildRan: runAfterApply && appliedPaths.length > 0 ? buildRan : undefined,
-      buildSucceeded: runAfterApply && appliedPaths.length > 0 ? buildSucceeded : undefined,
+      buildRan: runAfterApply && lastAppliedPaths.length > 0 ? buildRan : undefined,
+      buildSucceeded: runAfterApply && lastAppliedPaths.length > 0 ? buildSucceeded : undefined,
     })
   } catch (error) {
     console.error('Error in enhanced chat:', error)
