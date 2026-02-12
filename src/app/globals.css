@@ -382,3 +382,68 @@ pre code {
 .custom-scrollbar::-webkit-scrollbar-thumb {
   @apply bg-border rounded-full hover:bg-border-hover transition-colors;
 }
+
+/* ============================================
+   Sonner toasts — match GRIP app styling
+   Ensures announcements, app updates, and all toasts are legible and on-brand
+   ============================================ */
+[data-sonner-toaster] [data-sonner-toast] {
+  background: var(--background-secondary) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
+  box-shadow: var(--shadow-md) !important;
+  font-family: inherit;
+}
+[data-sonner-toaster] [data-sonner-toast] [data-title] {
+  font-size: 0.9375rem !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+  line-height: 1.4 !important;
+}
+[data-sonner-toaster] [data-sonner-toast] [data-description] {
+  font-size: 0.875rem !important;
+  color: var(--text-secondary) !important;
+  line-height: 1.45 !important;
+  margin-top: 0.25rem !important;
+}
+[data-sonner-toaster] [data-sonner-toast][data-type="success"] {
+  border-color: var(--success) !important;
+  background: var(--success-light) !important;
+}
+[data-sonner-toaster] [data-sonner-toast][data-type="success"] [data-title],
+[data-sonner-toaster] [data-sonner-toast][data-type="success"] [data-description] {
+  color: var(--text-primary) !important;
+}
+[data-sonner-toaster] [data-sonner-toast][data-type="error"] {
+  border-color: var(--danger) !important;
+  background: var(--danger-light) !important;
+}
+[data-sonner-toaster] [data-sonner-toast][data-type="error"] [data-title],
+[data-sonner-toaster] [data-sonner-toast][data-type="error"] [data-description] {
+  color: var(--text-primary) !important;
+}
+[data-sonner-toaster] [data-sonner-toast][data-type="warning"] {
+  border-color: var(--warning) !important;
+  background: var(--warning-light) !important;
+}
+[data-sonner-toaster] [data-sonner-toast][data-type="warning"] [data-title],
+[data-sonner-toaster] [data-sonner-toast][data-type="warning"] [data-description] {
+  color: var(--text-primary) !important;
+}
+[data-sonner-toaster] [data-sonner-toast][data-type="info"] {
+  border-color: var(--info) !important;
+  background: var(--info-light) !important;
+}
+[data-sonner-toaster] [data-sonner-toast][data-type="info"] [data-title],
+[data-sonner-toaster] [data-sonner-toast][data-type="info"] [data-description] {
+  color: var(--text-primary) !important;
+}
+[data-sonner-toaster] [data-sonner-toast] [data-close] {
+  background: transparent !important;
+  border: none !important;
+  color: var(--text-muted) !important;
+}
+[data-sonner-toaster] [data-sonner-toast] [data-close]:hover {
+  color: var(--text-primary) !important;
+  background: var(--background-tertiary) !important;
+}

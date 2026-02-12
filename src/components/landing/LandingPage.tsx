@@ -11,6 +11,7 @@ import {
   Play,
   Rocket,
   ChevronRight,
+  ChevronDown,
   Sparkles,
   FileCode2,
   GitBranch,
@@ -275,7 +276,27 @@ function MockBrowserFrame({
   )
 }
 
+const FAQ_ITEMS = [
+  {
+    q: 'Why paid plans only?',
+    a: 'Paid plans only—no freemium. Your subscription covers real AI usage so you get predictable pricing and enough tokens to ship. No hidden fees; your token allowance is used for all GRIP AI actions (chat, code gen, builds).',
+  },
+  {
+    q: 'How do I get started?',
+    a: 'New here? Create your account first, then sign in and choose a plan to pay via Stripe. We\'ll guide you through each step. Already have an account? Sign in to go to your dashboard.',
+  },
+  {
+    q: 'What uses tokens?',
+    a: 'Enhanced chat (project chat with GRIP), project and legal-sandbox chat, editing files from chat, repo summarization, plan generation (main and sandbox), AI keyword generation, repository analysis and code suggestions, chat completion and legacy chat. Your plan\'s allowance resets each billing cycle.',
+  },
+  {
+    q: 'How do I choose a plan?',
+    a: 'Create your account and sign in first; then you\'ll choose a plan and pay via Stripe. Starter ($19/mo, 50k tokens), Pro ($49/mo, 200k tokens), or Team ($99/mo, 500k tokens). Your token allowance covers all AI usage so you can ship without surprises.',
+  },
+]
+
 export function LandingPage() {
+  const [faqOpen, setFaqOpen] = useState<number | null>(null)
   return (
     <div className="min-h-screen bg-background-primary flex flex-col">
       <header className="border-b border-border bg-background-secondary/50 sticky top-0 z-10">
@@ -383,14 +404,8 @@ export function LandingPage() {
           <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto mb-2">
             Turn GitHub repos and ideas into runnable, deployable products. Clean-room code generation—reference repos for patterns, generate new code. No juggling tools—one flow from idea to ship.
           </p>
-          <p className="text-sm text-text-muted max-w-xl mx-auto mb-10">
+          <p className="text-sm text-text-muted max-w-xl mx-auto mb-8">
             Create projects, link repos for reference, chat with GRIP to generate new code that's automatically saved, experiment safely in sandbox playgrounds, watch builds run automatically, preview in StackBlitz, and export or deploy. Built for developers and makers who want to move fast.
-          </p>
-          <p className="text-xs text-text-muted max-w-lg mx-auto mb-2">
-            Paid plans only—no freemium. Your subscription covers real AI usage so you get predictable pricing and enough tokens to ship.
-          </p>
-          <p className="text-xs text-text-muted max-w-lg mx-auto mb-6">
-            New here? Create your account first, then sign in and choose a plan to pay via Stripe. We’ll guide you through each step.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
@@ -485,7 +500,7 @@ export function LandingPage() {
               </div>
             </div>
             <p className="text-center text-sm text-text-muted mt-6 max-w-xl mx-auto">
-              Create your account and sign in first; then you’ll choose a plan and pay via Stripe. Your token allowance is used for all GRIP AI actions (chat, code gen, builds). No hidden fees.
+              <Link href="#faq" className="text-primary hover:underline">FAQ</Link> — plans, sign-up steps, and token usage.
             </p>
             <div className="text-center mt-6">
               <Link
@@ -704,6 +719,41 @@ export function LandingPage() {
           </div>
         </section>
 
+        {/* FAQ — memos and extra details */}
+        <section id="faq" className="px-4 py-16 sm:py-20 border-t border-border bg-background-secondary/30">
+          <div className="max-w-2xl mx-auto">
+            <h2 className="grip-section-title text-2xl sm:text-3xl font-extrabold text-center mb-8">
+              Frequently asked questions
+            </h2>
+            <div className="space-y-2">
+              {FAQ_ITEMS.map((item, i) => (
+                <div
+                  key={i}
+                  className="grip-card-glow rounded-lg border border-border bg-background-primary overflow-hidden"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setFaqOpen(faqOpen === i ? null : i)}
+                    className="w-full flex items-center justify-between gap-4 px-4 py-3 text-left text-sm font-medium text-text-primary hover:bg-background-tertiary/50 transition-colors"
+                    aria-expanded={faqOpen === i ? 'true' : 'false'}
+                  >
+                    <span>{item.q}</span>
+                    <ChevronDown
+                      className={cn('h-4 w-4 shrink-0 text-text-muted transition-transform', faqOpen === i && 'rotate-180')}
+                      aria-hidden
+                    />
+                  </button>
+                  {faqOpen === i && (
+                    <div className="px-4 pb-4 pt-0">
+                      <p className="text-sm text-text-secondary leading-relaxed">{item.a}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* Final CTA */}
         <section className="px-4 py-16 sm:py-20 border-t border-border bg-primary/5">
           <div className="max-w-2xl mx-auto text-center">
@@ -711,10 +761,10 @@ export function LandingPage() {
               Ready to build with GRIP?
             </h2>
             <p className="text-text-secondary mb-8">
-              Create a project, link a repo for reference, and chat with GRIP to generate new code and turn your idea into a runnable app. Experiment safely in sandbox playgrounds. Choose a paid plan—your token allowance covers all AI usage so you can ship without surprises.
+              Create a project, link a repo for reference, and chat with GRIP to generate new code and turn your idea into a runnable app. Experiment safely in sandbox playgrounds.
             </p>
             <p className="text-sm text-text-muted mb-6 max-w-lg mx-auto">
-              New? Get started and we'll guide you through account, sign-in, and plan. Already have an account? Sign in to go to your dashboard. We’ll guide you through each step.
+              <Link href="#faq" className="text-primary hover:underline">FAQ</Link> — getting started, plans, and account steps.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-4">
               <Link
