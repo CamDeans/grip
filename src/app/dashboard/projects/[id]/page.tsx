@@ -410,7 +410,6 @@ export default function ProjectOverviewPage() {
       )}
 
       {/* Sandbox Experiments Section for main projects */}
-      {/* Show sandbox card for main projects only (not sandbox projects themselves) */}
       {project && project.isSandbox !== true && (
         <Card className="border-2 border-primary/30 bg-primary/5">
           <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -420,8 +419,7 @@ export default function ProjectOverviewPage() {
                 Sandbox Experiments
               </CardTitle>
               <CardDescription>
-                Create isolated environments to experiment with new features, architectures, or refactors without affecting your main project.
-                Sandboxes use <strong>clean-room code generation</strong> and <strong>legal-safe practices</strong>—perfect for risky experiments.
+                Isolated environments for trying new features or refactors without affecting your main project. Uses clean-room code generation and legal-safe practices.
               </CardDescription>
             </div>
             <div className="flex flex-col xs:flex-row gap-2 shrink-0 w-full sm:w-auto">
@@ -443,45 +441,27 @@ export default function ProjectOverviewPage() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="default" className="w-full sm:w-auto" disabled={creatingSandbox}>
                     <ChevronDown className="w-4 h-4 mr-2" />
-                    More options
+                    Copy files instead
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem onClick={() => handleCreateSandbox(undefined, false)} disabled={creatingSandbox}>
-                    <FlaskConical className="w-4 h-4 mr-2" />
-                    Start empty experiment
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleCreateSandbox(undefined, true)} disabled={creatingSandbox}>
                     <GitBranch className="w-4 h-4 mr-2" />
-                    Copy files from project
+                    Create sandbox with a copy of this project&apos;s files
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Primary CTA: one clear way to start */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-lg bg-primary/10 border border-primary/20">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Start a sandbox experiment</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  One click creates an empty sandbox. Use <strong>More options</strong> above to copy your project files into a new experiment.
-                </p>
-              </div>
-              <Button
-                variant="default"
-                size="lg"
-                className="shrink-0"
-                disabled={creatingSandbox}
-                onClick={() => handleCreateSandbox(undefined, false)}
-              >
-                {creatingSandbox ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <FlaskConical className="w-4 h-4 mr-2" />
-                )}
-                {creatingSandbox ? 'Creating…' : 'Start experiment'}
-              </Button>
+            {/* How to use — clear steps */}
+            <div className="rounded-lg border border-border bg-background/50 p-4">
+              <h4 className="text-sm font-semibold text-foreground mb-2">How to get the best results</h4>
+              <ol className="list-decimal list-inside space-y-1.5 text-sm text-text-secondary">
+                <li><strong className="text-foreground">Create a sandbox</strong> — Click &quot;Create new sandbox&quot; above (or &quot;Copy files instead&quot; to start from your current project files).</li>
+                <li><strong className="text-foreground">Open Sandbox Develop</strong> — After it’s created, open the experiment and go to the <strong>Sandbox Develop</strong> tab to chat with GRIP and build in isolation.</li>
+                <li><strong className="text-foreground">Promote when ready</strong> — When you’re happy with the result, use &quot;Promote to Main&quot; on the experiment to copy its files into this project.</li>
+              </ol>
             </div>
             {/* Use cases */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-background/50 rounded-lg border border-border">
@@ -612,65 +592,19 @@ export default function ProjectOverviewPage() {
             ) : (
               <div className="text-center py-8 px-4 text-text-secondary border-2 border-dashed border-border rounded-lg">
                 <FlaskConical className="w-8 h-8 mx-auto mb-2 text-text-muted" />
-                <p className="text-sm font-medium mb-1">No sandbox experiments yet</p>
-                <p className="text-xs mb-4">Create one to start experimenting safely without affecting your main project.</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  <Button
-                    onClick={() => handleCreateSandbox(undefined, false)}
-                    variant="outline"
-                    size="sm"
-                    disabled={creatingSandbox}
-                  >
-                    {creatingSandbox ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FlaskConical className="w-4 h-4 mr-2" />}
-                    Start empty experiment
-                  </Button>
-                  <Button
-                    onClick={() => handleCreateSandbox(undefined, true)}
-                    variant="default"
-                    size="sm"
-                    disabled={creatingSandbox}
-                  >
-                    {creatingSandbox ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <GitBranch className="w-4 h-4 mr-2" />}
-                    Copy files & start
-                  </Button>
-                </div>
+                <p className="text-sm font-medium text-foreground mb-1">No sandbox experiments yet</p>
+                <p className="text-xs mb-4">Click &quot;Create new sandbox&quot; at the top of this card to create one.</p>
+                <Button
+                  variant="default"
+                  size="sm"
+                  disabled={creatingSandbox}
+                  onClick={() => handleCreateSandbox(undefined, false)}
+                >
+                  {creatingSandbox ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+                  Create new sandbox
+                </Button>
               </div>
             )}
-
-            {/* Create another sandbox */}
-            <div className="pt-4 border-t border-border bg-background/40 rounded-lg p-4 -mx-1">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex-1">
-                  <h4 className="text-sm font-semibold mb-1 flex items-center gap-2">
-                    <Plus className="w-4 h-4" />
-                    {sandboxes.length === 0 ? 'Create your first experiment' : 'Create another experiment'}
-                  </h4>
-                  <p className="text-xs text-text-secondary">
-                    Start with an empty sandbox or copy your current files to experiment with modifications.
-                  </p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <Button
-                    onClick={() => handleCreateSandbox(undefined, false)}
-                    variant="outline"
-                    size="sm"
-                    disabled={creatingSandbox}
-                  >
-                    {creatingSandbox ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FlaskConical className="w-4 h-4 mr-2" />}
-                    Empty Sandbox
-                  </Button>
-                  <Button
-                    onClick={() => handleCreateSandbox(undefined, true)}
-                    variant="default"
-                    size="sm"
-                    disabled={creatingSandbox}
-                  >
-                    {creatingSandbox ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <GitBranch className="w-4 h-4 mr-2" />}
-                    Copy Files
-                  </Button>
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
       )}
