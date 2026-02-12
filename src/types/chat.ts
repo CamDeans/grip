@@ -9,6 +9,10 @@ export interface ChatMessage {
     type?: string
     submissionIndex?: number
     source?: string
+    /** Set when the backend ran the automated build after applying code */
+    buildRan?: boolean
+    buildSucceeded?: boolean
+    runErrors?: string[]
   }
 }
 

@@ -1105,6 +1105,23 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
               StackBlitz errors #{submissionIndex}
             </div>
           )}
+          {!isUser && message.metadata?.buildRan === true && (
+            <div
+              className={cn(
+                'mb-2 shrink-0 rounded-md border px-2 py-1.5 text-xs font-medium flex items-center gap-1.5',
+                message.metadata?.buildSucceeded === true
+                  ? 'border-success/50 bg-success/10 text-success'
+                  : 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+              )}
+              title={message.metadata?.buildSucceeded === true ? 'Automated build succeeded' : 'Automated build reported errors; GRIP will fix on next message'}
+            >
+              {message.metadata?.buildSucceeded === true ? (
+                <><CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Build ran: succeeded</>
+              ) : (
+                <><XCircleIcon className="h-3.5 w-3.5 shrink-0" /> Build ran: reported errors — GRIP will fix on your next message</>
+              )}
+            </div>
+          )}
           <FormattedMessage
               message={message}
               projectId={projectId ?? ''}
@@ -1256,6 +1273,9 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
                   </div>
                   <span className="text-sm text-muted-foreground">GRIP is thinking...</span>
                 </div>
+                <p className="mt-2 text-xs text-muted-foreground border-t border-border/50 pt-2">
+                  Build runs automatically in the background when code is saved. You’ll see the result below when GRIP responds.
+                </p>
               </div>
             </motion.div>
           )}

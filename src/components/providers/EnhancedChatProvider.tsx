@@ -591,12 +591,19 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
       const data = await response.json()
       console.log('Client: Received AI response:', data)
 
-      // Create AI message
+      // Create AI message (include build status so UI can show automated build result)
       const aiMessage: ChatMessage = {
         id: Math.random().toString(36).slice(2),
         role: 'assistant',
         content: data.message,
-        timestamp: new Date()
+        timestamp: new Date(),
+        ...(data.buildRan !== undefined && {
+          metadata: {
+            ...(typeof data.buildSucceeded === 'boolean' && { buildSucceeded: data.buildSucceeded }),
+            buildRan: true,
+            ...(Array.isArray(data.runErrors) && data.runErrors.length > 0 && { runErrors: data.runErrors }),
+          },
+        }),
       }
 
       // Add AI message to local state
@@ -606,7 +613,13 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
       // Hide typing indicator
       setIsTyping(false)
 
-      // Refresh context if needed
+      // After a build ran, refresh project context so next message sends updated lastRunErrors and GRIP can fix
+      if (data.buildRan === true) {
+        console.log('Client: Build ran — refreshing context so next turn has lastRunErrors')
+        await refreshContext()
+      }
+
+      // Refresh context if needed (e.g. other triggers)
       if (data.refreshContext) {
         console.log('Client: Refreshing context')
         await refreshContext()
