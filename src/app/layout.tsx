@@ -11,6 +11,7 @@ export const metadata = {
   title: 'G.R.I.P - Guided Real-time Intellectual Partner',
   description: 'Accelerate your development workflow with AI-powered project analysis and insights.',
   icons: {
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
     apple: '/apple-icon',
   },
 }
