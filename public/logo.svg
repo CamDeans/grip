@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 32" fill="none" aria-hidden="true">
+  <g stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 4L4 8L12 12L20 8L12 4Z"/>
+    <path d="M4 20L12 24L20 20"/>
+    <path d="M4 14L12 18L20 14"/>
+  </g>
+  <text x="28" y="22" font-family="system-ui, sans-serif" font-size="18" font-weight="700" fill="currentColor">G.R.I.P.</text>
+</svg>

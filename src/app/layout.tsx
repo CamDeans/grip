@@ -10,6 +10,9 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata = {
   title: 'G.R.I.P - Guided Real-time Intellectual Partner',
   description: 'Accelerate your development workflow with AI-powered project analysis and insights.',
+  icons: {
+    apple: '/apple-icon',
+  },
 }
 
 export default async function RootLayout({
