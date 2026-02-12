@@ -103,14 +103,29 @@
     @apply text-text-secondary hover:bg-primary/5 hover:text-primary;
   }
 
-  /* Logo — theme primary */
+  /* Logo — theme primary + green/teal glow, bold and fits page */
   .logo {
-    @apply text-xl font-bold cursor-pointer transition-transform duration-200;
+    @apply text-xl font-extrabold cursor-pointer transition-transform duration-200;
     color: var(--primary);
   }
   .logo:hover {
     @apply scale-105;
     color: var(--primary-hover);
+  }
+  .logo-glow {
+    filter: drop-shadow(0 0 6px var(--primary)) drop-shadow(0 0 12px rgba(15, 118, 110, 0.4));
+    transition: filter 0.3s ease;
+  }
+  .logo-glow:hover {
+    filter: drop-shadow(0 0 8px var(--primary-hover)) drop-shadow(0 0 16px rgba(13, 148, 136, 0.5));
+  }
+  .dark .logo-glow,
+  .dark-theme .logo-glow {
+    filter: drop-shadow(0 0 6px var(--primary)) drop-shadow(0 0 12px rgba(20, 184, 166, 0.4));
+  }
+  .dark .logo-glow:hover,
+  .dark-theme .logo-glow:hover {
+    filter: drop-shadow(0 0 8px var(--primary-hover)) drop-shadow(0 0 16px rgba(45, 212, 191, 0.5));
   }
 
   .header-title {

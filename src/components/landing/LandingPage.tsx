@@ -23,6 +23,7 @@ import {
   Coins,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { FullLogo } from '@/components/ui/FullLogo'
 
 const fadeInUp = {
   initial: { opacity: 0, y: 24 },
@@ -320,9 +321,9 @@ export function LandingPage() {
   return (
     <div className="min-h-screen bg-background-primary flex flex-col">
       <header className="border-b border-border bg-background-secondary/50 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <img src="/logo.svg" alt="G.R.I.P." className="h-8 w-auto" width={120} height={32} />
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+          <Link href="/" className="logo logo-glow flex items-center shrink-0" aria-label="G.R.I.P. home">
+            <FullLogo className="h-9 w-auto sm:h-10 w-auto" />
           </Link>
           <div className="flex items-center gap-3">
             <Link
