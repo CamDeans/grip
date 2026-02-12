@@ -613,6 +613,11 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
       // Hide typing indicator
       setIsTyping(false)
 
+      // Refresh tokenomics in sidebar so user sees updated usage without page refresh
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('grip-token-update'))
+      }
+
       // After a build ran, refresh project context so next message sends updated lastRunErrors and GRIP can fix
       if (data.buildRan === true) {
         console.log('Client: Build ran — refreshing context so next turn has lastRunErrors')

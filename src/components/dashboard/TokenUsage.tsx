@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Coins } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/use-toast'
@@ -27,6 +27,13 @@ export function TokenUsage() {
   const [loading, setLoading] = useState(true)
   const adminExhaustedToastShown = useRef(false)
 
+  const refetch = useCallback(() => {
+    fetch('/api/me/access')
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => setData(d || null))
+      .catch(() => {})
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     fetch('/api/me/access')
@@ -37,6 +44,13 @@ export function TokenUsage() {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [])
+
+  // Refetch token usage when enhanced chat (or other AI) records new usage so numbers stay current without page refresh
+  useEffect(() => {
+    const handler = () => refetch()
+    window.addEventListener('grip-token-update', handler)
+    return () => window.removeEventListener('grip-token-update', handler)
+  }, [refetch])
 
   useEffect(() => {
     if (!data?.hasAccess || !data?.isAdmin) return

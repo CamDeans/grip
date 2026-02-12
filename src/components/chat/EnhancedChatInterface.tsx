@@ -1180,8 +1180,6 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
                   const win = window.open(`/dashboard/open-stackblitz/${projectId}`, '_blank', 'noopener,noreferrer')
                   if (win) {
                     sonnerToast.success('Opening StackBlitz', { description: 'Stay here — paste errors from StackBlitz and send to GRIP.' })
-                  } else {
-                    sonnerToast.warning('Popup blocked', { description: 'Allow popups for this site, or copy the Preview URL and open it in a new tab.' })
                   }
                 }}
                 className="inline-flex items-center gap-2 rounded-md border border-primary/50 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/20 transition-colors"
