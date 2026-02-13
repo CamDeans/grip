@@ -8,14 +8,15 @@ import { ObjectId } from 'mongodb'
 import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/sandbox/treeSitterAnalysis'
 import { buildTechnicalAnalysisPromptFromIdeation } from '@/lib/sandbox/ideationToTechnicalPrompt'
 import { getSandboxProject } from '@/lib/services/sandboxProjectService'
+import { getOrCloneRepository } from '@/lib/repository'
 
 const SANDBOX_ANALYSES_COLLECTION = 'sandboxAnalyses'
 
 /**
  * POST /api/projects/[id]/legal-sandbox/analyze
  * Run repo analysis for a sandbox project only. Uses user's linked repo only (repo separation—never GRIP code).
- * Advances user plain-English ideation into a technical analysis prompt to align analysis with their goals.
- * Stores result in sandboxAnalyses; does not touch main projects collection.
+ * Same tree-sitter flow as main project: full repo via cached clone (repoFiles) so sandbox gets complete
+ * routes/entrypoints/capabilities. Stores result in sandboxAnalyses; does not touch main project or analyses.
  */
 export async function POST(
   _request: Request,
@@ -58,11 +59,20 @@ export async function POST(
 
     const { prompt: technicalPrompt, totalTokens: ideationTokens } = await buildTechnicalAnalysisPromptFromIdeation(project.ideation)
 
+    // Full repo for sandbox too: use cached clone (same as main project) so analysis is complete
+    let repoFiles: Array<{ path: string; content: string | null }> | undefined
+    try {
+      repoFiles = await getOrCloneRepository(owner, repo, projectId)
+      if (!repoFiles?.length) repoFiles = undefined
+    } catch (e) {
+      console.warn('Sandbox analyze: no cached repo, falling back to root+src only', e)
+    }
+
     const treeResult = await analyzeRepositoryStructureWithTreeSitter(
       owner,
       repo,
       projectId,
-      { technicalPrompt: technicalPrompt || undefined }
+      { technicalPrompt: technicalPrompt || undefined, repoFiles }
     )
     const { totalTokens: treeTokens, ...analysis } = treeResult
     const totalTokens = ideationTokens + (treeTokens ?? 0)

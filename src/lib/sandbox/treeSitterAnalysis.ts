@@ -1,9 +1,16 @@
 /**
- * Sandbox-only AST-based repository analysis (tree-sitter style).
+ * AST-based repository analysis (tree-sitter style). Used for **both** main GRIP project
+ * builds and sandbox experiments. Callers decide where to store results:
+ * - Main project: analysisService → analyses (projectId = main project).
+ * - Sandbox: legal-sandbox/analyze → sandboxAnalyses (projectId = sandbox project).
+ * No cross-talk: each project uses its own analysis doc and ideation; input-override and
+ * checklist rules apply per conversation.
+ *
  * Uses full native tree-sitter when optionalDependencies are installed (VS Code–style);
  * falls back to @babel/parser and @typescript-eslint/typescript-estree when not.
  * Repo separation: only the user's linked repo is analyzed—never GRIP codebase.
- * Returns the same shape as analyzeRepositoryStructure for sandbox UI/plan/chat.
+ * When repoFiles (full cached repo) is provided, analyzes the entire repo tree so no
+ * routes/APIs/features in nested dirs (e.g. src/api, src/lib) are missed.
  */
 
 import { parse as parseJS } from '@babel/parser'
@@ -216,6 +223,20 @@ function collectFiles(items: GhItem[]): GhItem[] {
     if (item.type === 'file' && item.path && SOURCE_EXT.test(item.path) && !SKIP_DIRS.test(item.path)) {
       out.push(item)
     }
+  }
+  return out
+}
+
+/** Normalize repo files (path + content) to analyzable entries; filters by SOURCE_EXT and SKIP_DIRS. */
+function collectFilesFromRepoFiles(
+  repoFiles: Array<{ path: string; content: string | null }>
+): Array<{ path: string; content: string }> {
+  const out: Array<{ path: string; content: string }> = []
+  for (const f of repoFiles) {
+    if (!f.path || !SOURCE_EXT.test(f.path) || SKIP_DIRS.test(f.path)) continue
+    const content = (f.content ?? '').trim()
+    if (!content) continue
+    out.push({ path: f.path, content })
   }
   return out
 }
@@ -701,29 +722,39 @@ export async function analyzeRepositoryStructureWithTreeSitter(
   owner: string,
   repo: string,
   projectId: string,
-  options?: { technicalPrompt?: string }
+  options?: { technicalPrompt?: string; repoFiles?: Array<{ path: string; content: string | null }> }
 ): Promise<SandboxAnalysisResult> {
   const technicalPrompt = options?.technicalPrompt?.trim() || ''
+  const repoFiles = options?.repoFiles
   await loadNativeTreeSitterAsync()
   const treeSitterAvailable = isTreeSitterAvailable()
-  console.log(`[Sandbox analyze] parser: ${treeSitterAvailable ? 'tree-sitter (native)' : 'Babel/TS-estree (fallback)'} | repo: ${owner}/${repo}`)
+  console.log(`[Sandbox analyze] parser: ${treeSitterAvailable ? 'tree-sitter (native)' : 'Babel/TS-estree (fallback)'} | repo: ${owner}/${repo} | fullRepo: ${!!repoFiles?.length}`)
   // Repo separation: owner/repo are the user's linked repo only. We never fetch or analyze GRIP codebase.
-  const root = await getRepositoryContentServer(owner, repo)
-  const rootItems = Array.isArray(root) ? root : [root]
-  let allItems: GhItem[] = rootItems.filter((i: GhItem) => i.type === 'file') as GhItem[]
+  let sourceFileEntries: Array<{ path: string; content: string }>
+  let directoryStructure: string[]
 
-  const srcDir = rootItems.find((i: GhItem) => i.type === 'dir' && i.name === 'src')
-  if (srcDir) {
-    const srcContent = await getRepositoryContentServer(owner, repo, 'src')
-    const srcItems = Array.isArray(srcContent) ? srcContent : [srcContent]
-    allItems = allItems.concat(srcItems.filter((i: GhItem) => i.type === 'file') as GhItem[])
+  if (repoFiles?.length) {
+    sourceFileEntries = collectFilesFromRepoFiles(repoFiles)
+    directoryStructure = [...new Set(sourceFileEntries.map((f) => f.path))]
+  } else {
+    const root = await getRepositoryContentServer(owner, repo)
+    const rootItems = Array.isArray(root) ? root : [root]
+    let allItems: GhItem[] = rootItems.filter((i: GhItem) => i.type === 'file') as GhItem[]
+    const srcDir = rootItems.find((i: GhItem) => i.type === 'dir' && i.name === 'src')
+    if (srcDir) {
+      const srcContent = await getRepositoryContentServer(owner, repo, 'src')
+      const srcItems = Array.isArray(srcContent) ? srcContent : [srcContent]
+      allItems = allItems.concat(srcItems.filter((i: GhItem) => i.type === 'file') as GhItem[])
+    }
+    const sourceFiles = collectFiles(allItems)
+    sourceFileEntries = sourceFiles
+      .map((item) => ({ path: item.path, content: decodeContent(item) }))
+      .filter((e) => e.content.trim())
+    directoryStructure = [...new Set(sourceFileEntries.map((f) => f.path))]
   }
 
-  const sourceFiles = collectFiles(allItems)
-  const allPaths = allItems.filter((i: GhItem) => i.type === 'file').map((i: GhItem) => i.path)
-  const directoryStructure = [...new Set(allPaths)]
   const mainLanguages: Record<string, number> = {}
-  sourceFiles.forEach((f) => {
+  sourceFileEntries.forEach((f) => {
     const ext = path.extname(f.path).toLowerCase().replace(/^\./, '') || 'js'
     mainLanguages[ext] = (mainLanguages[ext] || 0) + 1
   })
@@ -731,14 +762,12 @@ export async function analyzeRepositoryStructureWithTreeSitter(
   const fileAnalyses: Array<{ path: string; analysis: string }> = []
   const allComponents: SandboxAnalysisResult['components'] = []
 
-  for (const item of sourceFiles) {
-    const content = decodeContent(item)
-    if (!content) continue
-    const extracted = parseFile(item.path, content)
+  for (const entry of sourceFileEntries) {
+    const extracted = parseFile(entry.path, entry.content)
     if (extracted) {
       fileAnalyses.push({
-        path: item.path,
-        analysis: formatFileAnalysis(item.path, extracted),
+        path: entry.path,
+        analysis: formatFileAnalysis(entry.path, extracted),
       })
       allComponents.push(...extracted.components)
     }
@@ -777,7 +806,7 @@ export async function analyzeRepositoryStructureWithTreeSitter(
 
   return {
     projectId,
-    fileCount: sourceFiles.length,
+    fileCount: sourceFileEntries.length,
     directoryStructure,
     mainLanguages,
     components: allComponents,

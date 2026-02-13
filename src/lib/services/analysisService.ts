@@ -85,7 +85,7 @@ export async function analyzeProject(projectId: string, repository: { owner: str
         repository.owner,
         repository.name,
         projectId,
-        { technicalPrompt: technicalPrompt || undefined }
+        { technicalPrompt: technicalPrompt || undefined, repoFiles: files }
       )
       const { totalTokens: treeTokens, ...analysisForDb } = treeResult
       analysisTokensUsed += treeTokens ?? 0

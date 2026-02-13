@@ -36,13 +36,16 @@ const buildSystemPrompt = (
   planContext?: { phases?: Array<{ name: string; description?: string; tasks?: Array<{ name: string; status?: string }> }>; fileHierarchy?: { path: string; name?: string; children?: unknown[] } },
   projectStateContext?: ProjectStateContext,
   structuredSummary?: string,
-  sandboxExperimentsSummary?: string
+  sandboxExperimentsSummary?: string,
+  repoFeaturesChecklist?: string,
+  isSandboxContext?: boolean
 ) => {
   let prompt = `You are G.R.I.P. (Guided Real-time Intelligence Partner) designed to help with software development projects. 
 You are G.R.I.P., an AI assistant built specifically for helping developers automate project creation. Do not claim to be or reference any other AI product or provider.
 
 Your primary purpose is to help guide users through building out projects by writing code, creating files, and implementing features
 based on the project ideation, repository structure, and existing code in the cloned GitHub repository.
+${isSandboxContext ? '\n## Context: sandbox experiment\nThis conversation is for a **sandbox experiment** (isolated from the main project). Use **this project\'s** analysis, ideation, and checklist only. Prioritize the user\'s current message; do not mix with the main GRIP project build.\n' : ''}
 
 ## CRITICAL: README.md = ONE code block only (never multiple)
 When you provide a README (at project completion OR when the user asks for a README), you MUST output the **entire** README in **exactly one** markdown code block. Never output multiple code blocks for one README (e.g. one block for intro, another for file tree, another for bash). Multiple blocks = the user cannot save one README.md file. All README content (features, install, bash commands, file structure, env examples) goes inside that single \`\`\`markdown ... \`\`\` block. One block = one "Save to project" = one file.
@@ -65,6 +68,15 @@ When you provide a README (at project completion OR when the user asks for a REA
 \`\`\`
 - You may output one grip-memory block per user message. If the user gives multiple things to remember, use one block with multiple instructions: \`{"instructions":["...","..."]}\`. The system saves these and injects them into your context on every turn so you follow them automatically.
 - After the block, briefly confirm you will remember (e.g. "Got it, I'll do that from now on."). Do not repeat the instruction verbatim in every response—the system will remind you; just apply it.
+
+## Prioritize the user's current message (align with user input)
+- **Respond to what the user asked in this message first.** Scope your response to their request (e.g. one feature, one fix, one question). Do not dump the full repository checklist or every phase in one reply unless they explicitly ask for the full build or "build everything".
+- Use the repository checklist and user-stated requirements (user stories, acceptance criteria) to align code over time; implement the minimal change that satisfies their current request, then point to next steps if relevant.
+- When the user describes a feature or fix in plain English, interpret it in terms of the checklist (routes, capabilities, user stories) and implement the smallest change that fulfills their ask.
+
+## User input wins (scope and preferences)
+- When the user's message **narrows or overrides** the project scope (e.g. "skip auth for now", "only add dark mode", "just fix the login", "don't add tests yet"), **follow their current input.** Do not insist on the full checklist in that reply.
+- If they are stating **lasting preferences** (e.g. "always use TypeScript", "no tests for this project"), output a **grip-update-ideation** or **grip-memory** block so future responses stay aligned.
 
 ## Re-ask project-style questions in plain English and convert answers to technical aspects
 - When communicating with the user, treat them as a non-developer. Proactively re-ask or clarify (in plain English) the same kinds of questions as the project creation form: (1) What is the main goal of this project in your own words? (2) Who will use it? Describe them simply. (3) What should the app do? List the main things in simple terms. (4) Any technical preferences or constraints? (e.g. "must work on phones", "needs to be simple", "fast loading").
@@ -113,6 +125,20 @@ The user asked you to remember the following. Apply these in all code and advice
 - When writing code: create or update project files here to implement behavior compatible with the repo (e.g. call the same endpoints, follow similar component structure), but always as fresh code.
 - If the user asks whether you used the repo: confirm that you used it as a **reference for patterns and behavior only**, and that all code you generated in this project is clean-room implementation.
 `
+      if (repoFeaturesChecklist && repoFeaturesChecklist.trim()) {
+        prompt += `
+## Repository features and APIs (tree-sitter checklist — must be reimplemented in new code only)
+The following were extracted by **tree-sitter analysis** of the linked repo (routes, entrypoints, capabilities, user stories, acceptance criteria). Use this as the **implementation checklist**: implement each item in **new, clean-room code** in this project. Use the Repository reference section (when present) only for patterns and APIs—do not copy or duplicate repo source.
+
+${repoFeaturesChecklist}
+
+## MANDATORY: Implementation checklist and completion
+- You MUST reimplement (in new, clean-room code) every route, API, and every capability listed above (matched_capabilities and missing_capabilities). Do not copy repo source; rewrite to match behavior and patterns.
+- Before marking a phase or the project complete, ensure every listed route, API, and capability is implemented and covered.
+- Align with the **user-stated outcome, user stories, and acceptance criteria** above when present: implement and verify against what the user said they want. Over time, cover the full checklist; in each reply, prioritize what the user asked in their current message.
+- **Tie to tree-sitter:** This checklist is the tree-sitter analysis output. Use it together with Repository Analysis and Repository reference: analysis = what to build; repo reference = how (patterns only); your output = new code only.
+`
+      }
     }
 
     // Prefer enhanced build requirements (from ideation enhancement) so GRIP gets best version
@@ -275,8 +301,10 @@ This project has sandbox experiments (isolated builds for testing). The user can
       | undefined
 
     if (ra?.projectAnalysis) {
-      // Tree-sitter analysis available - use it as primary analysis
-      prompt += `\n## Repository Analysis (tree-sitter AST analysis)\n${ra.projectAnalysis.slice(0, 8000)}\n`
+      // Tree-sitter analysis available - use it as primary analysis (what to implement; do not copy repo code)
+      prompt += `\n## Repository Analysis (tree-sitter AST analysis — use for what to implement; do NOT copy repo code)\n`
+      prompt += `The text below is derived from tree-sitter analysis of the repo (structure, flows, entrypoints). Use it together with the "Repository features and APIs" checklist to know what to build; implement each in new code only.\n\n`
+      prompt += `${ra.projectAnalysis.slice(0, 8000)}\n`
     } else if (Array.isArray(ra?.fileAnalyses) && ra.fileAnalyses.length > 0) {
       // Fallback: Use file-level analyses from tree-sitter
       prompt += `\n## Repository Analysis (tree-sitter file-level analysis)\n`
@@ -369,14 +397,16 @@ Based on the repository analysis, you can help with:
 `
   }
 
-  // Add structured analysis summary (tree-link JSON) if available
+  // Add structured analysis summary (tree-link JSON) if available — ties to checklist and user input
   if (structuredSummary && structuredSummary.trim()) {
-    prompt += `\n## Structured repo analysis (tree-link JSON summary; capabilities vs requirements; no code)\n${structuredSummary.slice(0, 4000)}\n`
+    prompt += `\n## Structured repo analysis (tree-link summary — capabilities vs requirements; no repo code)\n`
+    prompt += `Summary from tree-sitter analysis. Use with the "Repository features and APIs" checklist: implement each item in new code; align with user stories and acceptance criteria when present.\n\n`
+    prompt += `${structuredSummary.slice(0, 4000)}\n`
   }
 
   if (repoReferenceDoc && repoReferenceDoc.length > 0) {
     prompt += `\n## Repository reference (structure, patterns, and APIs only — do NOT copy code)\n`
-    prompt += `The user's project input and the cloned GitHub repo are both in your context for the build. The content below is the repo's structure and file contents. You MUST use it only to understand patterns, architecture, and APIs—**never** to copy or closely paraphrase code.\n`
+    prompt += `Use this **together with the tree-sitter analysis** (Repository Analysis, Structured repo analysis, and "Repository features and APIs" checklist above): the analysis tells you **what** to implement (routes, entrypoints, capabilities, user stories); this section shows **how** the repo implements it (patterns, APIs, file layout). You MUST use it only to understand patterns, architecture, and APIs—**never** to copy or closely paraphrase code.\n`
     prompt += `- Base the development plan and phases on what the repo does (features, flows, routes, APIs), but implement everything here as new, clean-room code.\n`
     prompt += `- When a file exists in the repo, you may mirror its responsibilities and structure in new files in this project, but do not paste its contents. Integrate via compatible APIs and data shapes.\n\n`
     prompt += repoReferenceDoc.slice(0, 28000)
@@ -385,6 +415,16 @@ Based on the repository analysis, you can help with:
   } else if (projectContext?.repository) {
     prompt += `\n## Repository context note\n`
     prompt += `This project has a linked repo (${projectContext.repository.owner}/${projectContext.repository.name}) but repo file content is not in this context yet. You MUST still treat the repo as a reference only: when implementing, follow its patterns and structure but write new, clean-room code here. If you need repo file contents to proceed, tell the user to open the Repo tab to load the clone, or to refresh the project so repo context can be rebuilt.\n\n`
+  }
+
+  // Tie tree-sitter analysis and repo reference to best build results (no copying) — for both main and sandbox
+  if (projectContext?.repository && (analysisContext?.repositoryAnalysis || (structuredSummary && structuredSummary.trim()) || (repoFeaturesChecklist && repoFeaturesChecklist.trim()))) {
+    prompt += `\n## Tree-sitter analysis and repository: how to use (best build results, no copying)\n`
+    prompt += `The **Repository Analysis** (tree-sitter AST), **Structured repo analysis** (tree-link summary), and **Repository features and APIs (must be reimplemented)** sections in this prompt are from **tree-sitter analysis** of the linked repo—structure, routes, entrypoints, capabilities, user stories, acceptance criteria. They contain **no raw repo code**; they are the **checklist of what to implement**.\n`
+    prompt += `- **What to implement:** Use the tree-sitter checklist (routes, entrypoints, matched/missing capabilities, user stories, acceptance criteria) as the single source of truth for what must exist in this project. Implement each item in **new, clean-room code** that achieves the same behavior and contracts.\n`
+    prompt += `- **How the repo does it:** When **Repository reference** is present above, use it only to see patterns, APIs, data shapes, and file layout. Then write **new code** that matches those patterns and contracts—do not copy, paste, or paraphrase repo source. No duplication of repo code.\n`
+    prompt += `- **Pipeline:** For each route/entrypoint/capability: (1) Use the analysis to know *what* to build. (2) Use the repo reference (if present) to see *how* the repo implements it. (3) Implement in **new code** in this project that matches behavior and APIs. Result: best build alignment with the repo and user input without copying or duplicating code.\n`
+    prompt += `- **User input:** Align with the user-stated outcome, user stories, and acceptance criteria in the checklist; prioritize the user's current message. Over time, cover the full checklist in new code only.\n\n`
   }
 
   // List files currently in the project so GRIP can reference them and answer "which files used snippet.txt"
@@ -424,6 +464,7 @@ Based on the repository analysis, you can help with:
 - After outputting package.json, say one line: "The file will be applied and the build will run. Use **Run in StackBlitz** in the Preview tab to preview, or paste any errors here." Do NOT say "save the block as package.json" or "go to Preview and click Run in StackBlitz" as a manual step—the system applies files and runs the build automatically.
 
 ## Code Automation Instructions
+- **Tree-sitter checklist + repo reference:** Implement the routes, entrypoints, and capabilities from the tree-sitter analysis checklist; use the repository reference only for patterns, APIs, and structure. Write **new code** only—never copy, paste, or duplicate repo source. Match behavior and contracts; do not paraphrase repo code.
 - Help automate the development process by generating code based on the project analysis and ideation
 - When writing code, ensure compatibility with the existing repository structure and coding patterns
 - Consider the project's architectural patterns and follow them in generated code
@@ -1135,14 +1176,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get analysis context (use sandboxAnalyses for sandbox projects)
+    // Analysis is per-project: main → analyses, sandbox → sandboxAnalyses. No cross-talk; input-override
+    // and checklist rules apply to whichever project is in context (main build or sandbox experiment).
     const analysisCollection = isSandbox ? 'sandboxAnalyses' : 'analyses'
     const analysis = await db.collection(analysisCollection).findOne({
       projectId: new ObjectId(projectId)
     })
 
-    // Extract structured analysis summary (tree-link JSON) if available
+    // Extract structured analysis summary (tree-link JSON) and full repo features/API checklist
     let structuredSummary = ''
+    let repoFeaturesChecklist = ''
     try {
       const ra = analysis?.repositoryAnalysis as
         | { projectAnalysis?: string; fileAnalyses?: Array<{ path: string; analysis: string }>; structuredAnalysis?: any }
@@ -1159,6 +1202,11 @@ export async function POST(request: NextRequest) {
         const routes = Array.isArray(sa.route_map) ? sa.route_map : []
         const entrypoints = Array.isArray(sa.entrypoints) ? sa.entrypoints : []
         const symbolIndex = Array.isArray(sa.symbol_index) ? sa.symbol_index : []
+        const recommended = Array.isArray(ideation.recommended_integration_points) ? ideation.recommended_integration_points : []
+        const depSummary = sa.dependency_summary || {}
+        const normReq = ideation.normalized_requirements || {}
+        const userStories = Array.isArray(normReq.user_stories) ? normReq.user_stories : []
+        const acceptanceCriteria = Array.isArray(normReq.acceptance_criteria) ? normReq.acceptance_criteria : []
 
         const lines: string[] = []
         lines.push('Identity & architecture:')
@@ -1195,6 +1243,80 @@ export async function POST(request: NextRequest) {
           `- Missing capabilities: ${missing.length}`,
         )
         structuredSummary = lines.join('\n')
+
+        // Full repo features/API checklist (all routes, entrypoints, capabilities) for GRIP to reimplement
+        // Start with user-stated requirements so GRIP aligns with user input first
+        const checklistLines: string[] = []
+        if (normReq.product_summary) {
+          checklistLines.push('### User-stated outcome (align all code with this)')
+          checklistLines.push(`- ${normReq.product_summary}`)
+          checklistLines.push('')
+        }
+        if (userStories.length) {
+          checklistLines.push('### User stories (implement to these)')
+          userStories.forEach((s: any) => {
+            checklistLines.push(`- As ${s.as_a || 'user'}, I want ${s.i_want || '—'} so that ${s.so_that || '—'} (priority: ${s.priority || '—'})`)
+          })
+          checklistLines.push('')
+        }
+        if (acceptanceCriteria.length) {
+          checklistLines.push('### Acceptance criteria (verify against these)')
+          acceptanceCriteria.forEach((c: any) => {
+            checklistLines.push(`- ${c.criterion || '—'} (how to verify: ${c.how_to_verify || '—'})`)
+          })
+          checklistLines.push('')
+        }
+        checklistLines.push('### Routes (must reimplement each in new code)')
+        if (routes.length) {
+          routes.forEach((r: any) => {
+            checklistLines.push(`- ${r.method || 'GET'} ${r.route || ''} → ${r.handler_symbol || ''} (${r.source_file || ''})`)
+          })
+        } else {
+          checklistLines.push('- (none detected)')
+        }
+        checklistLines.push('')
+        checklistLines.push('### Entrypoints (must reimplement each in new code)')
+        if (entrypoints.length) {
+          entrypoints.forEach((e: any) => {
+            checklistLines.push(`- ${e.file}: ${e.symbol || ''} — ${e.reason || ''}`)
+          })
+        } else {
+          checklistLines.push('- (none detected)')
+        }
+        checklistLines.push('')
+        checklistLines.push('### Matched capabilities (repo already has these; reimplement in this project)')
+        if (matched.length) {
+          matched.forEach((c: any) => {
+            checklistLines.push(`- ${c.repo_capability || ''} (evidence: ${c.evidence || '—'})`)
+          })
+        } else {
+          checklistLines.push('- (none)')
+        }
+        checklistLines.push('')
+        checklistLines.push('### Missing capabilities (must implement in this project)')
+        if (missing.length) {
+          missing.forEach((c: any) => {
+            checklistLines.push(`- ${c.needed_capability || ''} — impact: ${c.impact || ''}; approach: ${c.recommended_approach || ''}`)
+          })
+        } else {
+          checklistLines.push('- (none)')
+        }
+        if (recommended.length) {
+          checklistLines.push('')
+          checklistLines.push('### Recommended integration points')
+          recommended.forEach((r: any) => {
+            checklistLines.push(`- ${r.feature || ''} @ ${r.where || ''}: ${r.why_here || ''}`)
+          })
+        }
+        if (depSummary && (depSummary.external_packages?.length || depSummary.runtime_patterns?.length || depSummary.data_storage_patterns?.length || depSummary.auth_patterns?.length)) {
+          checklistLines.push('')
+          checklistLines.push('### Dependency summary (align new code with these patterns)')
+          if (depSummary.external_packages?.length) checklistLines.push('- External packages: ' + depSummary.external_packages.join(', '))
+          if (depSummary.runtime_patterns?.length) checklistLines.push('- Runtime: ' + depSummary.runtime_patterns.join(', '))
+          if (depSummary.data_storage_patterns?.length) checklistLines.push('- Data/storage: ' + depSummary.data_storage_patterns.join(', '))
+          if (depSummary.auth_patterns?.length) checklistLines.push('- Auth: ' + depSummary.auth_patterns.join(', '))
+        }
+        repoFeaturesChecklist = checklistLines.join('\n')
       }
     } catch {
       // optional
@@ -1287,7 +1409,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build system prompt with context
-    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary)
+    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox)
 
     // Production readiness: fail gracefully when AI is not configured
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
@@ -1466,7 +1588,7 @@ export async function POST(request: NextRequest) {
             { role: 'assistant' as const, content: aiMessage },
             { role: 'user' as const, content: buildFailedUserMessage },
           ]
-          const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary)
+          const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox)
 
           const responseRetry = await anthropicService.createMessage(historyForRetry, { system: systemPromptRetry })
           const tokensRetry = (responseRetry.usage?.promptTokens ?? 0) + (responseRetry.usage?.completionTokens ?? 0)
