@@ -76,6 +76,10 @@ export default function ProjectOverviewPage() {
   const [sandboxes, setSandboxes] = useState<SandboxExperiment[]>([])
   const [loadingSandboxes, setLoadingSandboxes] = useState(false)
   const [creatingSandbox, setCreatingSandbox] = useState(false)
+  const [uploads, setUploads] = useState<Array<{ path: string; filename: string; size: number; purpose: string }>>([])
+  const [loadingUploads, setLoadingUploads] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const uploadInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const projectId = params?.id || ''
@@ -86,6 +90,43 @@ export default function ProjectOverviewPage() {
       .then((r) => r.ok ? r.json() : null)
       .then((data) => data && setProject(data))
       .catch(() => {})
+  }
+
+  const uploadsEndpoint = project?.isSandbox
+    ? `/api/projects/${projectId}/legal-sandbox/uploads`
+    : `/api/projects/${projectId}/uploads`
+  const refreshUploads = useCallback(() => {
+    if (!projectId) return
+    setLoadingUploads(true)
+    fetch(uploadsEndpoint)
+      .then((r) => r.ok ? r.json() : { uploads: [] })
+      .then((data) => setUploads(Array.isArray(data.uploads) ? data.uploads : []))
+      .catch(() => setUploads([]))
+      .finally(() => setLoadingUploads(false))
+  }, [projectId, uploadsEndpoint])
+  useEffect(() => {
+    if (projectId && project != null) refreshUploads()
+  }, [projectId, project, refreshUploads])
+  const handleUploadFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length || !projectId) return
+    setUploading(true)
+    const form = new FormData()
+    Array.from(files).forEach((f) => form.append('files', f))
+    try {
+      const res = await fetch(uploadsEndpoint, { method: 'POST', body: form })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Upload failed')
+      }
+      await refreshUploads()
+      sonnerToast.success('Uploaded. GRIP will use these in the build.')
+    } catch (err) {
+      sonnerToast.error(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
   }
 
   const handleMarkReady = async () => {
@@ -978,6 +1019,66 @@ export default function ProjectOverviewPage() {
           )}
           {generatedFiles.length > 15 && (
             <p className="text-xs text-text-secondary mt-2">Showing 15 of {generatedFiles.length} files.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Your uploads: images and reference docs for GRIP to use in the build */}
+      <Card id="your-uploads" className="border border-primary/20 bg-primary/5 scroll-mt-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xl font-bold flex items-center gap-2">
+            <ArrowUpCircle className="w-5 h-5 text-primary" />
+            Your uploads
+          </CardTitle>
+          <CardDescription>
+            Upload images (hero, logo, favicon) or reference docs (specs, copy, PDFs) for GRIP to use in the build. GRIP sees these in Develop chat and will use image paths in code and reference docs for requirements.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={uploadInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp,image/x-icon,image/bmp,.png,.jpg,.jpeg,.gif,.webp,.ico,.bmp,application/pdf,text/plain,text/markdown,.pdf,.txt,.md"
+              multiple
+              className="hidden"
+              onChange={handleUploadFiles}
+              aria-label="Upload images or reference documents for GRIP"
+            />
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              disabled={uploading}
+              onClick={() => uploadInputRef.current?.click()}
+            >
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <ArrowUpCircle className="h-4 w-4 mr-1.5" />}
+              {uploading ? 'Uploading...' : 'Choose images or docs'}
+            </Button>
+            <Button variant="outline" size="sm" disabled={loadingUploads} onClick={refreshUploads}>
+              {loadingUploads ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            </Button>
+            <span className="text-xs text-text-muted">Images → public/; docs → docs/. Max 4MB per file.</span>
+          </div>
+          {loadingUploads ? (
+            <p className="text-sm text-text-secondary">Loading uploads...</p>
+          ) : uploads.length === 0 ? (
+            <p className="text-sm text-text-secondary">
+              No uploads yet. Add images or reference docs above; they will be available to GRIP in Develop.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {uploads.map((u, i) => (
+                <li key={`${u.path}/${u.filename}-${i}`} className="flex items-center justify-between gap-2 py-1.5 border-b border-border/50 last:border-0 text-sm">
+                  <span className="truncate min-w-0">
+                    {u.path ? `${u.path}/` : ''}{u.filename}
+                  </span>
+                  <span className="text-xs text-text-muted shrink-0">
+                    {u.purpose === 'image' ? 'Image' : 'Doc'} · {Math.round((u.size || 0) / 1024 * 10) / 10} KB
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </CardContent>
       </Card>

@@ -852,6 +852,23 @@ enhanced_chat_continuity_and_automation:
       - "When the user asks to create files, run builds, or add features: G.R.I.P. should direct them to existing flows (e.g. Tasks, Builds, project actions) and use existing services (fileGeneratorService, taskQueueService, commandGeneratorService) when implementing automation."
       - "Keep the project_chat sequence and grip_chat_automation phases in .cursorrules as the reference for the intended user journey; any new chat flows or buttons should align with these phases (initial_chat, setup_phase, development_phase, component_phase, etc.) and reuse existing step titles and actions where possible."
       - "GRIP AI assistant MUST be able to guide the user from ideation → project overview → plan → chat for builds → file creation and run/build; all components and APIs in codebase_alignment_detail must work inline with enhanced chat to support this end-to-end automation."
+      - "MANDATORY — ALL repo types: G.R.I.P. MUST handle every kind of GitHub repository—not just one-off web dev. This includes: AI/ML/LLM (Python, PyTorch, LangChain, etc.), full-stack (frontend+backend), iOS (Swift/SwiftUI), Android (Kotlin/Gradle), Python, Go, Rust, Ruby, PHP, .NET, CLI tools. The enhanced-chat system prompt injects detected repo type and mandatory rules per category (see src/lib/repoTypeDetection.ts). G.R.I.P. must follow the injected rules: use the correct toolchain, build system, and conventions for the detected stack; never assume 'just a web app' unless the repo clearly is. See docs/REPO_TYPES_AND_GRIP.md for the plan and steps per scenario."
+
+  repo_types_mandate:
+    description: "G.R.I.P. must handle ALL GitHub repo types with a clear plan and steps per scenario."
+    categories:
+      - "AI/ML/LLM: Preserve ML stack (PyTorch, TensorFlow, LangChain); keep model configs and API usage; add code that fits existing patterns."
+      - "iOS (Swift): Swift/SwiftUI or UIKit only; respect Xcode structure and Info.plist; follow Apple HIG."
+      - "Android (Kotlin): Kotlin/Java and Gradle; respect app/src/main and manifests; follow Material Design."
+      - "Full-stack JS: Frontend + backend; single root dev script (e.g. concurrently); keep API contracts and env in sync."
+      - "Web JS: Use repo's frontend stack (React, Next, Vite) and package.json scripts."
+      - "Python: Python 3 and repo layout (pyproject.toml, requirements.txt); preserve virtualenv/poetry."
+      - "Go/Rust/Ruby/PHP/.NET/CLI: Use each stack's standard layout and build system; preserve entrypoints and conventions."
+      - "Generic: Follow primary languages and frameworks; support all common repo types; use appropriate toolchain."
+    implementation:
+      - "Repo type is detected from structured analysis (identity, file_manifest, mainLanguages) in src/lib/repoTypeDetection.ts."
+      - "Enhanced chat injects 'Mandatory: Repo type and stack' with category-specific rules into the system prompt."
+      - "When no structured analysis: generic rules are injected so G.R.I.P. still follows the 'handle all repo types' mandate."
 
 # G.R.I.P. Chat Automation Implementation Plan
 grip_chat_automation:

@@ -14,6 +14,7 @@ import { createProjectFolder, saveProjectFile } from '@/lib/services/gripProject
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 import { runMainProject } from '@/lib/runMainProject'
 import { MANDATORY_GRIP_BUILD_QUALITY } from '@/lib/constants/buildQualityPlan'
+import { detectRepoType, getMandatoryRepoTypeRules } from '@/lib/repoTypeDetection'
 
 // Phase 2, Step 2: Create Project Data Fetcher for enhanced chat
 //
@@ -52,7 +53,9 @@ const buildSystemPrompt = (
   repoFeaturesChecklist?: string,
   isSandboxContext?: boolean,
   likelyRemaining?: string,
-  lastAttemptSummary?: string
+  lastAttemptSummary?: string,
+  userUploadsSummary?: string,
+  repoTypeRules?: string
 ) => {
   let prompt = `You are G.R.I.P. (Guided Real-time Intelligence Partner) designed to help with software development projects. 
 You are G.R.I.P., an AI assistant built specifically for helping developers automate project creation. Do not claim to be or reference any other AI product or provider.
@@ -60,6 +63,10 @@ You are G.R.I.P., an AI assistant built specifically for helping developers auto
 Your primary purpose is to help guide users through building out projects by writing code, creating files, and implementing features
 based on the project ideation, repository structure, and existing code in the cloned GitHub repository.
 ${isSandboxContext ? '\n## Context: sandbox experiment\nThis conversation is for a **sandbox experiment** (isolated from the main project). Use **this project\'s** analysis, ideation, and checklist only. Prioritize the user\'s current message; do not mix with the main GRIP project build.\n' : ''}
+
+## Mandatory: Repo type and stack (handle ALL GitHub repo types)
+You MUST handle every kind of repository—not just one-off web apps. This includes: AI/ML/LLM (Python, PyTorch, LangChain, etc.), full-stack (frontend + backend), iOS (Swift/SwiftUI), Android (Kotlin/Gradle), Python, Go, Rust, Ruby, PHP, .NET, CLI tools, and generic web (JS/TS). Use the detected repo type and the rules below; follow the appropriate toolchain, build system, and conventions for that stack. Never assume "just a web app" unless the repo clearly is.
+${repoTypeRules && repoTypeRules.trim() ? `\n${repoTypeRules}\n` : ''}
 
 ## CRITICAL: README.md = ONE code block only (never multiple)
 When you provide a README (at project completion OR when the user asks for a README), you MUST output the **entire** README in **exactly one** markdown code block. Never output multiple code blocks for one README (e.g. one block for intro, another for file tree, another for bash). Multiple blocks = the user cannot save one README.md file. All README content (features, install, bash commands, file structure, env examples) goes inside that single \`\`\`markdown ... \`\`\` block. One block = one "Save to project" = one file.
@@ -190,6 +197,16 @@ ${projectContext.ideation.technicalRequirements}
       prompt += `
 ## Sandbox experiments (project overview)
 This project has sandbox experiments (isolated builds for testing). The user can create or open them from the project Overview. ${sandboxExperimentsSummary}
+`
+    }
+    // User uploads (images and reference docs): so GRIP uses them in the build
+    if (userUploadsSummary && userUploadsSummary.trim()) {
+      prompt += `
+## User uploads (use in the build)
+The user has uploaded images and/or reference docs for this project. You MUST use them in your code and implementation.
+${userUploadsSummary}
+- **Images:** Use the paths above in \`<img src="...">\`, CSS \`url()\`, or asset imports so the user's images appear in the app (e.g. hero, logo, favicon).
+- **Reference docs:** Use them for requirements, copy, or specs; incorporate or reference their content when implementing features.
 `
     }
   }
@@ -1235,6 +1252,7 @@ export async function POST(request: NextRequest) {
     // Extract structured analysis summary (tree-link JSON) and full repo features/API checklist (for main and sandbox)
     let structuredSummary = ''
     let repoFeaturesChecklist = ''
+    let repoTypeRules = ''
     let checklistRoutes: Array<{ method?: string; route?: string; source_file?: string }> = []
     let checklistEntrypoints: Array<{ file?: string; symbol?: string }> = []
     try {
@@ -1370,6 +1388,24 @@ export async function POST(request: NextRequest) {
           if (depSummary.auth_patterns?.length) checklistLines.push('- Auth: ' + depSummary.auth_patterns.join(', '))
         }
         repoFeaturesChecklist = checklistLines.join('\n')
+
+        // Repo type detection: AI/ML, iOS, Android, full-stack, etc. — mandatory rules per category
+        const fileManifest = Array.isArray(sa.file_manifest) ? sa.file_manifest : []
+        const filePaths = fileManifest.map((f: any) => f.path).filter(Boolean)
+        const mainLanguages: Record<string, number> = {}
+        fileManifest.forEach((f: any) => {
+          const ext = (f.path || '').split('.').pop()?.toLowerCase() || (f.language || '').toLowerCase() || 'unknown'
+          if (ext) mainLanguages[ext] = (mainLanguages[ext] || 0) + 1
+        })
+        const repoTypeInput = {
+          primary_languages: identity.primary_languages,
+          detected_frameworks: identity.detected_frameworks,
+          project_type: identity.project_type || '',
+          filePaths,
+          mainLanguages,
+        }
+        const detected = detectRepoType(repoTypeInput)
+        repoTypeRules = getMandatoryRepoTypeRules(detected.category, detected.label, detected.hints)
       }
     } catch {
       // optional
@@ -1387,6 +1423,18 @@ export async function POST(request: NextRequest) {
     } else {
       const projectFilesList = await listProjectFiles(projectId)
       savedFiles = projectFilesList.map((f) => ({ path: f.path || '', filename: f.filename || '' }))
+    }
+
+    // Fallback: when no structured analysis, infer repo type from saved project files so we get a better category than generic
+    if (!repoTypeRules.trim()) {
+      const filePathsFromSaved = savedFiles.map((f) => (f.path ? `${f.path}/` : '') + (f.filename || '')).filter(Boolean)
+      const mainLanguagesFromSaved: Record<string, number> = {}
+      filePathsFromSaved.forEach((p) => {
+        const ext = p.split('.').pop()?.toLowerCase() || 'unknown'
+        if (ext) mainLanguagesFromSaved[ext] = (mainLanguagesFromSaved[ext] || 0) + 1
+      })
+      const fallbackDetected = detectRepoType({ filePaths: filePathsFromSaved, mainLanguages: mainLanguagesFromSaved })
+      repoTypeRules = getMandatoryRepoTypeRules(fallbackDetected.category, fallbackDetected.label, fallbackDetected.hints)
     }
 
     // Implemented checklist progress (persisted so we don't show already-implemented as remaining)
@@ -1552,8 +1600,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // User uploads (images and reference docs) so GRIP uses them in the build (main and sandbox)
+    let userUploadsSummary = ''
+    try {
+      const uploadsColl = isSandbox ? 'legalSandboxFiles' : 'projectFiles'
+      const uploadsFilter = isSandbox
+        ? { projectId: new ObjectId(projectId), 'metadata.generatedBy': 'user_upload' }
+        : { projectId: new ObjectId(projectId), 'metadata.generatedBy': 'user_upload' }
+      const uploads = await db.collection(uploadsColl).find(uploadsFilter).project({ path: 1, filename: 1, metadata: 1 }).toArray() as Array<{ path?: string; filename?: string; metadata?: { purpose?: string } }>
+      const images = uploads.filter((u) => u.metadata?.purpose === 'image').map((u) => (u.path ? `${u.path}/${u.filename}` : u.filename).trim()).filter(Boolean)
+      const docs = uploads.filter((u) => u.metadata?.purpose === 'reference_doc').map((u) => (u.path ? `${u.path}/${u.filename}` : u.filename).trim()).filter(Boolean)
+      const lines: string[] = []
+      if (images.length) lines.push(`Images (use these paths in your code): ${images.join(', ')}.`)
+      if (docs.length) lines.push(`Reference docs (use for requirements or copy): ${docs.join(', ')}.`)
+      if (lines.length) userUploadsSummary = lines.join('\n')
+    } catch (uploadErr) {
+      console.warn('Enhanced chat: could not load user uploads for context', uploadErr)
+    }
+
     // Build system prompt with context
-    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary)
+    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules)
 
     // Production readiness: fail gracefully when AI is not configured
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
@@ -1774,7 +1840,7 @@ export async function POST(request: NextRequest) {
             { role: 'assistant' as const, content: aiMessage },
             { role: 'user' as const, content: buildFailedUserMessage },
           ]
-          const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary)
+          const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules)
 
           const responseRetry = await anthropicService.createMessage(historyForRetry, { system: systemPromptRetry })
           const tokensRetry = (responseRetry.usage?.promptTokens ?? 0) + (responseRetry.usage?.completionTokens ?? 0)

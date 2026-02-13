@@ -22,6 +22,19 @@ This doc describes how enhancements apply to **both** main GRIP (main project) a
 | **Last-attempt summary when build failed** | ✅ Passed into retry prompt | ✅ Same |
 | **Single dev script hint in plan** | Main plan generator | Sandbox plan: phase/task for root dev script when repo has frontend+backend |
 | **.cursorrules** | Prefer "Likely remaining", no duplicate work | Same rules apply in chat |
+| **User uploads** | `projectFiles` with `metadata.generatedBy: 'user_upload'`; GET/POST `/api/projects/[id]/uploads` | `legalSandboxFiles` same metadata; GET/POST `/api/projects/[id]/legal-sandbox/uploads` |
+
+---
+
+## User Uploads (Images and Reference Docs)
+
+Both GRIP and Sandbox GRIP support **user uploads** so the user can provide their own images (hero, logo, favicon) and reference docs (specs, copy, PDFs) for the build.
+
+- **Storage:** Main project → `projectFiles` with `metadata: { generatedBy: 'user_upload', purpose: 'image' | 'reference_doc' }`. Sandbox → `legalSandboxFiles` with the same metadata.
+- **Paths:** Images default to `public/` (e.g. `public/hero.png`); reference docs to `docs/` (e.g. `docs/spec.txt`). GRIP is told to use these paths in code and to use docs for requirements/copy.
+- **APIs:** GET/POST `/api/projects/[id]/uploads` (main), GET/POST `/api/projects/[id]/legal-sandbox/uploads` (sandbox). POST accepts multipart/form-data (`files` or `file`). Allowed: PNG, JPEG, GIF, WebP, ICO, BMP; PDF, TXT, MD. Max 4MB per file.
+- **Enhanced chat:** User uploads are listed in the system prompt under "User uploads (use in the build)" so GRIP uses image paths in `<img>`, CSS, or imports and uses reference docs for requirements or copy.
+- **Overview:** "Your uploads" card on the project Overview page (main and sandbox) with file picker and list of uploads.
 
 ---
 
@@ -56,3 +69,4 @@ This doc describes how enhancements apply to **both** main GRIP (main project) a
 - **Repo context**: `src/lib/services/repoContextService.ts` — `getOrBuildRepoContextDocument(projectId, isSandbox)`.
 - **Sandbox plan**: `src/app/api/projects/[id]/legal-sandbox/plan/route.ts` — single dev script hint for frontend+backend repos.
 - **Migration**: `src/scripts/migrate-sandbox-projectid-to-objectid.ts` — one-time normalize `projectId` to ObjectId in sandbox collections.
+- **User uploads**: `src/lib/uploadValidation.ts` — allowed MIME/types, max size, purpose/path. Main: `src/app/api/projects/[id]/uploads/route.ts`. Sandbox: `src/app/api/projects/[id]/legal-sandbox/uploads/route.ts`. Overview "Your uploads" card: `src/app/dashboard/projects/[id]/page.tsx`.
