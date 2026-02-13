@@ -179,8 +179,8 @@ export function detectRepoType(input: RepoTypeInput): {
   // Full-stack JS/TS (frontend + backend indicators)
   const frontendIndicators = ['react', 'next', 'vue', 'angular', 'svelte', 'vite', 'frontend', 'client']
   const backendIndicators = ['express', 'fastify', 'nest', 'backend', 'server', 'api']
-  const hasFrontend = hasAnyInList(frameworks, frontendIndicators) || pathsLower.some((p) => frontendIndicators.some((f) => p.includes(f))))
-  const hasBackend = hasAnyInList(frameworks, backendIndicators) || pathsLower.some((p) => backendIndicators.some((b) => p.includes(b))))
+  const hasFrontend = hasAnyInList(frameworks, frontendIndicators) || pathsLower.some((p) => frontendIndicators.some((f) => p.includes(f)));
+  const hasBackend = hasAnyInList(frameworks, backendIndicators) || pathsLower.some((p) => backendIndicators.some((b) => p.includes(b)));
   if (
     (hasFrontend && hasBackend) ||
     (hasPath('frontend') && hasPath('backend')) ||
