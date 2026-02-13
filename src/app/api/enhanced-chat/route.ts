@@ -1145,6 +1145,24 @@ async function saveChatMessage(projectId: string, message: ChatMessage) {
   }
 }
 
+// Update an existing assistant message's content (e.g. after appending build status)
+async function updateAssistantMessageContent(projectId: string, messageId: string, content: string) {
+  try {
+    const client = await clientPromise
+    const db = client.db('test')
+    const projectObjectId = new ObjectId(projectId)
+    const r = await db.collection('chatHistory').updateOne(
+      { projectId: projectObjectId, 'messages.id': messageId },
+      { $set: { 'messages.$.content': content, 'metadata.lastUpdated': new Date() } }
+    )
+    if (r.matchedCount === 0) {
+      console.warn('Enhanced chat: could not update message content (message not found)', { projectId, messageId })
+    }
+  } catch (err) {
+    console.warn('Enhanced chat: updateAssistantMessageContent failed', err)
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -1712,6 +1730,22 @@ export async function POST(request: NextRequest) {
     // Merge multiple README blocks into one so the user gets a single "Save to project" button
     aiMessage = mergeReadmeBlocks(aiMessage)
 
+    // Persist assistant message immediately so if the request times out during file apply/build,
+    // the user can still see the reply via refetched chat history
+    const earlyAiMessage = aiMessage
+    let savedAssistantMessage: { id: string } | null = null
+    try {
+      const saved = await saveChatMessage(projectId, {
+        role: 'assistant',
+        content: earlyAiMessage,
+        timestamp: new Date()
+      })
+      savedAssistantMessage = saved as { id: string }
+    } catch (saveErr) {
+      console.warn('Enhanced chat: failed to save assistant message early', saveErr)
+    }
+
+    try {
     // Save all code blocks with explicit file paths directly to project files (sandbox or main)
     const { saved: appliedPaths, codeBreakErrors: appliedCodeBreakErrors } = await saveCodeBlocksToProject(projectId, aiMessage, isSandbox)
 
@@ -1958,12 +1992,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Save AI response
-    await saveChatMessage(projectId, {
-      role: 'assistant',
-      content: aiMessage,
-      timestamp: new Date()
-    })
+    // Update persisted message with full content (including build status) so refetched history matches
+    if (savedAssistantMessage?.id) {
+      await updateAssistantMessageContent(projectId, savedAssistantMessage.id, aiMessage)
+    } else {
+      // Early save failed; persist now so history has the message
+      await saveChatMessage(projectId, { role: 'assistant', content: aiMessage, timestamp: new Date() }).catch((e) =>
+        console.warn('Enhanced chat: failed to save assistant message at end', e)
+      )
+    }
 
     return NextResponse.json({
       message: aiMessage,
@@ -1973,6 +2010,17 @@ export async function POST(request: NextRequest) {
       buildRan: runAfterApply && lastAppliedPaths.length > 0 ? buildRan : undefined,
       buildSucceeded: runAfterApply && lastAppliedPaths.length > 0 ? buildSucceeded : undefined,
     })
+    } catch (postSaveError) {
+      // After we had aiMessage and saved it early, something failed (e.g. timeout during build).
+      // Return 200 with the message we saved so the user always sees the reply when tokens were used.
+      console.error('Enhanced chat: post-save error (returning saved message)', postSaveError)
+      return NextResponse.json({
+        message: earlyAiMessage,
+        partialSuccess: true,
+        error: postSaveError instanceof Error ? postSaveError.message : String(postSaveError),
+        refreshContext: true,
+      })
+    }
   } catch (error) {
     console.error('Error in enhanced chat:', error)
     return NextResponse.json(

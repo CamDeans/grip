@@ -598,11 +598,12 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
         role: 'assistant',
         content: data.message,
         timestamp: new Date(),
-        ...(data.buildRan !== undefined && {
+        ...((data.buildRan !== undefined || data.partialSuccess === true) && {
           metadata: {
             ...(typeof data.buildSucceeded === 'boolean' && { buildSucceeded: data.buildSucceeded }),
-            buildRan: true,
+            ...(data.buildRan === true && { buildRan: true }),
             ...(Array.isArray(data.runErrors) && data.runErrors.length > 0 && { runErrors: data.runErrors }),
+            ...(data.partialSuccess === true && { partialSuccess: true, partialError: data.error }),
           },
         }),
       }
@@ -634,10 +635,37 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
       console.error('Client: Response status:', error instanceof Error ? error.message : 'Unknown error')
       console.error('Client: Error details:', error)
       console.error('Client: Error stack:', error instanceof Error ? error.stack : 'No stack trace')
-      
+
       // Hide typing indicator on error
       setIsTyping(false)
-      
+
+      // Refetch chat history so if the server saved the assistant reply before timeout/error,
+      // the user still sees it (tokens were used)
+      try {
+        const projectRes = await fetch(`/api/projects/${projectId}`)
+        const projectData = projectRes.ok ? await projectRes.json() : null
+        const isSandbox = projectData?.isSandbox === true
+        const historyEndpoint = isSandbox
+          ? `/api/projects/${projectId}/legal-sandbox/chat/history`
+          : `/api/chat/history?projectId=${projectId}`
+        const historyRes = await fetch(historyEndpoint)
+        if (historyRes.ok) {
+          const { messages: serverMessages } = await historyRes.json()
+          if (Array.isArray(serverMessages) && serverMessages.length > 0) {
+            setMessages(prev => {
+              const lastPrev = prev[prev.length - 1]
+              const lastServer = serverMessages[serverMessages.length - 1]
+              if (lastPrev?.role === 'user' && lastServer?.role === 'assistant') {
+                return [...serverMessages.slice(0, -1), lastPrev, lastServer]
+              }
+              return serverMessages
+            })
+          }
+        }
+      } catch (refetchErr) {
+        console.warn('Client: Could not refetch chat history after send error', refetchErr)
+      }
+
       // Add error to state
       setErrorState(prev => [
         ...prev.slice(0, prev.length - 1),
