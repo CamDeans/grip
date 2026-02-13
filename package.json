@@ -12,6 +12,7 @@
     "test:coverage": "jest --coverage",
     "db:init": "cross-env TS_NODE_PROJECT=tsconfig.scripts.json node -r ./src/scripts/loadEnv.js -r tsconfig-paths/register -r ts-node/register ./src/scripts/ensureCollections.ts",
     "db:populate": "node ./src/scripts/populateNewCluster.js",
+    "migrate:sandbox-projectid": "cross-env TS_NODE_PROJECT=tsconfig.scripts.json node -r ./src/scripts/loadEnv.js -r tsconfig-paths/register -r ts-node/register ./src/scripts/migrate-sandbox-projectid-to-objectid.ts",
     "build:check": "npm run lint && npm run build",
     "predeploy": "npm run build:check"
   },

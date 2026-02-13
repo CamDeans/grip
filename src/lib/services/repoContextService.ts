@@ -13,13 +13,22 @@ interface RepoFile {
 
 /**
  * Build a single reference document from the full repo stored in DB (repositories collection).
- * Used at chat start to give Claude full codebase context. Result is stored in analyses.projectContextDocument.
+ * Used at chat start to give Claude full codebase context. Result is stored in analyses.projectContextDocument
+ * (main) or sandboxAnalyses.projectContextDocument (sandbox).
+ * @param projectId - Main project _id or sandbox project _id
+ * @param isSandbox - If true, resolve project and analysis from sandboxProjects/sandboxAnalyses
+ * @param priorityPaths - Paths from tree-sitter (route_map.source_file, entrypoints.file, etc.) to include first
  */
-export async function buildRepoContextDocument(projectId: string): Promise<string> {
+export async function buildRepoContextDocument(
+  projectId: string,
+  isSandbox = false,
+  priorityPaths: string[] = []
+): Promise<string> {
   const client = await clientPromise
   const db = client.db('test')
+  const projectCollection = isSandbox ? 'sandboxProjects' : 'projects'
 
-  const project = await db.collection('projects').findOne({
+  const project = await db.collection(projectCollection).findOne({
     _id: new ObjectId(projectId),
   }) as { repository?: { owner: string; name: string } } | null
 
@@ -46,9 +55,16 @@ export async function buildRepoContextDocument(projectId: string): Promise<strin
   lines.push('\n## File contents (excerpts)\n')
 
   let totalChars = 0
-  const filesWithContent = repo.files.filter(
+  let filesWithContent = repo.files.filter(
     (f) => f.content && typeof f.content === 'string' && f.content.length > 0
   )
+  if (priorityPaths.length > 0) {
+    const prioritySet = new Set(priorityPaths.map((p) => p.replace(/\\/g, '/')))
+    filesWithContent = [
+      ...filesWithContent.filter((f) => prioritySet.has(f.path) || priorityPaths.some((pp) => f.path.includes(pp) || pp.includes(f.path))) ,
+      ...filesWithContent.filter((f) => !prioritySet.has(f.path) && !priorityPaths.some((pp) => f.path.includes(pp) || pp.includes(f.path))),
+    ]
+  }
 
   for (let i = 0; i < filesWithContent.length && i < MAX_FILES_WITH_CONTENT; i++) {
     if (totalChars >= MAX_TOTAL_CHARS) break
@@ -81,26 +97,45 @@ export async function buildRepoContextDocument(projectId: string): Promise<strin
 
 /**
  * Get or build and persist the repo context document for a project. Returns the document string.
+ * Supports both main projects (analyses) and sandbox projects (sandboxAnalyses).
  */
-export async function getOrBuildRepoContextDocument(projectId: string): Promise<string> {
+export async function getOrBuildRepoContextDocument(projectId: string, isSandbox = false): Promise<string> {
   const client = await clientPromise
   const db = client.db('test')
+  const analysisCollection = isSandbox ? 'sandboxAnalyses' : 'analyses'
 
-  const analysis = await db.collection('analyses').findOne({
-    projectId: new ObjectId(projectId),
-  }) as { projectContextDocument?: string } | null
+  const projectIdObj = new ObjectId(projectId)
+  const analysis = await db.collection(analysisCollection).findOne(
+    isSandbox
+      ? { $or: [{ projectId: projectIdObj }, { projectId }] }
+      : { projectId: projectIdObj },
+  ) as { projectContextDocument?: string; projectId?: unknown } | null
 
   if (analysis?.projectContextDocument && analysis.projectContextDocument.length > 0) {
     return analysis.projectContextDocument
   }
 
-  const doc = await buildRepoContextDocument(projectId)
+  const analysisDoc = analysis as { repositoryAnalysis?: { structuredAnalysis?: any } }
+  const sa = analysisDoc?.repositoryAnalysis?.structuredAnalysis
+  const priorityPaths: string[] = []
+  if (sa) {
+    const routes = Array.isArray(sa.route_map) ? sa.route_map : []
+    const entrypoints = Array.isArray(sa.entrypoints) ? sa.entrypoints : []
+    const recommended = Array.isArray(sa.ideation_alignment?.recommended_integration_points) ? sa.ideation_alignment.recommended_integration_points : []
+    routes.forEach((r: { source_file?: string }) => { if (r.source_file) priorityPaths.push(r.source_file) })
+    entrypoints.forEach((e: { file?: string }) => { if (e.file) priorityPaths.push(e.file) })
+    recommended.forEach((r: { touches?: { files?: string[] } }) => { (r.touches?.files || []).forEach((f) => priorityPaths.push(f)) })
+  }
+
+  const doc = await buildRepoContextDocument(projectId, isSandbox, priorityPaths)
   if (!doc) return ''
 
-  await db.collection('analyses').updateOne(
-    { projectId: new ObjectId(projectId) },
+  const filter = isSandbox ? { $or: [{ projectId: projectIdObj }, { projectId }] } : { projectId: projectIdObj }
+  await db.collection(analysisCollection).updateOne(
+    filter,
     {
       $set: {
+        projectId: projectIdObj,
         projectContextDocument: doc,
         updatedAt: new Date(),
       },

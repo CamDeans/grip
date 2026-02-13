@@ -9,13 +9,25 @@ import { anthropicService } from '@/lib/services/anthropicService'
 import { getOrBuildRepoContextDocument } from '@/lib/services/repoContextService'
 import { listProjectFiles } from '@/lib/services/fileStorageService'
 import { getProjectPlan } from '@/lib/services/projectPlanningService'
-import { getProjectState, recordFileSaveAndAdvanceStep } from '@/lib/services/projectStateService'
+import { getProjectState, updateProjectState, recordFileSaveAndAdvanceStep } from '@/lib/services/projectStateService'
 import { createProjectFolder, saveProjectFile } from '@/lib/services/gripProjectActions'
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 import { runMainProject } from '@/lib/runMainProject'
 import { MANDATORY_GRIP_BUILD_QUALITY } from '@/lib/constants/buildQualityPlan'
 
 // Phase 2, Step 2: Create Project Data Fetcher for enhanced chat
+//
+// Token/section budgets (for consistency; truncation applied in each section):
+// - projectAnalysis: 8000 chars; structuredSummary: 4000; repoReferenceDoc: 28000; build errors raw: 4000
+const PROMPT_SECTION_BUDGETS = { projectAnalysis: 8000, structuredSummary: 4000, repoReference: 28000, buildErrorsRaw: 4000 } as const
+//
+// Strengthening insights (main + sandbox parity). See docs/GRIP_SANDBOX_PARITY.md for full checklist.
+// - Analysis: tree-sitter runs for both; main → analyses, sandbox → sandboxAnalyses; full repo via repoFiles.
+// - Repo context: getOrBuildRepoContextDocument(projectId, isSandbox) so both get Repository reference.
+// - Checklist + likely remaining: same repoFeaturesChecklist and likelyRemaining for both; focus-on-remaining and phase-checklist alignment in prompt.
+// - Plan: main plan generator gets tree-sitter checklist and single-dev-script hint; sandbox plan includes single-dev-script when repo has frontend+backend.
+// - Implemented routes/entrypoints: persisted after save and on retry for both main (projectStates) and sandbox (sandboxProjects).
+// - projectId in sandboxAnalyses stored as ObjectId for consistent lookups.
 
 // Build a custom system prompt with project context
 /** Project state from user saves and chat — phases/steps status for alignment with GRIP */
@@ -38,7 +50,9 @@ const buildSystemPrompt = (
   structuredSummary?: string,
   sandboxExperimentsSummary?: string,
   repoFeaturesChecklist?: string,
-  isSandboxContext?: boolean
+  isSandboxContext?: boolean,
+  likelyRemaining?: string,
+  lastAttemptSummary?: string
 ) => {
   let prompt = `You are G.R.I.P. (Guided Real-time Intelligence Partner) designed to help with software development projects. 
 You are G.R.I.P., an AI assistant built specifically for helping developers automate project creation. Do not claim to be or reference any other AI product or provider.
@@ -272,7 +286,11 @@ This project has sandbox experiments (isolated builds for testing). The user can
             ? 'Deploy/Vercel'
             : String(lastRunErrors.source ?? 'run')
     prompt += `\n## Build/run errors (treat as high priority — fix before suggesting StackBlitz)\n`
-    prompt += `The user ran the project (${sourceLabel}) and build or runtime errors were reported below. You MUST:\n`
+    if (lastAttemptSummary && lastAttemptSummary.trim()) {
+      prompt += `In your previous response you provided: ${lastAttemptSummary.slice(0, 600)}${lastAttemptSummary.length > 600 ? '...' : ''}\n\nThe build still failed with the errors below. You MUST:\n`
+    } else {
+      prompt += `Fix the build/run errors below first before suggesting new features or next steps. The user ran the project (${sourceLabel}) and build or runtime errors were reported below. You MUST:\n`
+    }
     prompt += `1. Parse file paths from the errors (e.g. "ERROR in ./src/engine/GameEngine.ts:434" → fix \`src/engine/GameEngine.ts\`; "ENOENT: .../assets/favicon.png" → fix config or the missing asset).\n`
     prompt += `2. For each broken file: output the COMPLETE fixed file in a single code block with the exact path on the line above it (e.g. \`src/engine/GameEngine.ts\` or \`app.json\`), so the user can click "Save to project" and save to that path. NEVER use \`snippet.txt\` or generic names for these fixes—always use the path from the error.\n`
     prompt += `3. For ENOENT/missing files: update app.json, app.config.js, or the file that references the missing path; do not ask the user to run mkdir or touch.\n`
@@ -424,7 +442,14 @@ Based on the repository analysis, you can help with:
     prompt += `- **What to implement:** Use the tree-sitter checklist (routes, entrypoints, matched/missing capabilities, user stories, acceptance criteria) as the single source of truth for what must exist in this project. Implement each item in **new, clean-room code** that achieves the same behavior and contracts.\n`
     prompt += `- **How the repo does it:** When **Repository reference** is present above, use it only to see patterns, APIs, data shapes, and file layout. Then write **new code** that matches those patterns and contracts—do not copy, paste, or paraphrase repo source. No duplication of repo code.\n`
     prompt += `- **Pipeline:** For each route/entrypoint/capability: (1) Use the analysis to know *what* to build. (2) Use the repo reference (if present) to see *how* the repo implements it. (3) Implement in **new code** in this project that matches behavior and APIs. Result: best build alignment with the repo and user input without copying or duplicating code.\n`
-    prompt += `- **User input:** Align with the user-stated outcome, user stories, and acceptance criteria in the checklist; prioritize the user's current message. Over time, cover the full checklist in new code only.\n\n`
+    prompt += `- **User input:** Align with the user-stated outcome, user stories, and acceptance criteria in the checklist; prioritize the user's current message. Over time, cover the full checklist in new code only.
+- **Focus on remaining work:** When the project already has many files, prefer implementing checklist items that do not yet appear to be implemented (e.g. routes or capabilities with no obvious corresponding file). This avoids duplicate work and speeds the build.
+- **Phases and checklist:** Development plan phases should align with the tree-sitter checklist (routes, entrypoints, capabilities). Implement phase by phase in new code; before marking a phase complete, ensure its checklist items are done.
+- **Token focus:** When the repository reference is very long, focus on the sections relevant to the user's current message and the checklist items you are implementing.
+- **Track progress:** For each route or capability you implement, briefly name the route/capability and the file path before the code block (e.g. "Implementing GET /api/users → \`src/app/api/users/route.ts\`") so the user and system can track progress. Applies to both main GRIP and sandbox GRIP.\n\n`
+  }
+  if (likelyRemaining && likelyRemaining.trim()) {
+    prompt += `\n## Likely remaining to implement (focus here when relevant)\nThe following do not yet appear to have a matching file in this project. Prefer implementing these when the user asks for progress or next steps:\n${likelyRemaining}\n\n`
   }
 
   // List files currently in the project so GRIP can reference them and answer "which files used snippet.txt"
@@ -1176,6 +1201,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Sandbox ideation enhancement (once per sandbox so chat gets same quality as main)
+    if (isSandbox && project?.ideation && !(project as { enhancedBuildRequirements?: unknown }).enhancedBuildRequirements) {
+      try {
+        const { enhanceIdeationForBuild } = await import('@/lib/services/ideationEnhancementService')
+        const enhancedResult = await enhanceIdeationForBuild(project.ideation)
+        if (enhancedResult?.enhanced) {
+          await db.collection('sandboxProjects').updateOne(
+            { _id: new ObjectId(projectId) },
+            {
+              $set: {
+                enhancedBuildRequirements: enhancedResult.enhanced,
+                enhancedBuildRequirementsAt: new Date(),
+                updatedAt: new Date(),
+              },
+            }
+          )
+          const refetched = await db.collection('sandboxProjects').findOne({ _id: new ObjectId(projectId) }) as typeof project
+          if (refetched) project = refetched
+        }
+      } catch (enhanceErr) {
+        console.warn('Enhanced chat: sandbox ideation enhancement failed (non-fatal)', enhanceErr)
+      }
+    }
+
     // Analysis is per-project: main → analyses, sandbox → sandboxAnalyses. No cross-talk; input-override
     // and checklist rules apply to whichever project is in context (main build or sandbox experiment).
     const analysisCollection = isSandbox ? 'sandboxAnalyses' : 'analyses'
@@ -1183,15 +1232,19 @@ export async function POST(request: NextRequest) {
       projectId: new ObjectId(projectId)
     })
 
-    // Extract structured analysis summary (tree-link JSON) and full repo features/API checklist
+    // Extract structured analysis summary (tree-link JSON) and full repo features/API checklist (for main and sandbox)
     let structuredSummary = ''
     let repoFeaturesChecklist = ''
+    let checklistRoutes: Array<{ method?: string; route?: string; source_file?: string }> = []
+    let checklistEntrypoints: Array<{ file?: string; symbol?: string }> = []
     try {
       const ra = analysis?.repositoryAnalysis as
         | { projectAnalysis?: string; fileAnalyses?: Array<{ path: string; analysis: string }>; structuredAnalysis?: any }
         | undefined
       if (ra?.structuredAnalysis) {
         const sa = ra.structuredAnalysis as any
+        checklistRoutes = Array.isArray(sa.route_map) ? sa.route_map : []
+        checklistEntrypoints = Array.isArray(sa.entrypoints) ? sa.entrypoints : []
         const identity = sa.identity || {}
         const ideation = sa.ideation_alignment || {}
         const matched = Array.isArray(ideation.matched_capabilities) ? ideation.matched_capabilities : []
@@ -1322,8 +1375,8 @@ export async function POST(request: NextRequest) {
       // optional
     }
 
-    // Get or build repo reference document (full repo context for G.R.I.P.)
-    const repoReferenceDoc = await getOrBuildRepoContextDocument(projectId)
+    // Get or build repo reference document (full repo context for G.R.I.P.; main and sandbox)
+    const repoReferenceDoc = await getOrBuildRepoContextDocument(projectId, isSandbox)
 
     // List files already saved to this project (use sandbox files if sandbox project)
     let savedFiles: Array<{ path: string; filename: string }> = []
@@ -1336,46 +1389,127 @@ export async function POST(request: NextRequest) {
       savedFiles = projectFilesList.map((f) => ({ path: f.path || '', filename: f.filename || '' }))
     }
 
-    // Development plan (phases + file hierarchy) so GRIP uses the same plan and file paths
+    // Implemented checklist progress (persisted so we don't show already-implemented as remaining)
+    let implementedRoutePaths: string[] = []
+    let implementedEntrypointPaths: string[] = []
+    try {
+      if (isSandbox) {
+        implementedRoutePaths = (project as { implementedRoutePaths?: string[] }).implementedRoutePaths || []
+        implementedEntrypointPaths = (project as { implementedEntrypointPaths?: string[] }).implementedEntrypointPaths || []
+      } else {
+        const state = await getProjectState(projectId) as { implementedRoutePaths?: string[]; implementedEntrypointPaths?: string[] } | null
+        implementedRoutePaths = state?.implementedRoutePaths || []
+        implementedEntrypointPaths = state?.implementedEntrypointPaths || []
+      }
+    } catch {
+      // optional
+    }
+
+    // Likely remaining to implement (main and sandbox): routes/entrypoints with no obvious file in project yet; exclude persisted implemented
+    let likelyRemaining = ''
+    if ((checklistRoutes.length || checklistEntrypoints.length) && savedFiles.length >= 0) {
+      const projectPaths = savedFiles.map((f) => (f.path ? `${f.path}/` : '') + (f.filename || '')).filter(Boolean)
+      const remainingRoutes: string[] = []
+      for (const r of checklistRoutes) {
+        const routeKey = `${r.method || 'GET'} ${r.route || ''}`
+        const routePath = (r.route || '').replace(/^\//, '').replace(/\/$/, '')
+        const sourceFile = (r.source_file || '').trim()
+        const alreadyImplemented = implementedRoutePaths.some((impl) => impl === routeKey || impl === sourceFile)
+        const hasMatch = routePath && (projectPaths.some((p) => p.includes(routePath)) || projectPaths.some((p) => sourceFile && p.includes(sourceFile)))
+        if (!alreadyImplemented && !hasMatch && routePath) remainingRoutes.push(routeKey)
+      }
+      const remainingEntrypoints: string[] = []
+      for (const e of checklistEntrypoints) {
+        const epKey = `${e.file}:${e.symbol || ''}`
+        if (implementedEntrypointPaths.includes(epKey)) continue
+        const epFile = (e.file || '').trim()
+        if (!epFile) continue
+        const hasMatch = projectPaths.some((p) => p === epFile || p.endsWith(epFile) || epFile.endsWith(p))
+        if (!hasMatch) remainingEntrypoints.push(epKey)
+      }
+      const lines: string[] = []
+      if (remainingRoutes.length) lines.push('Routes: ' + remainingRoutes.join('; '))
+      if (remainingEntrypoints.length) lines.push('Entrypoints: ' + remainingEntrypoints.join('; '))
+      if (lines.length) likelyRemaining = lines.join('\n')
+    }
+
+    // Development plan (phases + file hierarchy) so GRIP uses the same plan and file paths (main and sandbox)
     let planContext: { phases?: Array<{ name: string; description?: string; tasks?: Array<{ name: string; status?: string }> }>; fileHierarchy?: { path: string; name?: string; children?: unknown[] } } | undefined
     try {
-      const plan = await getProjectPlan(projectId)
-      if (plan) {
-        planContext = {
-          phases: plan.plan?.phases?.map((p: { name: string; description?: string; tasks?: Array<{ title?: string; name?: string; status?: string }> }) => ({
-            name: p.name,
-            description: p.description,
-            tasks: p.tasks?.map((t: { title?: string; name?: string; status?: string }) => ({
-              name: (t.title ?? t.name) || 'Task',
-              status: t.status
-            }))
-          })),
-          fileHierarchy: plan.structure?.fileHierarchy
+      if (isSandbox) {
+        const sandboxPlanDoc = await db.collection('legalSandboxPlans').findOne({
+          $or: [{ projectId: new ObjectId(projectId) }, { projectId }]
+        }) as { plan?: { phases?: Array<{ name?: string; description?: string; tasks?: Array<{ title?: string; name?: string; status?: string }> }> }; structure?: { fileHierarchy?: unknown } } | null
+        if (sandboxPlanDoc?.plan?.phases?.length) {
+          planContext = {
+            phases: sandboxPlanDoc.plan.phases.map((p: { name?: string; description?: string; tasks?: Array<{ title?: string; name?: string; status?: string }> }) => ({
+              name: p.name || 'Phase',
+              description: p.description,
+              tasks: (p.tasks || []).map((t: { title?: string; name?: string; status?: string }) => ({
+                name: (t.title ?? t.name) || 'Task',
+                status: t.status
+              }))
+            })),
+            fileHierarchy: (sandboxPlanDoc as { structure?: { fileHierarchy?: unknown } }).structure?.fileHierarchy
+          }
+        }
+      } else {
+        const plan = await getProjectPlan(projectId)
+        if (plan) {
+          planContext = {
+            phases: plan.plan?.phases?.map((p: { name: string; description?: string; tasks?: Array<{ title?: string; name?: string; status?: string }> }) => ({
+              name: p.name,
+              description: p.description,
+              tasks: p.tasks?.map((t: { title?: string; name?: string; status?: string }) => ({
+                name: (t.title ?? t.name) || 'Task',
+                status: t.status
+              }))
+            })),
+            fileHierarchy: plan.structure?.fileHierarchy
+          }
         }
       }
     } catch (planErr) {
       console.warn('Enhanced chat: could not load project plan for context', planErr)
     }
 
-    // Project state (phases/steps) so GRIP knows what the user has completed via saves and chat
+    // Project state (phases/steps) so GRIP knows what the user has completed (main: projectStates; sandbox: derived from legalSandboxPlans)
     let projectStateContext: ProjectStateContext = null
     try {
-      const state = await getProjectState(projectId)
-      if (state?.phases?.length) {
+      if (isSandbox && planContext?.phases?.length) {
         projectStateContext = {
-          currentPhase: state.currentPhase || '',
-          phases: state.phases.map((p) => ({
+          currentPhase: planContext.phases[0]?.name || '',
+          phases: planContext.phases.map((p) => ({
             name: p.name,
-            status: p.status,
-            steps: (p.steps || []).map((s) => ({
-              id: s.id,
-              title: s.title,
-              status: s.status,
-              action: s.action,
-              progress: s.progress,
-              result: s.result,
+            status: 'pending',
+            steps: (p.tasks || []).map((t, i) => ({
+              id: i + 1,
+              title: t.name,
+              status: 'pending',
+              action: t.name,
+              progress: '0%',
+              result: undefined,
             })),
           })),
+        }
+      } else {
+        const state = await getProjectState(projectId)
+        if (state?.phases?.length) {
+          projectStateContext = {
+            currentPhase: state.currentPhase || '',
+            phases: state.phases.map((p) => ({
+              name: p.name,
+              status: p.status,
+              steps: (p.steps || []).map((s) => ({
+                id: s.id,
+                title: s.title,
+                status: s.status,
+                action: s.action,
+                progress: s.progress,
+                result: s.result,
+              })),
+            })),
+          }
         }
       }
     } catch (stateErr) {
@@ -1408,8 +1542,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Last-attempt summary when build failed (so GRIP doesn't repeat the same fix)
+    let lastAttemptSummary = ''
+    if (project?.lastRunErrors && Array.isArray(history) && history.length > 0) {
+      const lastAssistant = [...history].reverse().find((m) => m.role === 'assistant')
+      if (lastAssistant?.content) {
+        const raw = typeof lastAssistant.content === 'string' ? lastAssistant.content : String(lastAssistant.content ?? '')
+        lastAttemptSummary = raw.trim().slice(0, 600)
+      }
+    }
+
     // Build system prompt with context
-    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox)
+    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary)
 
     // Production readiness: fail gracefully when AI is not configured
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
@@ -1505,6 +1649,48 @@ export async function POST(request: NextRequest) {
     // Save all code blocks with explicit file paths directly to project files (sandbox or main)
     const { saved: appliedPaths, codeBreakErrors: appliedCodeBreakErrors } = await saveCodeBlocksToProject(projectId, aiMessage, isSandbox)
 
+    // Persist implemented routes/entrypoints so next request excludes them from "likely remaining"
+    if (appliedPaths.length > 0 && (checklistRoutes.length > 0 || checklistEntrypoints.length > 0)) {
+      try {
+        const newRouteKeys = new Set<string>()
+        const newEntrypointKeys = new Set<string>()
+        for (const applied of appliedPaths) {
+          const norm = applied.replace(/\\/g, '/')
+          for (const r of checklistRoutes) {
+            const routePath = (r.route || '').replace(/^\//, '').replace(/\/$/, '')
+            const sourceFile = (r.source_file || '').trim()
+            if ((routePath && norm.includes(routePath)) || (sourceFile && (norm.includes(sourceFile) || norm.endsWith(sourceFile)))) {
+              newRouteKeys.add(`${r.method || 'GET'} ${r.route || ''}`)
+              if (sourceFile) newRouteKeys.add(sourceFile)
+            }
+          }
+          for (const e of checklistEntrypoints) {
+            const epFile = (e.file || '').trim()
+            if (epFile && (norm.includes(epFile) || norm.endsWith(epFile))) {
+              newEntrypointKeys.add(`${e.file}:${e.symbol || ''}`)
+            }
+          }
+        }
+        if (newRouteKeys.size || newEntrypointKeys.size) {
+          const mergedRoutes = [...new Set([...implementedRoutePaths, ...newRouteKeys])]
+          const mergedEntrypoints = [...new Set([...implementedEntrypointPaths, ...newEntrypointKeys])]
+          if (isSandbox) {
+            await db.collection('sandboxProjects').updateOne(
+              { _id: new ObjectId(projectId) },
+              { $set: { implementedRoutePaths: mergedRoutes, implementedEntrypointPaths: mergedEntrypoints, updatedAt: new Date() } }
+            )
+          } else {
+            await updateProjectState(projectId, {
+              implementedRoutePaths: mergedRoutes,
+              implementedEntrypointPaths: mergedEntrypoints,
+            })
+          }
+        }
+      } catch (persistErr) {
+        console.warn('Enhanced chat: failed to persist implemented checklist progress', persistErr)
+      }
+    }
+
     // Advance project state steps so Build progress (Overview + enhanced chat) reflects applied code
     if (!isSandbox && appliedPaths.length > 0) {
       for (const p of appliedPaths) {
@@ -1588,7 +1774,7 @@ export async function POST(request: NextRequest) {
             { role: 'assistant' as const, content: aiMessage },
             { role: 'user' as const, content: buildFailedUserMessage },
           ]
-          const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox)
+          const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary)
 
           const responseRetry = await anthropicService.createMessage(historyForRetry, { system: systemPromptRetry })
           const tokensRetry = (responseRetry.usage?.promptTokens ?? 0) + (responseRetry.usage?.completionTokens ?? 0)
@@ -1620,6 +1806,48 @@ export async function POST(request: NextRequest) {
           const { saved: appliedPathsRetry, codeBreakErrors: codeBreakErrorsRetry } = await saveCodeBlocksToProject(projectId, nextMessage, isSandbox)
           lastAppliedPaths = appliedPathsRetry
           aiMessage = nextMessage
+
+          // Persist implemented routes/entrypoints on retry too (main and sandbox)
+          if (appliedPathsRetry.length > 0 && (checklistRoutes.length > 0 || checklistEntrypoints.length > 0)) {
+            try {
+              const newRouteKeysRetry = new Set<string>()
+              const newEntrypointKeysRetry = new Set<string>()
+              for (const applied of appliedPathsRetry) {
+                const norm = applied.replace(/\\/g, '/')
+                for (const r of checklistRoutes) {
+                  const routePath = (r.route || '').replace(/^\//, '').replace(/\/$/, '')
+                  const sourceFile = (r.source_file || '').trim()
+                  if ((routePath && norm.includes(routePath)) || (sourceFile && (norm.includes(sourceFile) || norm.endsWith(sourceFile)))) {
+                    newRouteKeysRetry.add(`${r.method || 'GET'} ${r.route || ''}`)
+                    if (sourceFile) newRouteKeysRetry.add(sourceFile)
+                  }
+                }
+                for (const e of checklistEntrypoints) {
+                  const epFile = (e.file || '').trim()
+                  if (epFile && (norm.includes(epFile) || norm.endsWith(epFile))) {
+                    newEntrypointKeysRetry.add(`${e.file}:${e.symbol || ''}`)
+                  }
+                }
+              }
+              if (newRouteKeysRetry.size || newEntrypointKeysRetry.size) {
+                const mergedRoutesRetry = [...new Set([...implementedRoutePaths, ...newRouteKeysRetry])]
+                const mergedEntrypointsRetry = [...new Set([...implementedEntrypointPaths, ...newEntrypointKeysRetry])]
+                if (isSandbox) {
+                  await db.collection('sandboxProjects').updateOne(
+                    { _id: new ObjectId(projectId) },
+                    { $set: { implementedRoutePaths: mergedRoutesRetry, implementedEntrypointPaths: mergedEntrypointsRetry, updatedAt: new Date() } }
+                  )
+                } else {
+                  await updateProjectState(projectId, {
+                    implementedRoutePaths: mergedRoutesRetry,
+                    implementedEntrypointPaths: mergedEntrypointsRetry,
+                  } as Record<string, unknown>)
+                }
+              }
+            } catch (persistErr) {
+              console.warn('Enhanced chat: failed to persist implemented checklist progress (retry)', persistErr)
+            }
+          }
 
           if (!isSandbox && appliedPathsRetry.length > 0) {
             for (const p of appliedPathsRetry) {

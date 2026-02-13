@@ -169,8 +169,10 @@ export async function POST(
     let structuredAnalysisSummary = ''
     try {
       const db = (await clientPromise).db('test')
+      // Support both ObjectId and string projectId (pre/post migration)
+      const oid = ObjectId.isValid(projectId) ? new ObjectId(projectId) : null
       const analysisDoc = await db.collection(SANDBOX_ANALYSES_COLLECTION).findOne(
-        { projectId: new ObjectId(projectId) },
+        oid ? { $or: [{ projectId: oid }, { projectId: projectId }] } : { projectId: projectId },
         { projection: { repositoryAnalysis: 1 } }
       )
       const analysis = analysisDoc?.repositoryAnalysis as
@@ -223,7 +225,8 @@ Output a JSON object with this exact shape (no markdown, no code fence):
     }
   ]
 }
-Use 3–6 phases. Include at least one phase focused on UX/structure (screens, flow, layout) and one on core functionality. Each phase should describe writing or implementing something new that aligns with the project and repo structure, not copying repo files.`
+Use 3–6 phases. Include at least one phase focused on UX/structure (screens, flow, layout) and one on core functionality. Each phase should describe writing or implementing something new that aligns with the project and repo structure, not copying repo files.
+If the repo has both frontend and backend (e.g. separate api/ or server/ dirs, or multiple package.json), include a phase or task for a single root dev script (e.g. concurrently or npm-run-all) so Run in StackBlitz starts the full stack.`
 
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
     if (!getAnthropicApiKey()) {

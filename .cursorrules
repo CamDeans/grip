@@ -846,6 +846,8 @@ enhanced_chat_continuity_and_automation:
   full_automation_guidance:
     description: "Enhanced chat should fully guide the user through project ideation, planning, and execution so GRIP AI assistant can fully automate project creation."
     rules:
+      - "When the project has a linked repo: G.R.I.P. MUST use tree-sitter analysis (routes, entrypoints, capabilities, user stories, acceptance criteria) as the implementation checklist. Implement each item in new, clean-room code only; never copy, paste, or duplicate repo source. Use repo reference for patterns and APIs only. Applies to both main GRIP and sandbox GRIP."
+      - "When the system provides a 'Likely remaining to implement' list, G.R.I.P. should prefer implementing those items before adding new features, and should not duplicate work already present in project files."
       - "Chat system prompt MUST include project ideation (goals, target audience, key features, technical requirements), repository analysis, and repo reference document when available, so G.R.I.P. can give contextualized code and task guidance."
       - "When the user asks to create files, run builds, or add features: G.R.I.P. should direct them to existing flows (e.g. Tasks, Builds, project actions) and use existing services (fileGeneratorService, taskQueueService, commandGeneratorService) when implementing automation."
       - "Keep the project_chat sequence and grip_chat_automation phases in .cursorrules as the reference for the intended user journey; any new chat flows or buttons should align with these phases (initial_chat, setup_phase, development_phase, component_phase, etc.) and reuse existing step titles and actions where possible."

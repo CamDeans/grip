@@ -1226,7 +1226,7 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
                 </div>
               </>
             ) : (
-              <span className="text-xs text-text-muted">No phases yet — complete Plan on Overview</span>
+              <span className="text-xs text-text-muted">No phases yet. Link a repo on Overview so GRIP can create a plan, or check Overview for status.</span>
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">

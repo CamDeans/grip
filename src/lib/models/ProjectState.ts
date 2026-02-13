@@ -36,6 +36,10 @@ export interface IProjectStateData {
       };
     };
   }>;
+  /** Populated by enhanced-chat when code is applied; used to exclude from "likely remaining" checklist */
+  implementedRoutePaths?: string[];
+  /** Populated by enhanced-chat when code is applied; used to exclude from "likely remaining" checklist */
+  implementedEntrypointPaths?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -87,7 +91,9 @@ const ProjectStateSchema = new mongoose.Schema<IProjectState>({
         message: String
       }
     }
-  }]
+  }],
+  implementedRoutePaths: [String],
+  implementedEntrypointPaths: [String]
 }, {
   timestamps: true
 })

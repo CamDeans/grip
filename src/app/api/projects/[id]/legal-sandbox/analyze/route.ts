@@ -85,11 +85,12 @@ export async function POST(
 
     const client = await clientPromise
     const db = client.db('test')
+    const projectIdObj = new ObjectId(projectId)
     await db.collection(SANDBOX_ANALYSES_COLLECTION).updateOne(
-      { projectId },
+      { $or: [{ projectId: projectIdObj }, { projectId }] },
       {
         $set: {
-          projectId,
+          projectId: projectIdObj,
           repositoryAnalysis: analysis,
           updatedAt: new Date(),
         },

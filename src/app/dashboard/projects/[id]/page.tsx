@@ -686,15 +686,15 @@ export default function ProjectOverviewPage() {
         </Card>
       )}
 
-      {/* Get started: follow these steps first so GRIP has full context */}
+      {/* Get started: set up once; GRIP automates analysis, plan, code apply, and build */}
       <Card className="border-2 border-primary/30 bg-primary/5">
         <CardHeader className="pb-2">
           <CardTitle className="text-xl font-bold flex items-center gap-2">
             <ListChecks className="w-5 h-5 text-primary" />
-            Get started: follow these steps
+            Get started: set up once, GRIP automates the rest
           </CardTitle>
           <CardDescription>
-            Complete each step in order so GRIP is equipped with all data before chat and code generation. Then review the build phases and start chat with GRIP.
+            Set ideation and link a repo below. GRIP runs analysis and creates a plan automatically. In Develop chat, GRIP applies code to your project and runs the build automatically—no manual save or run steps. This checklist shows what&apos;s ready.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -704,14 +704,14 @@ export default function ProjectOverviewPage() {
               <div>
                 <span className="font-medium">1. Ideation</span> — Define goals, audience, features, and technical requirements (set when you created the project or in Settings).
                 {!stepsComplete[0] && (
-                  <Link href={`/dashboard/projects/${projectId}/settings`} className="ml-1 text-primary hover:underline text-sm">Complete in Settings</Link>
+                  <Link href={`/dashboard/projects/${projectId}/settings`} className="ml-1 text-primary hover:underline text-sm">Set in Settings</Link>
                 )}
               </div>
             </li>
             <li className="flex items-start gap-3">
               {stepsComplete[1] ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" /> : <Circle className="w-5 h-5 text-text-muted shrink-0 mt-0.5" />}
               <div>
-                <span className="font-medium">2. Repo</span> — Select and link a GitHub repository.
+                <span className="font-medium">2. Repo</span> — Select and link a GitHub repository. GRIP uses it as reference only; all generated code is clean-room.
                 {!stepsComplete[1] && (
                   <Link href={`/dashboard/projects/${projectId}/repo`} className="ml-1 text-primary hover:underline text-sm">Select repo</Link>
                 )}
@@ -720,7 +720,7 @@ export default function ProjectOverviewPage() {
             <li className="flex items-start gap-3">
               {stepsComplete[2] ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" /> : <Circle className="w-5 h-5 text-text-muted shrink-0 mt-0.5" />}
               <div>
-                <span className="font-medium">3. Analysis</span> — Run analysis on the repo so GRIP understands the codebase.
+                <span className="font-medium">3. Analysis</span> — GRIP analyzes the repo automatically (e.g. when you open Develop or run from Repo). Ensures GRIP understands the codebase before generating code.
                 {!stepsComplete[2] && (
                   <Link href={`/dashboard/projects/${projectId}/repo`} className="ml-1 text-primary hover:underline text-sm">Run analysis from Repo</Link>
                 )}
@@ -729,7 +729,7 @@ export default function ProjectOverviewPage() {
             <li className="flex items-start gap-3">
               {stepsComplete[3] ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" /> : <Circle className="w-5 h-5 text-text-muted shrink-0 mt-0.5" />}
               <div>
-                <span className="font-medium">4. Plan</span> — Generate a development plan (phases and tasks).
+                <span className="font-medium">4. Plan</span> — Development plan (phases and tasks) is created automatically when you link a repo.
                 {!stepsComplete[3] && (
                   <span className="text-sm text-muted-foreground">Plan is created automatically when you link a repo.</span>
                 )}
@@ -738,9 +738,9 @@ export default function ProjectOverviewPage() {
             <li className="flex items-start gap-3">
               {stepsComplete[4] ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" /> : <Circle className="w-5 h-5 text-text-muted shrink-0 mt-0.5" />}
               <div>
-                <span className="font-medium">5. Review phases</span> — Review the build phases below. When ready, start chat with GRIP; GRIP will use the current phase as the starting point.
+                <span className="font-medium">5. Build progress</span> — Phases and steps below update automatically as GRIP saves files and runs the build in chat. Start or continue in Develop when ready.
                 {!stepsComplete[4] && (
-                  <span className="text-sm text-text-muted ml-1">Plan and phases are created automatically when you link a repo.</span>
+                  <span className="text-sm text-text-muted ml-1">Phases appear automatically once a plan exists (after linking a repo).</span>
                 )}
               </div>
             </li>
@@ -755,7 +755,7 @@ export default function ProjectOverviewPage() {
             <div>
               <CardTitle className="text-xl font-bold">Build phases</CardTitle>
               <CardDescription>
-                Current phase and steps. When you and GRIP agree a phase is done, return here to confirm and begin the next phase. Then start chat to continue.
+                Current phase and steps. Progress updates automatically as GRIP saves files and runs the build in Develop—no need to return here to confirm. Start or continue chat to build.
               </CardDescription>
             </div>
             {!project?.isSandbox && projectState?.phases?.length ? (
@@ -804,7 +804,7 @@ export default function ProjectOverviewPage() {
                 ))}
               </div>
               <p className="text-xs text-text-muted border-l-2 border-primary/50 pl-3">
-                GRIP works only on the current phase. When the phase is complete, GRIP will route you back to this Overview page for next steps and realignment; then you can start the next phase from here so you and GRIP stay in sync.
+                GRIP focuses on the current phase. Phases and steps sync automatically as you chat—when GRIP applies code and runs the build, progress updates here. You can check Overview anytime to see status; no need to return to &quot;confirm&quot; a phase.
               </p>
               <Link href={`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}`} className="mt-5 block">
                 <Button className="w-full sm:w-auto" size="lg">
@@ -818,9 +818,9 @@ export default function ProjectOverviewPage() {
               {hasPlan === true ? (
                 <>
                   <p className="font-medium text-text-primary">Your next step: Start chat with GRIP.</p>
-                  <p>Plan and files are ready. Go to <strong>Develop</strong> to build with GRIP. Phases will sync as you work.</p>
+                  <p>Plan and files are ready. Go to <strong>Develop</strong> to build with GRIP. Code applies and the build runs automatically; phases and steps sync here as you work.</p>
                   <p className="text-xs text-text-muted border-l-2 border-primary/50 pl-3">
-                    GRIP works only on the current phase and will always route you back to this Overview page for next steps and realignment before the next phase.
+                    GRIP focuses on the current phase. Progress syncs automatically—no need to return to Overview to &quot;confirm&quot; before the next phase.
                   </p>
                   <Link href={`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}`} className="mt-5 block">
                     <Button size="lg">Go to Develop (chat with GRIP)</Button>
@@ -828,7 +828,7 @@ export default function ProjectOverviewPage() {
                 </>
               ) : (
                 <>
-                  <p>No phases yet. Link a repo and return to Overview — plan and phases are created automatically, then go to Develop.</p>
+                  <p>No phases yet. Link a repo so GRIP can create a plan and phases automatically, then go to Develop to start building.</p>
                   <Link href={`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}`}>
                     <Button variant="outline">Open Develop anyway</Button>
                   </Link>
@@ -850,7 +850,7 @@ export default function ProjectOverviewPage() {
         
         <CardContent>
           <p className="text-sm text-text-secondary mb-4">
-            Use the tabs above to move through the flow: <strong>Setup</strong> → <strong>Repo</strong> → <strong>Plan</strong> → <strong>Develop</strong> → <strong>Preview</strong>. Chat and task progress are saved.
+            Use the tabs to move through the flow: <strong>Setup</strong> → <strong>Repo</strong> → <strong>Plan</strong> → <strong>Develop</strong> → <strong>Preview</strong>. In Develop, GRIP applies code and runs the build automatically; progress syncs here.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -875,7 +875,7 @@ export default function ProjectOverviewPage() {
             <div>
               <h3 className="text-lg font-semibold mb-2 text-primary">Next step</h3>
               <p className="text-sm text-text-secondary">
-                Use the tabs at the top to go where you need to go. After you and GRIP finish a phase, return here to confirm and start the next phase.
+                Use the tabs to jump to Setup, Repo, Plan, or Develop. Build progress (phases and steps) syncs automatically as GRIP saves files and runs the build—no need to return here to confirm.
               </p>
             </div>
           </div>
@@ -931,7 +931,7 @@ export default function ProjectOverviewPage() {
                 Generated files
               </CardTitle>
               <CardDescription>
-                Files created by GRIP (e.g. from Plan → Generate files). Code in chat is stored in chat history only; these are files saved to the project.
+                Files GRIP creates or updates. Code blocks from Develop chat are applied automatically to the project and appear here.
               </CardDescription>
             </div>
             <Button variant="outline" size="sm" disabled={loadingFiles} onClick={refreshGeneratedFiles}>
@@ -945,7 +945,7 @@ export default function ProjectOverviewPage() {
             <p className="text-sm text-text-secondary">Loading...</p>
           ) : generatedFiles.length === 0 ? (
             <p className="text-sm text-text-secondary">
-              No generated files yet. Files are generated automatically with the plan, or get code from <Link href={`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}`} className="text-primary hover:underline">Develop</Link> (code in chat is in message history).
+              No generated files yet. Files are created with the plan or when you chat in Develop—GRIP applies code blocks automatically to the project and they appear here.
             </p>
           ) : (
             <ul className="space-y-2">

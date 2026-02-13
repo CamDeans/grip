@@ -23,8 +23,15 @@ export async function GET(
       return NextResponse.json({ error: 'Missing project ID' }, { status: 400 })
     }
 
-    const analysis = await (await clientPromise).db('test').collection('analyses').findOne(
-      { projectId: new ObjectId(projectId) },
+    const url = new URL(request.url)
+    const isSandbox = url.searchParams.get('sandbox') === 'true'
+    const analysisCollection = isSandbox ? 'sandboxAnalyses' : 'analyses'
+    const projectIdFilter = isSandbox
+      ? { $or: [{ projectId: new ObjectId(projectId) }, { projectId }] }
+      : { projectId: new ObjectId(projectId) }
+
+    const analysis = await (await clientPromise).db('test').collection(analysisCollection).findOne(
+      projectIdFilter,
       { projection: { projectContextDocument: 1 } }
     ) as { projectContextDocument?: string } | null
 
@@ -63,7 +70,9 @@ export async function POST(
       return NextResponse.json({ error: 'Missing project ID' }, { status: 400 })
     }
 
-    const doc = await getOrBuildRepoContextDocument(projectId)
+    const url = new URL(request.url)
+    const isSandbox = url.searchParams.get('sandbox') === 'true'
+    const doc = await getOrBuildRepoContextDocument(projectId, isSandbox)
 
     return NextResponse.json({
       success: true,

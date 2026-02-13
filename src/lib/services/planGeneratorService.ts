@@ -113,6 +113,28 @@ export type GenerateDevelopmentPlanResult = { plan: DevelopmentPlan; totalTokens
 /**
  * Generate a development plan for a project
  */
+/**
+ * Build a short checklist summary from tree-sitter structured analysis for plan/phase alignment.
+ * Used so development plan phases and tasks align with routes, entrypoints, and capabilities (main and sandbox).
+ */
+function buildChecklistSummaryFromStructuredAnalysis(sa: any): string {
+  if (!sa) return ''
+  const routes = Array.isArray(sa.route_map) ? sa.route_map : []
+  const entrypoints = Array.isArray(sa.entrypoints) ? sa.entrypoints : []
+  const missing = Array.isArray(sa.ideation_alignment?.missing_capabilities) ? sa.ideation_alignment.missing_capabilities : []
+  const lines: string[] = []
+  if (routes.length) {
+    lines.push('Routes to implement: ' + routes.map((r: any) => `${r.method || 'GET'} ${r.route || ''}`).join('; '))
+  }
+  if (entrypoints.length) {
+    lines.push('Entrypoints: ' + entrypoints.map((e: any) => `${e.file}:${e.symbol || ''}`).join('; '))
+  }
+  if (missing.length) {
+    lines.push('Missing capabilities: ' + missing.map((c: any) => c.needed_capability || '').join('; '))
+  }
+  return lines.join('\n')
+}
+
 export async function generateDevelopmentPlan(projectId: string): Promise<GenerateDevelopmentPlanResult> {
   try {
     console.log(`Generating development plan for project: ${projectId}`)
@@ -127,11 +149,24 @@ export async function generateDevelopmentPlan(projectId: string): Promise<Genera
       throw new Error(`Project not found: ${projectId}`)
     }
     
+    // Tree-sitter checklist so phases/tasks align with repo (main GRIP)
+    let checklistSummary = ''
+    try {
+      const analysis = await db.collection('analyses').findOne(
+        { projectId: new ObjectId(projectId) },
+        { projection: { repositoryAnalysis: 1 } }
+      ) as { repositoryAnalysis?: { structuredAnalysis?: any } } | null
+      const sa = analysis?.repositoryAnalysis?.structuredAnalysis
+      if (sa) checklistSummary = buildChecklistSummaryFromStructuredAnalysis(sa)
+    } catch {
+      // optional
+    }
+    
     // Get project structure
     const structure = await getOrCreateProjectStructure(projectId)
     
-    // Generate initial plan
-    const { plan, totalTokens } = await createInitialPlan(projectId, project, structure)
+    // Generate initial plan (with checklist so AI aligns phases/tasks)
+    const { plan, totalTokens } = await createInitialPlan(projectId, project, structure, checklistSummary)
 
     // Add resource requirements
     await addResourceRequirements(plan)
@@ -164,11 +199,13 @@ export async function generateDevelopmentPlan(projectId: string): Promise<Genera
 
 /**
  * Create an initial development plan
+ * @param checklistSummary - From tree-sitter structured analysis; aligns phases/tasks with routes, entrypoints, capabilities
  */
 async function createInitialPlan(
   projectId: string,
   project: any,
-  structure: IProjectStructureData
+  structure: IProjectStructureData,
+  checklistSummary?: string
 ): Promise<{ plan: DevelopmentPlan; totalTokens: number }> {
   const phases: Phase[] = [
     createPhase('1', 'Setup', 'Project setup and configuration', 0),
@@ -178,7 +215,7 @@ async function createInitialPlan(
     createPhase('5', 'Deployment', 'Deployment preparation and launch', 4)
   ]
 
-  const totalTokens = await addTasksToPhases(phases, project, structure)
+  const totalTokens = await addTasksToPhases(phases, project, structure, checklistSummary)
 
   const plan: DevelopmentPlan = {
     projectId: new ObjectId(projectId),
@@ -210,11 +247,13 @@ function createPhase(id: string, name: string, description: string, order: numbe
 
 /**
  * Add tasks to phases using AI
+ * @param checklistSummary - From tree-sitter; align tasks with routes, entrypoints, capabilities (implement each in new code)
  */
 async function addTasksToPhases(
   phases: Phase[],
   project: any,
-  structure: IProjectStructureData
+  structure: IProjectStructureData,
+  checklistSummary?: string
 ): Promise<number> {
   try {
     // Prefer enhanced build requirements (from ideation enhancement step) so AI gets best input
@@ -224,6 +263,10 @@ async function addTasksToPhases(
         ? `Project Goals: ${project.ideation.goals ?? ''}\nKey Features: ${project.ideation.keyFeatures ?? ''}\nTechnical Requirements: ${project.ideation.technicalRequirements ?? ''}`
         : ''
 
+    const checklistBlock = checklistSummary?.trim()
+      ? `\nImplementation checklist from tree-sitter analysis (align phases and tasks with these; implement each in new code—do not copy repo source):\n${checklistSummary}\n\nIf the repo has both frontend and backend (e.g. separate api/ or server/ dirs), include a task for a single root dev script (e.g. concurrently or npm-run-all) so Run in StackBlitz starts the full stack.\n`
+      : ''
+
     // Build prompt for AI
     const prompt = `
 I'm creating a development plan for a software project. Please help me generate tasks for each phase.
@@ -232,6 +275,7 @@ Here's the project information:
 Project Title: ${project.title}
 Project Description: ${project.description}
 ${buildReqsText ? `\nBuild requirements (use these for task scope and quality):\n${buildReqsText}\n` : ''}
+${checklistBlock}
 
 ${MANDATORY_GRIP_BUILD_QUALITY}
 
