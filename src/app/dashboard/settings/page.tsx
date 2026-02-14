@@ -18,7 +18,7 @@ import {
   ExclamationTriangleIcon,
   TrashIcon
 } from '@heroicons/react/24/outline'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui'
 
 interface ThemeOption {
   value: string
