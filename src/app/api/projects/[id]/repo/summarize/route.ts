@@ -88,7 +88,7 @@ export async function POST(
           [{ role: 'user', content: prompt }],
           { system: 'You are G.R.I.P. Provide only a single short sentence summary. No preamble.' }
         )
-        totalTokens += (res.usage?.promptTokens ?? 0) + (res.usage?.completionTokens ?? 0)
+        totalTokens += res.usage?.totalTokens ?? (res.usage?.promptTokens ?? 0) + (res.usage?.completionTokens ?? 0)
         const summary = (res.content || '').trim()
         await db.collection('repoFileSummaries').updateOne(
           { projectId: new ObjectId(projectId), path: file.path },

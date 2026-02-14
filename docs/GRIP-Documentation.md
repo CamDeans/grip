@@ -81,9 +81,9 @@ The admin interface enables monitoring and control through:
 
 ### Project Creation and Analysis
 
-1. Create a new project with a title, description, and repository URL
-2. G.R.I.P. analyzes the repository structure and code patterns
-3. Project requirements are loaded from the analysis or added manually
+1. Create a new project with a title, description, and a **required** GitHub repository (select via Generate Keywords and Search)
+2. G.R.I.P. analyzes the repository structure and code patterns automatically
+3. A development plan is generated automatically; project requirements come from the analysis and ideation (goals, audience, features, technical requirements). Plain language and technical details are both supported.
 
 ### Development Planning
 

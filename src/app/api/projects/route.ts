@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       userId: session.user.id
     }
 
-    // Validate required fields
+    // Validate required fields (repo required for analysis and patterns)
     if (!projectToCreate.title?.trim() || !projectToCreate.description?.trim()) {
       console.error('Missing required fields:', {
         hasTitle: Boolean(projectToCreate.title?.trim()),
@@ -51,6 +51,12 @@ export async function POST(req: Request) {
       })
       return NextResponse.json(
         { error: 'Validation failed', details: 'Title and description are required' },
+        { status: 400 }
+      )
+    }
+    if (!projectToCreate.repository?.owner?.trim() || !projectToCreate.repository?.name?.trim()) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: 'A GitHub repository is required. GRIP uses repo analysis and patterns to guide your build.' },
         { status: 400 }
       )
     }
@@ -80,6 +86,18 @@ export async function POST(req: Request) {
           console.error('Repository analysis failed:', error)
           // Don't fail the whole request if analysis fails
         }
+      }
+
+      if (session?.user?.email) {
+        const { createNotification } = await import('@/lib/notifications')
+        await createNotification({
+          userId: session.user.email,
+          type: 'project_update',
+          title: 'Project created',
+          message: `"${savedProject.title || 'Untitled'}" is ready. Open it to start planning and building.`,
+          projectId: String(savedProject._id),
+          priority: 'low',
+        })
       }
 
       return NextResponse.json({ project: savedProject })

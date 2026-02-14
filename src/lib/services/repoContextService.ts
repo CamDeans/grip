@@ -117,7 +117,8 @@ export async function getOrBuildRepoContextDocument(projectId: string, isSandbox
 
   const analysisDoc = analysis as { repositoryAnalysis?: { structuredAnalysis?: any } }
   const sa = analysisDoc?.repositoryAnalysis?.structuredAnalysis
-  const priorityPaths: string[] = []
+  // Always prioritize package.json and lockfiles so repo dependencies are in context for pattern alignment (e.g. text-to-image, text-to-video)
+  const priorityPaths: string[] = ['package.json', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml']
   if (sa) {
     const routes = Array.isArray(sa.route_map) ? sa.route_map : []
     const entrypoints = Array.isArray(sa.entrypoints) ? sa.entrypoints : []

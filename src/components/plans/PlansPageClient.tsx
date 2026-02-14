@@ -2,18 +2,27 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
-import { Coins } from 'lucide-react'
+import { Coins, Zap } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
 
 const TIERS = [
-  { id: 'starter', name: 'Starter', price: '$19', priceLabel: '/month', tokens: '650,000 tokens/month', description: 'Light use, side projects. Enough for regular chat and code generation without worrying about limits.', popular: false },
-  { id: 'pro', name: 'Pro', price: '$49', priceLabel: '/month', tokens: '1.7M tokens/month', description: 'Serious builders, daily use. Heavy development and multiple projects with plenty of headroom.', popular: true },
-  { id: 'team', name: 'Team', price: '$99', priceLabel: '/month', tokens: '3.4M tokens/month', description: 'Small teams, heavy usage. Maximum allowance for shipping multiple apps and experiments.', popular: false },
+  { id: 'starter', name: 'Starter', price: '$19', priceLabel: '/month', tokens: '2.3M tokens/month', description: 'Light use, side projects. Enough for regular chat and code generation without worrying about limits.', popular: false },
+  { id: 'pro', name: 'Pro', price: '$49', priceLabel: '/month', tokens: '6M tokens/month', description: 'Serious builders, daily use. Heavy development and multiple projects with plenty of headroom.', popular: true },
+  { id: 'team', name: 'Team', price: '$99', priceLabel: '/month', tokens: '12M tokens/month', description: 'Small teams, heavy usage. Maximum allowance for shipping multiple apps and experiments.', popular: false },
+] as const
+
+const ADD_TOKEN_PACKS = [
+  { id: '500k', name: '500K tokens', tokens: '500,000', oneTime: true },
+  { id: '1M', name: '1M tokens', tokens: '1,000,000', oneTime: true },
 ] as const
 
 export function PlansPageClient() {
+  const searchParams = useSearchParams()
+  const outOfTokens = searchParams.get('out') === '1'
   const [loadingTier, setLoadingTier] = useState<string | null>(null)
+  const [loadingAddTokens, setLoadingAddTokens] = useState<string | null>(null)
 
   const handleSubscribe = async (tierId: string) => {
     setLoadingTier(tierId)
@@ -37,9 +46,37 @@ export function PlansPageClient() {
     }
   }
 
+  const handleAddTokens = async (packId: string) => {
+    setLoadingAddTokens(packId)
+    try {
+      const res = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'add_tokens', addTokensPack: packId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast({ title: 'Error', description: data.error || 'Failed to start checkout', variant: 'destructive' })
+        return
+      }
+      if (data.url) window.location.href = data.url
+      else toast({ title: 'Error', description: 'No checkout URL returned', variant: 'destructive' })
+    } catch (e) {
+      toast({ title: 'Error', description: 'Something went wrong', variant: 'destructive' })
+    } finally {
+      setLoadingAddTokens(null)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background-primary">
       <div className="max-w-5xl mx-auto px-4 py-12 sm:py-16">
+        {outOfTokens && (
+          <div className="mb-8 p-4 rounded-xl border-2 border-amber-500/50 bg-amber-500/10 text-center">
+            <p className="font-semibold text-text-primary">You&apos;re out of tokens</p>
+            <p className="text-sm text-text-secondary mt-1">Upgrade your plan for more tokens per month, or add a one-time token pack below to continue this period.</p>
+          </div>
+        )}
         <div className="text-center mb-12">
           <h1 className="logo text-3xl sm:text-4xl mb-2">G.R.I.P.</h1>
           <p className="text-text-secondary mb-2">Choose a plan to access the app</p>
@@ -97,6 +134,27 @@ export function PlansPageClient() {
               </Button>
             </div>
           ))}
+        </div>
+
+        <div className="mb-8 p-6 rounded-xl border-2 border-border bg-background-secondary">
+          <div className="flex items-center gap-2 mb-4">
+            <Zap className="h-5 w-5 text-primary" />
+            <h3 className="font-semibold text-text-primary">Add more tokens</h3>
+          </div>
+          <p className="text-sm text-text-muted mb-4">Need extra tokens this period? Add a one-time pack without changing your plan.</p>
+          <div className="flex flex-wrap gap-4">
+            {ADD_TOKEN_PACKS.map((pack) => (
+              <Button
+                key={pack.id}
+                size="sm"
+                variant="outline"
+                disabled={!!loadingAddTokens}
+                onClick={() => handleAddTokens(pack.id)}
+              >
+                {loadingAddTokens === pack.id ? 'Redirecting…' : `${pack.name} (one-time)`}
+              </Button>
+            ))}
+          </div>
         </div>
 
         <p className="text-center text-sm text-text-muted max-w-xl mx-auto mb-6">

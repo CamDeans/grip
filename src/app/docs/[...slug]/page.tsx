@@ -23,8 +23,8 @@ const KNOWN_DOC_PATHS: Record<string, { title: string; description: string }> = 
 const DOC_CONTENT: Record<string, ReactNode> = {
   'getting-started': (
     <>
-      <p>G.R.I.P. (Generated Requirements to Implementation Pipeline) is an AI-powered development assistant that helps you go from idea to working code. Use the dashboard to create projects, chat with the AI to refine requirements, generate and edit files, and deploy or export your work.</p>
-      <p className="mt-4">Key steps: create a project, describe what you want in Enhanced Chat, use generated code and file actions, and when ready export to GitHub or deploy to Vercel. For a short path, see <Link href="/docs/getting-started/quick-start" className="text-primary hover:underline">Quick Start</Link>. For concepts, see <Link href="/docs/getting-started/concepts" className="text-primary hover:underline">Core Concepts</Link>.</p>
+      <p>G.R.I.P. (Generated Requirements to Implementation Pipeline) is an AI-powered development assistant that helps you go from idea to working code. Create a project with a GitHub repo (required—GRIP analyzes it and uses its structure and patterns), answer ideation questions, then chat in Develop to build. Code from chat is applied automatically and the build runs automatically; progress syncs on Overview.</p>
+      <p className="mt-4">Key steps: create a project (name, description, and a GitHub repo), answer ideation (goals, audience, features—plain language or technical details), then open Develop to chat with GRIP. Code applies and the build runs automatically; when ready, export to GitHub or deploy to Vercel. For a short path, see <Link href="/docs/getting-started/quick-start" className="text-primary hover:underline">Quick Start</Link>. For concepts, see <Link href="/docs/getting-started/concepts" className="text-primary hover:underline">Core Concepts</Link>.</p>
       <ul className="list-disc pl-6 mt-4">
         <li><Link href="/docs" className="text-primary hover:underline">Documentation index</Link></li>
         <li><Link href="/docs/api" className="text-primary hover:underline">API Reference</Link></li>
@@ -35,9 +35,9 @@ const DOC_CONTENT: Record<string, ReactNode> = {
     <>
       <p>Get up and running in a few steps:</p>
       <ol className="list-decimal pl-6 mt-2 space-y-2">
-        <li>Sign in at the dashboard and create a new project (or open an existing one).</li>
-        <li>Open Enhanced Chat for that project and describe your app or feature in plain language.</li>
-        <li>Use the AI to generate files, edit code, and run commands. You can view and edit generated files from the project overview.</li>
+        <li>Sign in at the dashboard and create a new project: name, description, and a GitHub repo (required—use Generate Keywords and Search to find one).</li>
+        <li>Answer ideation questions (goals, audience, features). Plain language works; you can add technical details for higher-level projects.</li>
+        <li>Open the Develop tab and describe your app or feature. GRIP applies code and runs the build automatically; progress syncs on Overview.</li>
         <li>When ready, export to GitHub from the project, then deploy to Vercel or use your own CI/CD.</li>
       </ol>
       <p className="mt-4">For more detail, see <Link href="/docs/getting-started" className="text-primary hover:underline">Getting Started</Link> and <Link href="/docs/features/enhanced-chat" className="text-primary hover:underline">Enhanced Chat</Link>.</p>
@@ -51,7 +51,7 @@ const DOC_CONTENT: Record<string, ReactNode> = {
     <>
       <p>Core concepts in G.R.I.P.:</p>
       <ul className="list-disc pl-6 mt-2 space-y-1">
-        <li><strong>Projects</strong> — Each project has its own chat context, files, and settings. Create one per app or repo.</li>
+        <li><strong>Projects</strong> — Each project has its own chat context, files, and settings. Create one per app; a GitHub repo is required so GRIP can analyze it and use its structure and patterns.</li>
         <li><strong>Enhanced Chat</strong> — Context-aware AI that can read your project, generate and edit files, and run terminal commands.</li>
         <li><strong>Generated files</strong> — Files created or updated by the AI are listed in the project; you can view, edit, and commit them.</li>
         <li><strong>Export & deploy</strong> — Export to GitHub (one token in Settings), then use Deploy to Vercel or your own pipeline.</li>
@@ -95,8 +95,8 @@ const DOC_CONTENT: Record<string, ReactNode> = {
   ),
   'features/automation': (
     <>
-      <p>Project automation covers flows that combine chat, code generation, and terminal commands: for example, &quot;add a new API route and run the dev server&quot; or &quot;fix lint errors in the last file.&quot; The AI can run commands in the project environment and apply changes in one workflow.</p>
-      <p className="mt-4">Use clear instructions in Enhanced Chat and rely on the generated-files list to review changes. For deployment automation, see <Link href="/docs/integrations/deploy-vercel" className="text-primary hover:underline">Deploy to Vercel</Link>.</p>
+      <p><strong>Full automation:</strong> In the Develop tab, code from chat is applied to the project automatically and the build runs automatically—no manual save or run steps. Phases and steps sync on the Overview tab. GRIP focuses on the current phase; when it&apos;s done, it routes you back to Overview for the next phase.</p>
+      <p className="mt-4">Project automation also covers flows that combine chat, code generation, and terminal commands: for example, &quot;add a new API route&quot; or &quot;fix lint errors.&quot; Use clear instructions in Enhanced Chat; the generated-files list shows changes. For deployment, see <Link href="/docs/integrations/deploy-vercel" className="text-primary hover:underline">Deploy to Vercel</Link>.</p>
       <ul className="list-disc pl-6 mt-4">
         <li><Link href="/docs" className="text-primary hover:underline">Documentation index</Link></li>
         <li><Link href="/docs/api" className="text-primary hover:underline">API Reference</Link></li>
@@ -115,7 +115,7 @@ const DOC_CONTENT: Record<string, ReactNode> = {
   ),
   'integrations/mongodb': (
     <>
-      <p>You can use MongoDB (or any database) in projects built with G.R.I.P.: add connection logic and models in your generated code, and use environment variables for connection strings. Store secrets in Dashboard → Settings or in your deployment platform (e.g. Vercel).</p>
+      <p>Connect your own MongoDB in <strong>Dashboard → Settings → Backend connections</strong>: add your connection string, test and save it, then create collections from the same page. GRIP uses this when building fullstack apps (Develop) so it can suggest <code className="text-sm bg-muted px-1 rounded">MONGODB_URI</code> and wire your app to your database. You can also add connection logic in generated code and use environment variables; store secrets in Dashboard → Settings or in your deployment platform (e.g. Vercel).</p>
       <p className="mt-4 font-medium">Seeing the same projects locally and on Vercel</p>
       <p className="mt-1">GRIP stores projects, users, and chat in MongoDB. If you create a project on the deployed app (Vercel) but it does not show when you run <code className="text-sm bg-muted px-1 rounded">npm run dev</code> locally, local and Vercel are using different databases. Fix: use the same <code className="text-sm bg-muted px-1 rounded">MONGODB_URI</code> in both places. Copy the value from Vercel (Project → Settings → Environment Variables) into your local <code className="text-sm bg-muted px-1 rounded">.env.local</code>, then restart <code className="text-sm bg-muted px-1 rounded">npm run dev</code>. After that, projects created on Vercel will appear locally and vice versa.</p>
       <p className="mt-4">For app structure and deployment, see <Link href="/docs/getting-started/quick-start" className="text-primary hover:underline">Quick Start</Link> and <Link href="/docs/integrations/deploy-vercel" className="text-primary hover:underline">Deploy to Vercel</Link>.</p>

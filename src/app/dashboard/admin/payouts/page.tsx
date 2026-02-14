@@ -74,7 +74,7 @@ export default function AdminPayoutsPage() {
   return (
     <AdminDashboardLayout>
       <div className="space-y-6 overflow-x-auto min-w-0">
-        <h2 className="text-xl font-bold">Payouts (55% admin / 45% app)</h2>
+        <h2 className="text-xl font-bold">Payouts (45% admin / 55% app)</h2>
         <Card>
           <CardHeader><CardTitle>Create Payout</CardTitle></CardHeader>
           <CardContent>
@@ -113,8 +113,8 @@ export default function AdminPayoutsPage() {
                   <tr className="border-b">
                     <th className="text-left py-2">Date</th>
                     <th className="text-left py-2">Amount</th>
-                    <th className="text-left py-2">Admin (55%)</th>
-                    <th className="text-left py-2">App (45%)</th>
+                    <th className="text-left py-2">Admin (45%)</th>
+                    <th className="text-left py-2">App (55%)</th>
                     <th className="text-left py-2">Status</th>
                     <th className="text-left py-2">Actions</th>
                   </tr>

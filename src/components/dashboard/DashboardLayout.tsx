@@ -23,9 +23,11 @@ import { cn } from '@/lib/client-utils'
 import { QuickSearch } from '../search/QuickSearch'
 import { NotificationsPopover } from '../notifications/NotificationsPopover'
 import { Button } from '@/components/ui'
-import { TerminalIcon, FlaskConical } from 'lucide-react'
+import { TerminalIcon, FlaskConical, ShieldCheck } from 'lucide-react'
+import { isAdminUser } from '@/lib/utils/auth'
 import { AppUpdatesToaster } from '@/components/app/AppUpdatesToaster'
 import { TokenUsage } from '@/components/dashboard/TokenUsage'
+import { useUserTimezone } from '@/hooks/useUserTimezone'
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -55,6 +57,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter()
   const { theme, setTheme } = useTheme()
   const { data: session, status } = useSession()
+  const timezone = useUserTimezone()
   
   // This is necessary to avoid hydration mismatch when rendering theme-dependent UI
   useEffect(() => {
@@ -78,7 +81,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     }
   };
 
-  const navigation = baseNavigation
+  // Show Admin in sidebar only when signed-in user is admin (ADMIN_EMAILS or DB role)
+  const navigation = [
+    ...baseNavigation,
+    ...(session && isAdminUser(session) ? [{ name: 'Admin', href: '/dashboard/admin', icon: ShieldCheck }] : []),
+  ]
 
   const renderNavItems = () => (
     <ul role="list" className="-mx-2 space-y-1">
@@ -275,7 +282,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <TokenUsage />
               <div className="px-3 py-2">
                 <p className="text-xs uppercase font-medium text-text-secondary tracking-wider">
-                  {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  {timezone
+                    ? new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: timezone })
+                    : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                 </p>
                 <p className="text-xs text-text-secondary">
                   {session?.user?.name ? `Signed in as ${session.user.name}` : 'Not signed in'}

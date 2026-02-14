@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { requireAppAccess, requireTokenBalance } from '@/lib/access'
+import { requireAppAccess, requireTokenBalance, getAppAccess } from '@/lib/access'
 import { addTokenUsage } from '@/lib/tokenUsage'
+import { buildTokenBudgetPromptFragment } from '@/lib/constants/tokenBudgetPlan'
 import { generateProjectPlan, getProjectPlan } from '@/lib/services/projectPlanningService'
 import { ObjectId } from 'mongodb'
 import clientPromise from '@/lib/db'
@@ -95,7 +96,11 @@ export async function POST(
     const tokenExhausted = await requireTokenBalance(session)
     if (tokenExhausted) return tokenExhausted
 
-    const result = await generateProjectPlan(id)
+    const access = await getAppAccess(session)
+    const remainingTokens = Math.max(0, (access.tokenAllowance ?? 0) - (access.tokensUsedThisPeriod ?? 0))
+    const tokenBudgetHint = buildTokenBudgetPromptFragment(remainingTokens, access.tier ?? 'starter', 'plan')
+
+    const result = await generateProjectPlan(id, { tokenBudgetHint })
     const totalTokens = (result as { totalTokens?: number }).totalTokens ?? 0
     if (totalTokens > 0 && session.user?.id) {
       addTokenUsage(session.user.id, totalTokens).catch((err) =>

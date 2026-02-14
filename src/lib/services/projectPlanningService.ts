@@ -78,7 +78,9 @@ function getRecommendedDependenciesFromIdeation(project: { ideation?: { technica
  * @param projectId The ID of the project to plan
  * @returns The complete planning result
  */
-export async function generateProjectPlan(projectId: string): Promise<PlanningResult> {
+export type GenerateProjectPlanOptions = { tokenBudgetHint?: string }
+
+export async function generateProjectPlan(projectId: string, options?: GenerateProjectPlanOptions): Promise<PlanningResult> {
   try {
     console.log(`Generating complete project plan for: ${projectId}`)
 
@@ -154,7 +156,7 @@ export async function generateProjectPlan(projectId: string): Promise<PlanningRe
     const { structure: enhancedStructure, totalTokens: structureTokens } = await enhanceProjectStructure(projectId, structure)
 
     console.log('Step 4: Generating development plan')
-    const { plan, totalTokens: planTokens } = await generateDevelopmentPlan(projectId)
+    const { plan, totalTokens: planTokens } = await generateDevelopmentPlan(projectId, { tokenBudgetHint: options?.tokenBudgetHint })
     const totalTokens = enhancementTokens + treeAnalysisTokens + structureTokens + planTokens
     
     // Step 5: Link plan to structure

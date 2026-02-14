@@ -23,14 +23,14 @@
   - Enhanced-chat returns **503** with a short, user-friendly message; UI shows it via the provider’s error handling.
 - **No repo linked**  
   - Repo Explorer shows: *"Link a GitHub repository in project settings, then return here."*  
-  - Enhanced chat works without a repo (project/ideation context only); repo context is optional.
+  - Enhanced chat uses project, ideation, and repo context; a GitHub repo is required when creating a project so GRIP can analyze it and use its structure and patterns.
 
 ## Critical path (auth → project → chat/repo)
 
 - **Auth:** Register and Login use NextAuth with credentials; session used for dashboard and project APIs.
-- **Projects:** Create project → optional ideation → optional repo in settings → open project.
-- **Repo:** Repo tab and Repo Explorer require a linked repo; clear CTA to settings if missing.
-- **Chat:** Enhanced chat is available per project; uses project + optional repo context; shows clear errors when AI is unavailable.
+- **Projects:** Create project (name, description, required repo, ideation) → open project. All tabs (Overview, Settings, Repo, Develop, Preview) are always visible.
+- **Repo:** Repo tab and Repo Explorer use the linked repo; Settings tab always visible for ideation and repo link.
+- **Chat:** Enhanced chat is available per project; uses project + repo context; code applies and build runs automatically; shows clear errors when AI is unavailable.
 
 ## Environment and deployment
 

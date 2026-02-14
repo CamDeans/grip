@@ -231,21 +231,34 @@ export async function requireTokenBalance(
   const used = access.tokensUsedThisPeriod ?? 0
   const allowance = access.tokenAllowance ?? 0
   const remaining = allowance > 0 ? allowance - used : 0
+  const tier = (access.tier ?? 'starter').toLowerCase()
+  const upgradeSuggestions: { action: 'upgrade' | 'add_tokens'; targetTier?: string; label: string }[] = []
+  if (!access.isAdmin && tier === 'starter') {
+    upgradeSuggestions.push({ action: 'upgrade', targetTier: 'pro', label: 'Upgrade to Pro (6M tokens/month)' })
+    upgradeSuggestions.push({ action: 'upgrade', targetTier: 'team', label: 'Upgrade to Team (12M tokens/month)' })
+    upgradeSuggestions.push({ action: 'add_tokens', label: 'Add more tokens to this period' })
+  } else if (!access.isAdmin && tier === 'pro') {
+    upgradeSuggestions.push({ action: 'upgrade', targetTier: 'team', label: 'Upgrade to Team (12M tokens/month)' })
+    upgradeSuggestions.push({ action: 'add_tokens', label: 'Add more tokens to this period' })
+  } else if (!access.isAdmin && tier === 'team') {
+    upgradeSuggestions.push({ action: 'add_tokens', label: 'Add more tokens to this period' })
+  }
+
   if (allowance > 0 && used >= allowance) {
     const message = access.isAdmin
       ? "You've reached your token limit. Request more from Admin portal → Token limits."
-      : "You've used all your tokens for this period. Your allowance resets at the start of the next billing cycle."
+      : "You've used all your tokens for this period. Upgrade your plan or add more tokens to continue."
     return NextResponse.json(
-      { error: 'Token limit reached', message, code: 'TOKENS_EXHAUSTED' },
+      { error: 'Token limit reached', message, code: 'TOKENS_EXHAUSTED', tier, upgradeSuggestions },
       { status: 403 }
     )
   }
   if (allowance > 0 && remaining < SAFE_MIN_REMAINING_TOKENS) {
     const message = access.isAdmin
       ? "You're close to your token limit. Request more from Admin portal → Token limits, or wait for the next period."
-      : "You're close to your token limit for this period. Your allowance resets at the start of the next billing cycle."
+      : "You're close to your token limit for this period. Upgrade or add tokens to avoid interruption."
     return NextResponse.json(
-      { error: 'Token limit reached', message, code: 'TOKENS_EXHAUSTED' },
+      { error: 'Token limit reached', message, code: 'TOKENS_EXHAUSTED', tier, upgradeSuggestions },
       { status: 403 }
     )
   }

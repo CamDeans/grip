@@ -32,6 +32,11 @@ interface Analytics {
     status: string
     count: number
   }>
+  buildDataByTaskType?: Array<{ taskType: string; count: number }>
+  buildSummary?: { totalBuilds: number; avgDurationMs: number | null }
+  chatSummary?: { totalChatMessages: number; chatActivityInPeriod: number }
+  planSummary?: { projectsWithPlan: number; totalStepsCompleted: number }
+  repoAnalysesCount?: number
   languageData: Array<{
     language: string
     count: number
@@ -41,6 +46,7 @@ interface Analytics {
     total: number
     average: number
     peak: string
+    activeDays?: number
   }
   projectsDetail?: Array<{
     id: unknown
@@ -106,9 +112,8 @@ export default function AnalyticsPage() {
           color="blue"
         />
         <StatCard
-          title="Development Time"
-          value={analytics?.timeData?.total}
-          suffix="hrs"
+          title="Active days"
+          value={analytics?.timeData?.activeDays ?? 0}
           icon={<ClockIcon className="h-5 w-5 text-accent-blue" />}
           loading={isLoading}
           color="purple"
@@ -122,7 +127,7 @@ export default function AnalyticsPage() {
           color="green"
         />
         <StatCard
-          title="Terminal Sessions"
+          title="Activity"
           value={analytics?.activityData?.reduce((acc, curr) => acc + curr.count, 0) ?? 0}
           icon={<CommandLineIcon className="h-5 w-5 text-accent-amber" />}
           loading={isLoading}
@@ -135,6 +140,7 @@ export default function AnalyticsPage() {
         <Card>
           <div className="p-6">
             <h3 className="text-lg font-medium mb-4">Activity Timeline</h3>
+                <p className="text-sm text-text-muted mb-3">File saves and builds per period. Chat with GRIP and run builds to see activity.</p>
             {isLoading ? (
               <Skeleton className="h-64 w-full" />
             ) : (
@@ -155,7 +161,7 @@ export default function AnalyticsPage() {
                   })}
                 </div>
                 {analytics?.activityData?.every(d => d.count === 0) && (
-                  <p className="text-sm text-text-secondary mt-2 text-center">No terminal sessions in this period. Use the Terminal in a project to see activity.</p>
+                  <p className="text-sm text-text-secondary mt-2 text-center">No file or build activity in this period. Chat with GRIP, save files, or run builds to see activity.</p>
                 )}
               </>
             )}
@@ -219,10 +225,34 @@ export default function AnalyticsPage() {
         </Card>
       )}
 
-      {/* Build Status */}
+      {/* Build Status — what we track: outcomes, total, avg duration, task type */}
       <Card>
         <div className="p-6">
           <h3 className="text-lg font-medium mb-4">Build Status</h3>
+          <p className="text-sm text-text-muted mb-3">What we track: outcome (success / failed / pending / canceled), total builds, average duration, and task type (install, build, test, etc.). Build logs and outcomes from auto build runs in Develop are shown in the chat after each run.</p>
+          {!isLoading && analytics?.buildSummary && (
+            <div className="flex flex-wrap items-center gap-4 mb-3 text-sm text-text-secondary">
+              <span>Total builds: <strong className="text-text-primary">{analytics.buildSummary.totalBuilds}</strong></span>
+              <span>Avg duration: <strong className="text-text-primary">
+                {analytics.buildSummary.avgDurationMs != null
+                  ? (analytics.buildSummary.avgDurationMs >= 1000
+                      ? `${(analytics.buildSummary.avgDurationMs / 1000).toFixed(1)}s`
+                      : `${Math.round(analytics.buildSummary.avgDurationMs)}ms`)
+                  : '—'}
+              </strong></span>
+            </div>
+          )}
+          {!isLoading && (analytics?.buildDataByTaskType?.length ?? 0) > 0 && (
+            <div className="mb-3 text-sm text-text-secondary">
+              <span className="font-medium">By task type: </span>
+              {analytics.buildDataByTaskType?.map((item, i) => (
+                <span key={item.taskType}>
+                  {i > 0 && ' · '}
+                  <strong className="text-text-primary capitalize">{item.taskType}</strong> {item.count}
+                </span>
+              ))}
+            </div>
+          )}
           {isLoading ? (
             <Skeleton className="h-20 w-full" />
           ) : (
@@ -280,30 +310,63 @@ export default function AnalyticsPage() {
         </div>
       </Card>
 
-      {/* Peak Hours */}
+      {/* Development Patterns — what we track: active days, chat, analyses, files, plans, project status, terminal (once) */}
       <Card>
         <div className="p-6">
           <h3 className="text-lg font-medium mb-4">Development Patterns</h3>
+          <p className="text-sm text-text-muted mb-3">What we track: active days, chat messages &amp; chat-active projects, repo analyses, files created, plan steps, project status (Active / Completed / Archived), and terminal usage (shown once below).</p>
           {isLoading ? (
             <Skeleton className="h-20 w-full" />
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="flex flex-col items-center justify-center">
-                  <h4 className="text-sm text-text-secondary mb-2">Total Hours</h4>
-                  <p className="text-3xl font-semibold">{analytics?.timeData?.total ?? 0}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-background-tertiary/50">
+                  <h4 className="text-xs text-text-secondary mb-1">Active days</h4>
+                  <p className="text-xl font-semibold">{analytics?.timeData?.activeDays ?? 0}</p>
                 </div>
-                <div className="flex flex-col items-center justify-center">
-                  <h4 className="text-sm text-text-secondary mb-2">Daily Average</h4>
-                  <p className="text-3xl font-semibold">{analytics?.timeData?.average?.toFixed(1) ?? '0.0'}</p>
+                <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-background-tertiary/50">
+                  <h4 className="text-xs text-text-secondary mb-1">Chat messages</h4>
+                  <p className="text-xl font-semibold">{analytics?.chatSummary?.totalChatMessages ?? 0}</p>
                 </div>
-                <div className="flex flex-col items-center justify-center">
-                  <h4 className="text-sm text-text-secondary mb-2">Peak Activity</h4>
-                  <p className="text-3xl font-semibold">{analytics?.timeData?.peak ?? '--'}</p>
+                <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-background-tertiary/50">
+                  <h4 className="text-xs text-text-secondary mb-1">Chat active (period)</h4>
+                  <p className="text-xl font-semibold">{analytics?.chatSummary?.chatActivityInPeriod ?? 0}</p>
+                </div>
+                <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-background-tertiary/50">
+                  <h4 className="text-xs text-text-secondary mb-1">Repo analyses</h4>
+                  <p className="text-xl font-semibold">{analytics?.repoAnalysesCount ?? 0}</p>
+                </div>
+                <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-background-tertiary/50">
+                  <h4 className="text-xs text-text-secondary mb-1">Files created</h4>
+                  <p className="text-xl font-semibold">{analytics?.filesGenerated ?? 0}</p>
+                </div>
+                <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-background-tertiary/50">
+                  <h4 className="text-xs text-text-secondary mb-1">Plans / steps</h4>
+                  <p className="text-xl font-semibold">{analytics?.planSummary?.projectsWithPlan ?? 0} / {analytics?.planSummary?.totalStepsCompleted ?? 0}</p>
                 </div>
               </div>
-              {(analytics?.timeData?.total ?? 0) === 0 && (
-                <p className="text-sm text-text-secondary mt-3 text-center">Development time is tracked from terminal sessions. Use the Terminal in a project to see hours here.</p>
+              {/* Project status — previously tracked but not displayed */}
+              {analytics?.distributionData && analytics.distributionData.some(d => d.value > 0) && (
+                <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+                  <span className="text-text-secondary font-medium">Project status:</span>
+                  {analytics.distributionData.map((d) => (
+                    <span key={d.label} className="text-text-secondary">
+                      <strong className="text-text-primary">{d.label}</strong> {d.value}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {/* Terminal shown once only */}
+              <div className="mt-4 pt-4 border-t border-border">
+                <p className="text-sm text-text-secondary">
+                  <strong>Terminal</strong> (tracked when used in a project): {(analytics?.timeData?.total ?? 0)} hrs total
+                  {(analytics?.timeData?.total ?? 0) > 0 && (
+                    <span className="ml-2">· peak hour {analytics?.timeData?.peak ?? '--'}</span>
+                  )}
+                </p>
+              </div>
+              {(analytics?.timeData?.activeDays ?? 0) === 0 && (analytics?.chatSummary?.totalChatMessages ?? 0) === 0 && (analytics?.timeData?.total ?? 0) === 0 && (
+                <p className="text-sm text-text-secondary mt-3 text-center">Chat with GRIP, save files, or run builds to see activity. Terminal hours appear here when you use the Terminal in a project.</p>
               )}
             </>
           )}

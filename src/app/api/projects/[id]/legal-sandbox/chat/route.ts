@@ -14,6 +14,7 @@ import {
 import { getOrCloneRepository } from '@/lib/repository'
 import { runSandboxProject } from '@/lib/sandbox/runSandboxProject'
 import { getSandboxProject } from '@/lib/services/sandboxProjectService'
+import { MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE } from '@/lib/constants/buildQualityPlan'
 
 const MAX_HISTORY = 16
 const SANDBOX_CHAT_HISTORY_COLLECTION = 'sandboxChatHistory'
@@ -82,6 +83,12 @@ The same GRIP main chat rules apply here: assume the user may be non-technical, 
     p += `\n## Structured repo analysis (tree-link JSON summary; capabilities vs requirements; no code)\n${structuredSummary.slice(0, 4000)}\n`
   }
   p += `
+## MANDATORY: package.json — never blank, never incorrect (runnable StackBlitz)
+${MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE}
+
+## Full-stack sandbox: single root script (MANDATORY)
+- When the project has both **frontend and backend** (e.g. \`api/\` and \`app/\`, or \`client/\` and \`server/\`, or \`src/frontend\` and \`src/backend\`), you MUST add a **single root script** in package.json (e.g. using \`concurrently\` or \`npm-run-all\`) so **Run in StackBlitz** starts both at once. Do NOT leave this for the user—always provide the complete package.json with a root \`dev\` script that runs both client and server so the user gets a runnable full-stack app in one click.
+
 ## Format (same as GRIP main chat)
 - Put the **full file path** on the line directly above **every file** code block. Use real names only: \`package.json\`, \`src/App.tsx\`, \`src/index.html\`, \`.env\`, \`README.md\`, etc. Never \`file.txt\`, \`file.json\`, \`snippet.*\`, or any generic name.
 - For **grip-actions** (create_folder): put a line **above** the block like "Creating folder: \`src/assets/sounds\`" or "Creating folders: \`src/assets/sounds\`, \`src/components/powerups\`." The system creates folders automatically; the user does not save. This avoids errors and helps non-devs.
@@ -305,7 +312,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { system: systemPrompt }
       )
       aiMessage = (response?.content && String(response.content).trim()) || ''
-      tokenUsageTotal = (response?.usage?.promptTokens ?? 0) + (response?.usage?.completionTokens ?? 0)
+      tokenUsageTotal = response?.usage?.totalTokens ?? (response?.usage?.promptTokens ?? 0) + (response?.usage?.completionTokens ?? 0)
     } catch (apiErr) {
       console.error('Legal-sandbox chat API error:', apiErr)
       return NextResponse.json(

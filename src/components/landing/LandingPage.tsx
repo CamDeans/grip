@@ -174,7 +174,7 @@ const FLOW_STEPS = [
   {
     step: 3,
     title: 'Plan & files — automatic',
-    description: 'GRIP generates a development plan and starter files from your ideation and repo patterns. All code is newly generated—clean-room implementation that follows the repo\'s structure and patterns. No extra clicks; everything shows in Develop → Show Context.',
+    description: 'GRIP runs analysis, generates the plan, and writes code for each file in one run. All files are built with code from your ideation and repo patterns—clean-room implementation that follows the repo\'s structure and patterns. No extra clicks; everything shows in Develop → Show Context.',
     icon: FileCode2,
     mockLabel: 'Plan & generated files',
   },
@@ -280,11 +280,11 @@ function MockBrowserFrame({
 const FAQ_ITEMS = [
   {
     q: 'What are the project creation steps?',
-    a: 'Create a project (name + description) → answer ideation questions (goals, audience, key features, technical needs) → optionally link a GitHub repo as reference → GRIP generates a plan and starter files → develop with GRIP in chat (code saved automatically, builds run) → preview in StackBlitz → export to GitHub or deploy to Vercel. You can start from an idea only; GitHub is optional.',
+    a: 'Create a project (name + description) → select a GitHub repo (required—GRIP analyzes it and uses its structure and patterns) → answer ideation questions (goals, audience, key features, technical needs) → GRIP runs analysis, generates the plan, and writes code for each file in one run → develop with GRIP in chat (code applied and build runs automatically) → preview in StackBlitz → export to GitHub or deploy to Vercel.',
   },
   {
     q: 'Do I need GitHub? Is it required?',
-    a: 'No. GitHub is optional. If you\'re starting from an idea only, skip the repo step and leave it blank—GRIP will still generate a plan and code from your ideation. Link a repo only if you want GRIP to use an existing codebase as a reference for structure and patterns.',
+    a: 'Yes. A GitHub repository is required when you create a project. GRIP analyzes the repo and uses its structure and patterns to guide your build—that analysis is core to how GRIP works. Any public repo works; you don\'t need to own it. GRIP uses it as reference only and never copies code.',
   },
   {
     q: 'Can I use a GitHub repo I don\'t own?',
@@ -296,7 +296,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'What use cases does GRIP support?',
-    a: 'Idea-only: describe your project in plain English, skip GitHub, and get a plan and generated code. Idea + reference repo: link any public repo (yours or not) so GRIP can follow its patterns. Non-technical: describe what you want; GRIP guides you and saves code automatically. Safe experimentation: use the Sandbox Playground to try changes without touching your main project, then promote when ready.',
+    a: 'Every project starts with a GitHub repo: link any public repo so GRIP analyzes it and uses its structure and patterns. Non-technical: use plain language; GRIP guides you and applies code automatically. Developers: add technical details, stack preferences, or architecture notes in ideation—GRIP uses both simple and detailed input. Safe experimentation: use the Sandbox Playground to try changes without touching your main project, then promote when ready.',
   },
   {
     q: 'Why paid plans only?',
@@ -312,7 +312,15 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How do I choose a plan?',
-    a: 'Create your account and sign in first; then you\'ll choose a plan and pay via Stripe. Starter ($19/mo, 650k tokens), Pro ($49/mo, 1.7M tokens), or Team ($99/mo, 3.4M tokens). Your token allowance covers all AI usage so you can ship without surprises.',
+    a: 'Create your account and sign in first; then you\'ll choose a plan and pay via Stripe. Starter ($19/mo, 2.3M tokens), Pro ($49/mo, 6M tokens), or Team ($99/mo, 12M tokens). Your token allowance covers all AI usage so you can ship without surprises.',
+  },
+  {
+    q: 'What happens when I run out of tokens?',
+    a: 'When you hit your monthly limit, GRIP will prompt you to upgrade your plan (e.g. Starter → Pro or Team) or buy a one-time token add-on. Add-ons top up your current period so you can keep building without waiting for the next cycle.',
+  },
+  {
+    q: 'What token add-ons are available and how much do they cost?',
+    a: 'We offer one-time token packs: 500K tokens and 1M tokens. Pricing is shown on the Plans page when you\'re signed in and when you run out of tokens (/plans). You can buy a pack at any time to add tokens to your current billing period.',
   },
 ]
 
@@ -424,11 +432,8 @@ export function LandingPage() {
               deleteSpeed={40}
             />
           </motion.p>
-          <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto mb-2">
+          <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto mb-8">
             Turn GitHub repos and ideas into runnable, deployable products. Clean-room code generation—reference repos for patterns, generate new code. No juggling tools—one flow from idea to ship.
-          </p>
-          <p className="text-sm text-text-muted max-w-xl mx-auto mb-8">
-            Create projects, link repos for reference, chat with GRIP to generate new code that's automatically saved, experiment safely in sandbox playgrounds, watch builds run automatically, preview in StackBlitz, and export or deploy. Built for developers and makers who want to move fast.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
@@ -469,22 +474,6 @@ export function LandingPage() {
               <p className="text-text-secondary max-w-2xl mx-auto mb-2">
                 GRIP is paid-only so we can cover real AI API costs and give you predictable limits. No freemium—every plan includes a monthly token allowance for chat, code generation, and builds.
               </p>
-              <p className="text-sm text-text-muted max-w-xl mx-auto">
-                <strong>Tokens</strong> are used when you chat with GRIP, generate code, or run builds. Your plan’s allowance resets each billing cycle. Choose the tier that matches how much you build.
-              </p>
-              <div className="mt-6 p-4 rounded-lg bg-background-primary border border-border text-left max-w-2xl mx-auto">
-                <p className="text-xs font-semibold text-text-primary mb-2">What uses tokens:</p>
-                <ul className="text-xs text-text-secondary space-y-1 list-disc list-inside">
-                  <li>Enhanced chat (project chat with GRIP)</li>
-                  <li>Project and legal-sandbox chat</li>
-                  <li>Editing files from chat (update-from-chat)</li>
-                  <li>Repo summarization</li>
-                  <li>Plan generation (main and sandbox)</li>
-                  <li>AI keyword generation</li>
-                  <li>Repository analysis and code suggestions</li>
-                  <li>Chat completion and legacy chat</li>
-                </ul>
-              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="grip-card-glow p-6 rounded-xl border-2 border-border bg-background-primary hover:border-primary/40 hover:scale-[1.02] transition-all duration-300">
@@ -493,7 +482,7 @@ export function LandingPage() {
                   <h3 className="font-semibold text-lg text-text-primary">Starter</h3>
                 </div>
                 <p className="text-2xl font-bold text-primary mb-1">$19<span className="text-sm font-normal text-text-muted">/month</span></p>
-                <p className="text-sm text-text-secondary mb-4">650,000 tokens/month</p>
+                <p className="text-sm text-text-secondary mb-4">2.3M tokens/month</p>
                 <p className="text-sm text-text-muted">
                   Light use, side projects. Enough for regular chat and code generation without worrying about limits.
                 </p>
@@ -505,7 +494,7 @@ export function LandingPage() {
                   <h3 className="font-semibold text-lg text-text-primary">Pro</h3>
                 </div>
                 <p className="text-2xl font-bold text-primary mb-1">$49<span className="text-sm font-normal text-text-muted">/month</span></p>
-                <p className="text-sm text-text-secondary mb-4">1.7M tokens/month</p>
+                <p className="text-sm text-text-secondary mb-4">6M tokens/month</p>
                 <p className="text-sm text-text-muted">
                   Serious builders, daily use. Heavy development and multiple projects with plenty of headroom.
                 </p>
@@ -516,12 +505,37 @@ export function LandingPage() {
                   <h3 className="font-semibold text-lg text-text-primary">Team</h3>
                 </div>
                 <p className="text-2xl font-bold text-primary mb-1">$99<span className="text-sm font-normal text-text-muted">/month</span></p>
-                <p className="text-sm text-text-secondary mb-4">3.4M tokens/month</p>
+                <p className="text-sm text-text-secondary mb-4">12M tokens/month</p>
                 <p className="text-sm text-text-muted">
                   Small teams, heavy usage. Maximum allowance for shipping multiple apps and experiments.
                 </p>
               </div>
             </div>
+
+            {/* Token add-ons — when you reach your limit */}
+            <div className="mt-12 p-6 rounded-xl border-2 border-border bg-background-primary">
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold text-lg text-text-primary">Token add-ons</h3>
+              </div>
+              <p className="text-sm text-text-secondary mb-4">
+                When you reach your monthly limit, add more tokens without changing your plan. One-time packs are added to your current billing period.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+                <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-background-secondary/50">
+                  <span className="font-medium text-text-primary">500K tokens</span>
+                  <span className="text-sm text-text-muted">One-time</span>
+                </div>
+                <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-background-secondary/50">
+                  <span className="font-medium text-text-primary">1M tokens</span>
+                  <span className="text-sm text-text-muted">One-time</span>
+                </div>
+              </div>
+              <p className="text-sm text-text-muted mt-4">
+                Pricing and purchase on the <Link href="/plans" className="text-primary hover:underline">Plans</Link> page when you&apos;re signed in, or when you run out of tokens.
+              </p>
+            </div>
+
             <p className="text-center text-sm text-text-muted mt-6 max-w-xl mx-auto">
               <Link href="#faq" className="text-primary hover:underline">FAQ</Link> — plans, sign-up steps, and token usage.
             </p>
@@ -783,9 +797,6 @@ export function LandingPage() {
             <h2 className="grip-section-title text-2xl sm:text-3xl font-extrabold mb-4">
               Ready to build with GRIP?
             </h2>
-            <p className="text-text-secondary mb-8">
-              Create a project, link a repo for reference, and chat with GRIP to generate new code and turn your idea into a runnable app. Experiment safely in sandbox playgrounds.
-            </p>
             <p className="text-sm text-text-muted mb-6 max-w-lg mx-auto">
               <Link href="#faq" className="text-primary hover:underline">FAQ</Link> — getting started, plans, and account steps.
             </p>

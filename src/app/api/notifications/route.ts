@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     
-    const notifications = await db.collection('notifications')
+    const raw = await db.collection('notifications')
       .find({ 
         userId,
         timestamp: { $gte: thirtyDaysAgo }
@@ -43,6 +43,10 @@ export async function GET(request: NextRequest) {
       .limit(50)
       .toArray()
     
+    const notifications = raw.map((n: { _id: unknown; [k: string]: unknown }) => ({
+      ...n,
+      id: n._id != null ? (typeof n._id === 'string' ? n._id : String((n._id as { toString(): string }).toString())) : '',
+    }))
     return NextResponse.json(notifications)
   } catch (error) {
     console.error('Error retrieving notifications:', error)

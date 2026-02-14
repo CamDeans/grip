@@ -76,6 +76,7 @@ export default function ProjectOverviewPage() {
   const [sandboxes, setSandboxes] = useState<SandboxExperiment[]>([])
   const [loadingSandboxes, setLoadingSandboxes] = useState(false)
   const [creatingSandbox, setCreatingSandbox] = useState(false)
+  const [setupStep, setSetupStep] = useState<null | 'analysis' | 'plan' | 'files' | 'done'>(null)
   const [uploads, setUploads] = useState<Array<{ path: string; filename: string; size: number; purpose: string }>>([])
   const [loadingUploads, setLoadingUploads] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -304,14 +305,38 @@ export default function ProjectOverviewPage() {
     if (hasPlan === true && projectState?.phases?.length) return
     if (hasPlan === null) return
     autoPlanRanRef.current = projectId
-    sonnerToast.info('Setting up your plan…', { description: 'Generating plan, build steps, and required files so you can go straight to Develop.' })
     const run = async () => {
       try {
+        // Step 1: Show "Analyzing repository…" until analysis is ready (poll if needed); otherwise start at plan
+        if (!hasAnalysis) {
+          setSetupStep('analysis')
+          let done = false
+          for (let i = 0; i < 60 && !done; i++) {
+            const r = await fetch(`/api/projects/${projectId}/analysis/status`)
+            const d = r.ok ? await r.json().catch(() => ({})) : {}
+            if (d?.hasAnalysis ?? d?.analysisCompleted) {
+              setHasAnalysis(true)
+              done = true
+            } else {
+              await new Promise((resolve) => setTimeout(resolve, 1000))
+            }
+          }
+        }
+        // Step 2: Generating plan
+        setSetupStep('plan')
         const planRes = await fetch(`/api/projects/${projectId}/plan`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-        if (!planRes.ok) return
+        if (!planRes.ok) {
+          setSetupStep(null)
+          return
+        }
         refreshTokenUsage()
         const syncRes = await fetch(`/api/projects/${projectId}/plan/sync-state`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-        if (!syncRes.ok) return
+        if (!syncRes.ok) {
+          setSetupStep(null)
+          return
+        }
+        // Step 3: Generating files
+        setSetupStep('files')
         const filesRes = await fetch(`/api/projects/${projectId}/files/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
         const filesData = filesRes.ok ? await filesRes.json().catch(() => ({})) : {}
         const fileCount = filesData.successCount ?? filesData.generatedFiles?.filter((f: { success?: boolean }) => f.success).length ?? 0
@@ -320,16 +345,19 @@ export default function ProjectOverviewPage() {
         ])
         setProjectState(state && (state.phases?.length || state.currentPhase) ? state : null)
         setHasPlan(true)
+        setSetupStep('done')
         sonnerToast.success(
           'Plan ready',
           { description: fileCount > 0 ? `Phases and ${fileCount} file(s) created. Go to Develop to build with GRIP.` : 'You can go to Develop to start building with GRIP.' }
         )
+        setTimeout(() => setSetupStep(null), 1500)
       } catch {
         autoPlanRanRef.current = null
+        setSetupStep(null)
       }
     }
     run()
-  }, [projectId, project?.repository?.owner, project?.repository?.name, hasPlan, projectState?.phases?.length])
+  }, [projectId, project?.repository?.owner, project?.repository?.name, hasPlan, hasAnalysis, projectState?.phases?.length])
 
   if (isLoading) {
     return <LoadingState message="Loading project information..." />
@@ -394,8 +422,34 @@ export default function ProjectOverviewPage() {
     }
   }
 
+  const setupStepLabel =
+    setupStep === 'analysis'
+      ? 'Analyzing repository…'
+      : setupStep === 'plan'
+        ? 'Generating plan…'
+        : setupStep === 'files'
+          ? 'Generating files…'
+          : setupStep === 'done'
+            ? 'Done'
+            : ''
+
   return (
     <div className="space-y-8">
+      {/* Setup loader overlay: analysis → plan → files */}
+      {setupStep != null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 rounded-lg border bg-card p-8 shadow-lg">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden />
+            <p className="text-lg font-medium text-foreground">{setupStepLabel}</p>
+            <p className="text-sm text-muted-foreground">
+              {setupStep === 'analysis' && 'Understanding your repo structure and patterns.'}
+              {setupStep === 'plan' && 'Creating phases and build steps.'}
+              {setupStep === 'files' && 'Writing code for each file.'}
+              {setupStep === 'done' && 'You can go to Develop.'}
+            </p>
+          </div>
+        </div>
+      )}
       {/* Sandbox indicator banner - only show if it's a linked experiment */}
       {project?.isSandbox && project?.parentProjectId && (
         <Card className="border-2 border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
@@ -891,7 +945,7 @@ export default function ProjectOverviewPage() {
         
         <CardContent>
           <p className="text-sm text-text-secondary mb-4">
-            Use the tabs to move through the flow: <strong>Setup</strong> → <strong>Repo</strong> → <strong>Plan</strong> → <strong>Develop</strong> → <strong>Preview</strong>. In Develop, GRIP applies code and runs the build automatically; progress syncs here.
+            Use the tabs to move through the flow: <strong>Settings</strong> (ideation, repo link) → <strong>Repo</strong> (analysis) → <strong>Develop</strong> (chat; code applies and build runs automatically) → <strong>Preview</strong>. All tabs are always visible. Progress syncs here as GRIP saves files and runs the build.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -916,7 +970,7 @@ export default function ProjectOverviewPage() {
             <div>
               <h3 className="text-lg font-semibold mb-2 text-primary">Next step</h3>
               <p className="text-sm text-text-secondary">
-                Use the tabs to jump to Setup, Repo, Plan, or Develop. Build progress (phases and steps) syncs automatically as GRIP saves files and runs the build—no need to return here to confirm.
+                Use the tabs to jump to Settings, Repo, Develop, or Preview. Build progress (phases and steps) syncs automatically as GRIP saves files and runs the build—no need to return here to confirm.
               </p>
             </div>
           </div>

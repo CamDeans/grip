@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/input'
-import { ExternalLink, Loader2, Play, Download, Github, ChevronDown, ChevronUp, Zap, MessageSquare } from 'lucide-react'
+import { Label } from '@/components/ui/Label'
+import { ExternalLink, Loader2, Play, Download, Github, ChevronDown, ChevronUp, Zap, MessageSquare, Database } from 'lucide-react'
 import { toast as sonnerToast } from 'sonner'
 import { openInStackBlitz } from '@/lib/stackblitzOpen'
 
@@ -20,8 +21,12 @@ export default function ProjectPreviewPage() {
     repository?: { owner: string; name: string }
     exportedRepoUrl?: string
     deployedUrl?: string
+    mongodbCollectionName?: string | null
   } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [collections, setCollections] = useState<string[]>([])
+  const [collectionsLoading, setCollectionsLoading] = useState(false)
+  const [mongodbCollectionSaving, setMongodbCollectionSaving] = useState(false)
   const [previewUrl, setPreviewUrl] = useState('')
   const [stackblitzLoading, setStackblitzLoading] = useState(false)
   const [downloadLoading, setDownloadLoading] = useState(false)
@@ -45,6 +50,16 @@ export default function ProjectPreviewPage() {
       .catch(() => setProject(null))
       .finally(() => setLoading(false))
   }, [projectId])
+
+  // Fetch user's MongoDB collections for project alignment (Settings → Backend connections)
+  useEffect(() => {
+    setCollectionsLoading(true)
+    fetch('/api/user/backend-connections/mongodb/collections')
+      .then((r) => (r.ok ? r.json() : { collections: [] }))
+      .then((data) => setCollections(Array.isArray(data?.collections) ? data.collections : []))
+      .catch(() => setCollections([]))
+      .finally(() => setCollectionsLoading(false))
+  }, [])
 
   // Run in browser: preflight first, then send project files to StackBlitz (not the cloned repo)
   const handleRunInBrowser = async () => {
@@ -367,7 +382,7 @@ export default function ProjectPreviewPage() {
               </Button>
               {!hasRepo && (
                 <p className="text-xs text-text-muted">
-                  Link a repo in Project Settings or Export to GitHub first.
+                  Export to GitHub first (repo is set at project creation).
                 </p>
               )}
               <button
@@ -382,15 +397,15 @@ export default function ProjectPreviewPage() {
                 <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-text-secondary space-y-2">
                   <p className="font-medium text-text-primary">Flow</p>
                   <ol className="list-decimal list-inside space-y-1">
-                    <li>Get the project on GitHub (Export to GitHub above or link a repo in Settings).</li>
+                    <li>Get the project on GitHub (Export to GitHub above; repo is set at project creation).</li>
                     <li>In Vercel: <a href="https://vercel.com/new" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">vercel.com → Add New → Project</a> → Import the same GitHub repo (one-time per repo).</li>
                     <li>In GRIP: click Deploy to Vercel above. GRIP triggers a production deploy; when ready, the live URL appears here.</li>
                   </ol>
                   <p className="font-medium text-text-primary pt-1">FAQs</p>
                   <ul className="list-disc list-inside space-y-1">
-                    <li><strong>One GitHub token or per project?</strong> One token per user. Set it once in Dashboard → Settings (or Project → Settings); it’s used for Export to GitHub for all your projects.</li>
-                    <li><strong>Button disabled?</strong> The project needs a GitHub repo. Export to GitHub first or link a repo in Project Settings.</li>
-                    <li><strong>Deploy failed?</strong> Import the repo in Vercel first (step 2). If it still fails, the server may need VERCEL_TOKEN (ask your admin).</li>
+                    <li><strong>One GitHub token or per project?</strong> One token per user. Set it once in Dashboard → Settings; it’s used for Export to GitHub for all your projects.</li>
+                    <li><strong>Button disabled?</strong> The project needs a GitHub repo. Export to GitHub first (repo is set at project creation).</li>
+                    <li><strong>Deploy failed?</strong> Import the repo in Vercel first (step 2). If the button says Vercel is not configured, add your Vercel token in <Link href="/dashboard/settings" className="text-primary hover:underline">Dashboard → Settings → System Integration (Vercel)</Link>.</li>
                   </ul>
                   <p className="pt-1">
                     <Link href="/docs" className="text-primary hover:underline">Full documentation</Link> (see Deploy to Vercel &amp; FAQs in docs).
@@ -400,7 +415,58 @@ export default function ProjectPreviewPage() {
             </CardContent>
           </Card>
 
-          {/* 5. Preview URL (paste for iframe) */}
+          {/* MongoDB collection — align this project to a collection for preview and deployment */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Database className="h-4 w-4" />
+                MongoDB collection
+              </CardTitle>
+              <CardDescription>
+                Align this project with a collection from Settings → Backend connections. Used for preview and deployment so your app connects to the right data. Create collections in Dashboard → Settings if needed.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="mongodb-collection">Collection for this project</Label>
+                <select
+                  id="mongodb-collection"
+                  aria-label="MongoDB collection for this project"
+                  value={project?.mongodbCollectionName ?? ''}
+                  disabled={collectionsLoading || mongodbCollectionSaving}
+                  onChange={async (e) => {
+                    const value = e.target.value || null
+                    if (!projectId) return
+                    setMongodbCollectionSaving(true)
+                    try {
+                      const res = await fetch(`/api/projects/${projectId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mongodbCollectionName: value }),
+                      })
+                      if (!res.ok) throw new Error('Failed to save')
+                      const data = await res.json()
+                      setProject(data)
+                      sonnerToast.success('Collection updated', { description: value ? `This project uses "${value}".` : 'No collection selected.' })
+                    } catch {
+                      sonnerToast.error('Failed to save collection')
+                    } finally {
+                      setMongodbCollectionSaving(false)
+                    }
+                  }}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 dark:bg-black dark:text-white"
+                >
+                  <option value="">None</option>
+                  {collections.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+              {collectionsLoading && <p className="text-xs text-muted-foreground">Loading collections…</p>}
+            </CardContent>
+          </Card>
+
+          {/* 6. Preview URL (paste for iframe) */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Preview URL</CardTitle>

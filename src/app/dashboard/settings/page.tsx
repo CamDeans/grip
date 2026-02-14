@@ -15,9 +15,10 @@ import type { UserSettings, UserSettingsUpdate } from '@/lib/services/settingsSe
 import { useRouter } from 'next/navigation'
 import { 
   ArrowRightOnRectangleIcon, 
-  ShieldExclamationIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface ThemeOption {
   value: string
@@ -59,7 +60,27 @@ export default function SettingsPage() {
   const [githubToken, setGithubToken] = useState('')
   const [hasGithubToken, setHasGithubToken] = useState(false)
   const [githubTokenSaving, setGithubTokenSaving] = useState(false)
+  const [vercelToken, setVercelToken] = useState('')
+  const [vercelTeamId, setVercelTeamId] = useState('')
+  const [hasVercelConnection, setHasVercelConnection] = useState(false)
+  const [vercelTokenSaving, setVercelTokenSaving] = useState(false)
+  const [mongodbUri, setMongodbUri] = useState('')
+  const [hasMongodbConnection, setHasMongodbConnection] = useState(false)
+  const [mongodbTestResult, setMongodbTestResult] = useState<{ ok: boolean; message?: string } | null>(null)
+  const [mongodbSaving, setMongodbSaving] = useState(false)
+  const [newCollectionName, setNewCollectionName] = useState('')
+  const [newCollectionHint, setNewCollectionHint] = useState('')
+  const [createCollectionSubmitting, setCreateCollectionSubmitting] = useState(false)
   const router = useRouter()
+  const [deleteDataOpen, setDeleteDataOpen] = useState(false)
+  const [deleteDataStep, setDeleteDataStep] = useState(1)
+  const [deleteDataConfirm, setDeleteDataConfirm] = useState('')
+  const [deleteDataSubmitting, setDeleteDataSubmitting] = useState(false)
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
+  const [deleteAccountStep, setDeleteAccountStep] = useState(1)
+  const [deleteAccountEmail, setDeleteAccountEmail] = useState('')
+  const [deleteAccountPhrase, setDeleteAccountPhrase] = useState('')
+  const [deleteAccountSubmitting, setDeleteAccountSubmitting] = useState(false)
 
   // Prevent hydration mismatch
   useEffect(() => {
@@ -98,6 +119,8 @@ export default function SettingsPage() {
         if (res.ok) {
           const data = await res.json()
           setHasGithubToken(!!data.hasGithubToken)
+          setHasMongodbConnection(!!data.hasMongodbConnection)
+          setHasVercelConnection(!!data.hasVercelConnection)
         }
       } catch {
         // ignore
@@ -155,6 +178,32 @@ export default function SettingsPage() {
       })
     } finally {
       setGithubTokenSaving(false)
+    }
+  }
+
+  const saveVercelToken = async () => {
+    setVercelTokenSaving(true)
+    try {
+      const res = await fetch('/api/user/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vercelToken: vercelToken.trim(), vercelTeamId: vercelTeamId.trim() || undefined }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
+      setHasVercelConnection(true)
+      setVercelToken('')
+      toast({
+        title: 'Vercel connection saved',
+        description: 'Your token is used for Deploy to Vercel from project Preview.',
+      })
+    } catch (error) {
+      toast({
+        title: 'Failed to save Vercel connection',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      })
+    } finally {
+      setVercelTokenSaving(false)
     }
   }
 
@@ -216,29 +265,6 @@ export default function SettingsPage() {
         <CardContent>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="language">Language</Label>
-              <Select
-                value={settings?.preferences.language || 'en'}
-                onValueChange={(value: string) => updateSettings({
-                  preferences: {
-                    ...settings?.preferences,
-                    language: value,
-                    theme: settings?.preferences.theme || 'system'
-                  }
-                })}
-              >
-                <SelectTrigger id="language">
-                  <SelectValue placeholder="Select language" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="es">Spanish</SelectItem>
-                  <SelectItem value="fr">French</SelectItem>
-                  <SelectItem value="de">German</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="timezone">Timezone</Label>
               <Select
                 value={settings?.preferences.timezone || 'UTC'}
@@ -255,10 +281,24 @@ export default function SettingsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="UTC">UTC</SelectItem>
-                  <SelectItem value="America/New_York">Eastern Time</SelectItem>
-                  <SelectItem value="America/Chicago">Central Time</SelectItem>
-                  <SelectItem value="America/Denver">Mountain Time</SelectItem>
-                  <SelectItem value="America/Los_Angeles">Pacific Time</SelectItem>
+                  <SelectItem value="America/New_York">Eastern (US)</SelectItem>
+                  <SelectItem value="America/Chicago">Central (US)</SelectItem>
+                  <SelectItem value="America/Denver">Mountain (US)</SelectItem>
+                  <SelectItem value="America/Los_Angeles">Pacific (US)</SelectItem>
+                  <SelectItem value="America/Phoenix">Arizona</SelectItem>
+                  <SelectItem value="America/Anchorage">Alaska</SelectItem>
+                  <SelectItem value="Pacific/Honolulu">Hawaii</SelectItem>
+                  <SelectItem value="Europe/London">London</SelectItem>
+                  <SelectItem value="Europe/Paris">Paris</SelectItem>
+                  <SelectItem value="Europe/Berlin">Berlin</SelectItem>
+                  <SelectItem value="Europe/Amsterdam">Amsterdam</SelectItem>
+                  <SelectItem value="Asia/Tokyo">Tokyo</SelectItem>
+                  <SelectItem value="Asia/Shanghai">Shanghai</SelectItem>
+                  <SelectItem value="Asia/Singapore">Singapore</SelectItem>
+                  <SelectItem value="Asia/Kolkata">India</SelectItem>
+                  <SelectItem value="Australia/Sydney">Sydney</SelectItem>
+                  <SelectItem value="Australia/Melbourne">Melbourne</SelectItem>
+                  <SelectItem value="Pacific/Auckland">Auckland</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -278,9 +318,9 @@ export default function SettingsPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Project Status Updates</Label>
+                  <Label>Project & build updates</Label>
                   <p className="text-sm text-text-secondary">
-                    Receive notifications about project status changes
+                    Get notified when projects are created and when automated builds succeed or fail (shown in the bell icon).
                   </p>
                 </div>
                 <Switch
@@ -292,9 +332,9 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Time Tracking Reminders</Label>
+                  <Label>Time tracking reminders</Label>
                   <p className="text-sm text-text-secondary">
-                    Get reminders about time tracking
+                    Remind you to log time when working on projects (if time tracking is enabled).
                   </p>
                 </div>
                 <Switch
@@ -306,9 +346,9 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Email Notifications</Label>
+                  <Label>Email notifications</Label>
                   <p className="text-sm text-text-secondary">
-                    Receive notifications via email
+                    Send important alerts (e.g. build failures, project updates) to your email when enabled.
                   </p>
                 </div>
                 <Switch
@@ -462,31 +502,194 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h4 className="text-base font-medium">Delete Account Data</h4>
+                <h4 className="text-base font-medium">Delete all data</h4>
                 <p className="text-sm text-text-secondary">
-                  Delete all your account data and settings
+                  Permanently delete all your projects, chat history, build logs, and related data. Your account stays; you can continue using GRIP.
                 </p>
               </div>
               <Button
                 variant="outline"
                 className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => {
-                  toast({
-                    title: "This is a demo feature",
-                    description: "In a production environment, this would delete your account data after confirmation.",
-                  });
+                  setDeleteDataStep(1)
+                  setDeleteDataConfirm('')
+                  setDeleteDataOpen(true)
                 }}
                 icon={<ExclamationTriangleIcon className="h-5 w-5" />}
               >
                 Delete Data
               </Button>
             </div>
+            <div className="flex justify-between items-center border-t border-border pt-6">
+              <div>
+                <h4 className="text-base font-medium">Delete account</h4>
+                <p className="text-sm text-text-secondary">
+                  Permanently delete your account and all data. You will need to sign up again to use GRIP.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => {
+                  setDeleteAccountStep(1)
+                  setDeleteAccountEmail('')
+                  setDeleteAccountPhrase('')
+                  setDeleteAccountOpen(true)
+                }}
+                icon={<TrashIcon className="h-5 w-5" />}
+              >
+                Delete Account
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={deleteDataOpen} onOpenChange={setDeleteDataOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete all data</DialogTitle>
+          </DialogHeader>
+          {deleteDataStep === 1 ? (
+            <>
+              <p className="text-sm text-text-secondary mb-4">
+                This will permanently delete all your projects, chat history, build logs, analyses, and related data. This cannot be undone. Your account will remain so you can continue using GRIP.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <Button variant="secondary" onClick={() => setDeleteDataOpen(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={() => setDeleteDataStep(2)}>Continue</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-text-secondary mb-2">Type <strong>DELETE</strong> to confirm.</p>
+              <Input
+                value={deleteDataConfirm}
+                onChange={(e) => setDeleteDataConfirm(e.target.value)}
+                placeholder="DELETE"
+                className="mb-4 font-mono"
+                autoComplete="off"
+              />
+              <div className="flex gap-2 justify-end">
+                <Button variant="secondary" onClick={() => { setDeleteDataStep(1); setDeleteDataConfirm('') }}>Back</Button>
+                <Button
+                  variant="destructive"
+                  disabled={deleteDataSubmitting || deleteDataConfirm !== 'DELETE'}
+                  onClick={async () => {
+                    setDeleteDataSubmitting(true)
+                    try {
+                      const res = await fetch('/api/user/delete-data', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ confirmPhrase: deleteDataConfirm }),
+                      })
+                      const data = await res.json().catch(() => ({}))
+                      if (!res.ok) {
+                        toast({ title: 'Failed', description: data.error || 'Could not delete data', variant: 'destructive' })
+                        return
+                      }
+                      toast({ title: 'Data deleted', description: 'All your data has been permanently deleted.' })
+                      setDeleteDataOpen(false)
+                      setDeleteDataStep(1)
+                      setDeleteDataConfirm('')
+                      router.refresh()
+                    } finally {
+                      setDeleteDataSubmitting(false)
+                    }
+                  }}
+                >
+                  {deleteDataSubmitting ? 'Deleting…' : 'Delete my data'}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete account</DialogTitle>
+          </DialogHeader>
+          {deleteAccountStep === 1 ? (
+            <>
+              <p className="text-sm text-text-secondary mb-4">
+                This will permanently delete your account and all associated data. You will need to sign up again to use GRIP. This cannot be undone.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <Button variant="secondary" onClick={() => setDeleteAccountOpen(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={() => setDeleteAccountStep(2)}>Continue</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-text-secondary mb-2">Enter your account email and type <strong>DELETE MY ACCOUNT</strong> to confirm.</p>
+              <div className="space-y-2 mb-4">
+                <Label>Your email</Label>
+                <Input
+                  type="email"
+                  value={deleteAccountEmail}
+                  onChange={(e) => setDeleteAccountEmail(e.target.value)}
+                  placeholder={session?.user?.email ?? 'you@example.com'}
+                  className="font-mono"
+                  autoComplete="email"
+                />
+                <Label>Type: DELETE MY ACCOUNT</Label>
+                <Input
+                  value={deleteAccountPhrase}
+                  onChange={(e) => setDeleteAccountPhrase(e.target.value)}
+                  placeholder="DELETE MY ACCOUNT"
+                  className="font-mono"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="secondary" onClick={() => { setDeleteAccountStep(1); setDeleteAccountEmail(''); setDeleteAccountPhrase('') }}>Back</Button>
+                <Button
+                  variant="destructive"
+                  disabled={
+                    deleteAccountSubmitting ||
+                    deleteAccountPhrase !== 'DELETE MY ACCOUNT' ||
+                    (deleteAccountEmail.trim().toLowerCase() !== (session?.user?.email ?? '').trim().toLowerCase())
+                  }
+                  onClick={async () => {
+                    setDeleteAccountSubmitting(true)
+                    try {
+                      const res = await fetch('/api/user/delete-account', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          email: deleteAccountEmail.trim(),
+                          confirmPhrase: deleteAccountPhrase,
+                        }),
+                      })
+                      const data = await res.json().catch(() => ({}))
+                      if (!res.ok) {
+                        toast({ title: 'Failed', description: data.error || 'Could not delete account', variant: 'destructive' })
+                        return
+                      }
+                      toast({ title: 'Account deleted', description: 'Your account has been permanently deleted.' })
+                      setDeleteAccountOpen(false)
+                      setDeleteAccountStep(1)
+                      setDeleteAccountEmail('')
+                      setDeleteAccountPhrase('')
+                      await signOut({ redirect: false })
+                      router.push('/login')
+                    } finally {
+                      setDeleteAccountSubmitting(false)
+                    }
+                  }}
+                >
+                  {deleteAccountSubmitting ? 'Deleting…' : 'Delete my account'}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
@@ -643,11 +846,284 @@ export default function SettingsPage() {
                 </Button>
               </div>
             </div>
+
             <div>
-              <GradientTitle as="h4">MongoDB Integration</GradientTitle>
-              <p className="text-sm text-text-secondary">
-                Connected via Environment Configuration
+              <GradientTitle as="h4">Vercel (Deploy)</GradientTitle>
+              <p className="text-sm text-text-secondary mt-1 mb-2">
+                One token for <strong>all your projects</strong>. Required for Deploy to Vercel from project Preview. Create a token at{' '}
+                <a
+                  href="https://vercel.com/account/tokens"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  vercel.com/account/tokens
+                </a>
+                . If you use a team, paste your <strong>Team ID</strong> below (Vercel → Team Settings → General).
               </p>
+              <div className="flex flex-wrap items-end gap-2 space-y-2">
+                <div className="flex-1 min-w-[200px] space-y-2">
+                  <Label htmlFor="vercelToken">Token</Label>
+                  <Input
+                    id="vercelToken"
+                    type="password"
+                    placeholder={hasVercelConnection ? '••••••••••••' : 'vercel_...'}
+                    value={vercelToken}
+                    onChange={(e) => setVercelToken(e.target.value)}
+                    className="bg-black text-white border border-input hover:border-accent focus:ring-ring focus:ring-offset-0 font-mono text-sm"
+                    autoComplete="off"
+                  />
+                  {hasVercelConnection && (
+                    <p className="text-xs text-success">Token saved. Enter a new token above to replace.</p>
+                  )}
+                </div>
+                <div className="w-full sm:w-auto min-w-[140px] space-y-2">
+                  <Label htmlFor="vercelTeamId">Team ID (optional)</Label>
+                  <Input
+                    id="vercelTeamId"
+                    type="text"
+                    placeholder="team_..."
+                    value={vercelTeamId}
+                    onChange={(e) => setVercelTeamId(e.target.value)}
+                    className="bg-black text-white border border-input hover:border-accent focus:ring-ring focus:ring-offset-0 font-mono text-sm"
+                    autoComplete="off"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={saveVercelToken}
+                  disabled={vercelTokenSaving || !vercelToken.trim()}
+                  className="shrink-0"
+                >
+                  {vercelTokenSaving ? 'Saving...' : 'Save Vercel connection'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <GradientTitle as="h2">Backend connections</GradientTitle>
+          <CardDescription>
+            Connect your own database for fullstack builds. When you build in Develop, GRIP uses this so it can suggest MongoDB and MONGODB_URI. Create collections below with minimal input—no dev experience required.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            <div>
+              <GradientTitle as="h4">MongoDB</GradientTitle>
+              <p className="text-sm text-text-secondary mt-1 mb-3">
+                One connection for <strong>all your projects</strong>. Used for fullstack builds and for creating collections below. Get a free database and connection string from MongoDB Atlas:
+              </p>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-text-secondary mb-4 pl-1">
+                <li>
+                  Create a free account and cluster at{' '}
+                  <a
+                    href="https://www.mongodb.com/cloud/atlas/register"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    MongoDB Atlas → Sign up
+                  </a>
+                  .
+                </li>
+                <li>
+                  In Atlas, open your cluster and click <strong>Connect</strong> → <strong>Connect your application</strong> → copy the connection string (it starts with <code className="text-xs bg-muted px-1 rounded">mongodb+srv://</code>).
+                </li>
+                <li>
+                  Replace <code className="text-xs bg-muted px-1 rounded">&lt;password&gt;</code> in the string with your database user password. Need help? See{' '}
+                  <a
+                    href="https://www.mongodb.com/docs/atlas/getting-started/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    Atlas Getting Started
+                  </a>
+                  .
+                </li>
+                <li>
+                  Paste the connection string below, click <strong>Test</strong>, then <strong>Save connection</strong>.
+                </li>
+              </ol>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="flex-1 min-w-[200px] space-y-2">
+                  <Label htmlFor="mongodbUri">Connection string</Label>
+                  <Input
+                    id="mongodbUri"
+                    type="password"
+                    placeholder={hasMongodbConnection ? '••••••••••••' : 'mongodb+srv://... or mongodb://...'}
+                    value={mongodbUri}
+                    onChange={(e) => { setMongodbUri(e.target.value); setMongodbTestResult(null) }}
+                    className="bg-black text-white border border-input hover:border-accent focus:border-ring focus:ring-ring focus:ring-offset-0 font-mono text-sm"
+                    autoComplete="off"
+                  />
+                  {hasMongodbConnection && (
+                    <p className="text-xs text-success">Connection saved. Enter a new URI above to replace.</p>
+                  )}
+                  {mongodbTestResult && (
+                    <p className={`text-xs ${mongodbTestResult.ok ? 'text-success' : 'text-destructive'}`}>
+                      {mongodbTestResult.ok ? mongodbTestResult.message ?? 'Connection successful' : mongodbTestResult.message ?? 'Connection failed'}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  {hasMongodbConnection && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={async () => {
+                          setMongodbTestResult(null)
+                          try {
+                            const res = await fetch('/api/user/backend-connections/test-saved')
+                            const data = await res.json()
+                            setMongodbTestResult({ ok: data.ok, message: data.ok ? data.message : data.error })
+                          } catch {
+                            setMongodbTestResult({ ok: false, message: 'Request failed' })
+                          }
+                        }}
+                      >
+                        Test saved
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch('/api/user/settings', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ mongodbUri: '' }),
+                            })
+                            if (!res.ok) throw new Error('Failed to remove')
+                            setHasMongodbConnection(false)
+                            setMongodbTestResult(null)
+                            toast({ title: 'Connection removed', description: 'You can add a new connection anytime.' })
+                          } catch {
+                            toast({ title: 'Failed to remove connection', variant: 'destructive' })
+                          }
+                        }}
+                      >
+                        Remove connection
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={async () => {
+                      const uri = mongodbUri.trim()
+                      if (!uri) {
+                        toast({ title: 'Enter a connection string to test', variant: 'destructive' })
+                        return
+                      }
+                      try {
+                        const res = await fetch('/api/user/backend-connections/test', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ mongodbUri: uri }),
+                        })
+                        const data = await res.json()
+                        setMongodbTestResult({ ok: data.ok, message: data.message ?? data.error })
+                      } catch {
+                        setMongodbTestResult({ ok: false, message: 'Request failed' })
+                      }
+                    }}
+                  >
+                    Test
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      if (!mongodbUri.trim()) {
+                        toast({ title: 'Enter a connection string', variant: 'destructive' })
+                        return
+                      }
+                      setMongodbSaving(true)
+                      try {
+                        const res = await fetch('/api/user/settings', {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ mongodbUri: mongodbUri.trim() }),
+                        })
+                        if (!res.ok) throw new Error('Failed to save')
+                        setHasMongodbConnection(true)
+                        setMongodbUri('')
+                        setMongodbTestResult(null)
+                        toast({ title: 'MongoDB connection saved', description: 'Use "Create collection" below to add collections.' })
+                      } catch {
+                        toast({ title: 'Failed to save connection', variant: 'destructive' })
+                      } finally {
+                        setMongodbSaving(false)
+                      }
+                    }}
+                    disabled={mongodbSaving || !mongodbUri.trim()}
+                  >
+                    {mongodbSaving ? 'Saving...' : 'Save connection'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-border pt-6">
+              <GradientTitle as="h4">Create a collection</GradientTitle>
+              <p className="text-sm text-text-secondary mt-1 mb-2">
+                After saving a connection above, you can create collections here. GRIP will add them to your database—no code required.
+              </p>
+              <p className="text-sm text-text-secondary mb-3">
+                Enter a name (e.g. <strong>users</strong>, <strong>posts</strong>, <strong>tasks</strong>). Optionally describe what the collection stores; GRIP can use that when building your app in Develop.
+              </p>
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="space-y-2 min-w-[140px]">
+                  <Label>Collection name</Label>
+                  <Input
+                    placeholder="e.g. users"
+                    value={newCollectionName}
+                    onChange={(e) => setNewCollectionName(e.target.value.replace(/\s/g, '_'))}
+                    className="font-mono"
+                  />
+                </div>
+                <div className="flex-1 min-w-[180px] space-y-2">
+                  <Label>What it stores (optional)</Label>
+                  <Input
+                    placeholder="e.g. user profiles and preferences"
+                    value={newCollectionHint}
+                    onChange={(e) => setNewCollectionHint(e.target.value)}
+                  />
+                </div>
+                <Button
+                  disabled={!hasMongodbConnection || !newCollectionName.trim() || createCollectionSubmitting}
+                  onClick={async () => {
+                    setCreateCollectionSubmitting(true)
+                    try {
+                      const res = await fetch('/api/user/backend-connections/mongodb/collections', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ collectionName: newCollectionName.trim(), schemaHint: newCollectionHint.trim() || undefined }),
+                      })
+                      const data = await res.json()
+                      if (!res.ok) {
+                        toast({ title: 'Failed', description: data.error ?? 'Could not create collection', variant: 'destructive' })
+                        return
+                      }
+                      toast({ title: 'Collection created', description: data.message ?? `"${newCollectionName}" is ready.` })
+                      setNewCollectionName('')
+                      setNewCollectionHint('')
+                    } finally {
+                      setCreateCollectionSubmitting(false)
+                    }
+                  }}
+                >
+                  {createCollectionSubmitting ? 'Creating…' : 'Create collection'}
+                </Button>
+              </div>
+              {!hasMongodbConnection && (
+                <p className="text-xs text-text-secondary mt-2">Save a MongoDB connection above first, then you can create collections here.</p>
+              )}
             </div>
           </div>
         </CardContent>

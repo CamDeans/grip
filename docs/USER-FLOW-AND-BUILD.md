@@ -7,7 +7,7 @@ We did **not** change the core flow. We added **Preview**, **Export to GitHub**,
 ## 1. Create project
 
 - **New Project** → **Details** (title, description) → **Context** (ideation: goals, target audience, key features, technical requirements).
-- **Repository** is optional at creation; you can link it later in **Settings**.
+- **Repository** is required at creation; GRIP analyzes it and uses its structure and patterns. You can update the repo link later in **Settings**.
 - On submit: project is created; if a repo was set, analysis runs in the background. You land on the **project Overview**.
 
 ---
@@ -48,6 +48,6 @@ We did **not** change the core flow. We added **Preview**, **Export to GitHub**,
 
 ## 4. Summary
 
-- **Flow**: Create project (ideation ± repo) → **Planning** (plan + optional file generation) → **Chat** (implementation guidance with full ideation context) + **Repo** (view/edit/search/summarize) → **Preview** (see it run) → **Export / Deploy** when ready.
+- **Flow**: Create project (name, description, required repo, ideation) → GRIP analyzes repo and generates plan automatically → **Develop** (chat; code applies and build runs automatically) + **Repo** (view/analyze) + **Settings** (ideation, repo link) → **Preview** (see it run) → **Export / Deploy** when ready. All tabs (Overview, Settings, Repo, Develop, Preview) are always visible.
 - **We added**: Preview tab, Export to GitHub, Deploy to Vercel, Repo edit/search/summarize, completion status. We did **not** replace the existing ideation → planning → chat → build flow.
 - **To make the build meet your full ideation**: Update **Settings** (ideation + repo), regenerate **Planning** when needed, use **Chat** for next steps, edit in **Repo**, check **Preview**, and repeat until it matches; then Export and Deploy.

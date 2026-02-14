@@ -25,7 +25,7 @@ Welcome to G.R.I.P. (Guided Real-time Intelligence Partner), your AI-powered dev
 
 - Modern web browser (Chrome, Firefox, Safari, Edge)
 - Internet connection
-- GitHub account (for repository analysis)
+- GitHub account (for repository analysis; a repo is required when creating a project)
 
 ## Creating Projects
 
@@ -35,10 +35,10 @@ Welcome to G.R.I.P. (Guided Real-time Intelligence Partner), your AI-powered dev
 2. Fill in the project details:
    - **Title**: A descriptive name for your project
    - **Description**: A brief overview of what you're building
-   - **Repository URL** (optional): Link to a GitHub repository for analysis
-   - **Ideation** (optional): Project goals, target audience, key features, and technical requirements
+   - **GitHub Repository** (required): Select a public GitHub repo so GRIP can analyze it and use its structure and patterns. Use Generate Keywords and Search on the form to find one.
+   - **Ideation**: Project goals, target audience, key features, and technical requirements. Plain language works for everyone; you can also add technical details (stack, architecture, acceptance criteria) for higher-level projects.
 
-3. Click "Create Project" to proceed.
+3. Click "Create Project" to proceed. GRIP analyzes the repo and generates a plan automatically.
 
 ### Project Types
 
@@ -50,13 +50,14 @@ G.R.I.P. supports various project types, including:
 - Full-stack applications
 - Libraries and frameworks
 
-### Importing Existing Projects
+### Repo Analysis and Automation
 
-To import an existing project:
+When you create a project with a GitHub repo:
 
-1. Enter the GitHub repository URL during project creation.
-2. G.R.I.P. will analyze the repository structure and codebase.
-3. Once analysis is complete, you can interact with the AI assistant to continue development.
+1. GRIP analyzes the repository structure and codebase automatically.
+2. A development plan (phases and tasks) is generated automatically.
+3. In the **Develop** tab, code from chat is applied to the project automatically and the build runs automatically—no manual save or run steps. Progress syncs on the **Overview** tab.
+4. Use the **Settings**, **Repo**, **Develop**, and **Preview** tabs anytime; all tabs are always visible.
 
 ## Chat Interface
 

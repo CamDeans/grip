@@ -135,7 +135,9 @@ function buildChecklistSummaryFromStructuredAnalysis(sa: any): string {
   return lines.join('\n')
 }
 
-export async function generateDevelopmentPlan(projectId: string): Promise<GenerateDevelopmentPlanResult> {
+export type GenerateDevelopmentPlanOptions = { tokenBudgetHint?: string }
+
+export async function generateDevelopmentPlan(projectId: string, options?: GenerateDevelopmentPlanOptions): Promise<GenerateDevelopmentPlanResult> {
   try {
     console.log(`Generating development plan for project: ${projectId}`)
     const db = (await clientPromise).db()
@@ -165,8 +167,8 @@ export async function generateDevelopmentPlan(projectId: string): Promise<Genera
     // Get project structure
     const structure = await getOrCreateProjectStructure(projectId)
     
-    // Generate initial plan (with checklist so AI aligns phases/tasks)
-    const { plan, totalTokens } = await createInitialPlan(projectId, project, structure, checklistSummary)
+    // Generate initial plan (with checklist so AI aligns phases/tasks; token budget so plan fits user's allowance)
+    const { plan, totalTokens } = await createInitialPlan(projectId, project, structure, checklistSummary, options?.tokenBudgetHint)
 
     // Add resource requirements
     await addResourceRequirements(plan)
@@ -200,12 +202,14 @@ export async function generateDevelopmentPlan(projectId: string): Promise<Genera
 /**
  * Create an initial development plan
  * @param checklistSummary - From tree-sitter structured analysis; aligns phases/tasks with routes, entrypoints, capabilities
+ * @param tokenBudgetHint - Optional prompt fragment so plan fits within user's remaining token allowance
  */
 async function createInitialPlan(
   projectId: string,
   project: any,
   structure: IProjectStructureData,
-  checklistSummary?: string
+  checklistSummary?: string,
+  tokenBudgetHint?: string
 ): Promise<{ plan: DevelopmentPlan; totalTokens: number }> {
   const phases: Phase[] = [
     createPhase('1', 'Setup', 'Project setup and configuration', 0),
@@ -215,7 +219,7 @@ async function createInitialPlan(
     createPhase('5', 'Deployment', 'Deployment preparation and launch', 4)
   ]
 
-  const totalTokens = await addTasksToPhases(phases, project, structure, checklistSummary)
+  const totalTokens = await addTasksToPhases(phases, project, structure, checklistSummary, tokenBudgetHint)
 
   const plan: DevelopmentPlan = {
     projectId: new ObjectId(projectId),
@@ -253,7 +257,8 @@ async function addTasksToPhases(
   phases: Phase[],
   project: any,
   structure: IProjectStructureData,
-  checklistSummary?: string
+  checklistSummary?: string,
+  tokenBudgetHint?: string
 ): Promise<number> {
   try {
     // Prefer enhanced build requirements (from ideation enhancement step) so AI gets best input
@@ -278,6 +283,7 @@ ${buildReqsText ? `\nBuild requirements (use these for task scope and quality):\
 ${checklistBlock}
 
 ${MANDATORY_GRIP_BUILD_QUALITY}
+${tokenBudgetHint ? `\n${tokenBudgetHint}\n` : ''}
 
 Here are the phases I've defined:
 ${phases.map(phase => `- Phase ${phase.id}: ${phase.name} - ${phase.description}`).join('\n')}

@@ -21,7 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 const adminSections = [
   { id: 'revenue', title: 'Revenue', description: 'View revenue and subscription metrics', icon: <DollarSign className="h-6 w-6 text-primary" />, href: '/dashboard/admin/revenue' },
-  { id: 'payouts', title: 'Payouts', description: 'Manage payouts (55/45 split)', icon: <DollarSign className="h-6 w-6 text-accent-blue" />, href: '/dashboard/admin/payouts' },
+  { id: 'payouts', title: 'Payouts', description: 'Manage payouts (45/55 split)', icon: <DollarSign className="h-6 w-6 text-accent-blue" />, href: '/dashboard/admin/payouts' },
   { id: 'users', title: 'Users', description: 'View and manage users', icon: <Users className="h-6 w-6 text-success" />, href: '/dashboard/admin/users' },
   { id: 'valued-testers', title: 'Valued Testers', description: 'Add or remove valued testers (10 max)', icon: <Heart className="h-6 w-6 text-destructive" />, href: '/dashboard/admin/valued-testers' },
   { id: 'support', title: 'Support', description: 'View and manage support tickets', icon: <MessageSquare className="h-6 w-6 text-primary" />, href: '/dashboard/admin/support' },

@@ -113,6 +113,9 @@ export async function PATCH(
     }
     if (body.exportedRepoUrl !== undefined) update.exportedRepoUrl = body.exportedRepoUrl
     if (body.deployedUrl !== undefined) update.deployedUrl = body.deployedUrl
+    if (body.mongodbCollectionName !== undefined) {
+      update.mongodbCollectionName = typeof body.mongodbCollectionName === 'string' ? body.mongodbCollectionName.trim() || null : null
+    }
 
     await db.collection('projects').updateOne(
       { _id: new ObjectId(id) },

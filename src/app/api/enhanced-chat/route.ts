@@ -3,7 +3,8 @@ import { ObjectId } from 'mongodb'
 import clientPromise from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { requireAppAccess, requireTokenBalance } from '@/lib/access'
+import { requireAppAccess, requireTokenBalance, getAppAccess } from '@/lib/access'
+import { buildTokenBudgetPromptFragment } from '@/lib/constants/tokenBudgetPlan'
 import { addTokenUsage } from '@/lib/tokenUsage'
 import { anthropicService } from '@/lib/services/anthropicService'
 import { getOrBuildRepoContextDocument } from '@/lib/services/repoContextService'
@@ -13,7 +14,7 @@ import { getProjectState, updateProjectState, recordFileSaveAndAdvanceStep } fro
 import { createProjectFolder, saveProjectFile } from '@/lib/services/gripProjectActions'
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 import { runMainProject } from '@/lib/runMainProject'
-import { MANDATORY_GRIP_BUILD_QUALITY } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP } from '@/lib/constants/buildQualityPlan'
 import { detectRepoType, getMandatoryRepoTypeRules } from '@/lib/repoTypeDetection'
 
 // Phase 2, Step 2: Create Project Data Fetcher for enhanced chat
@@ -55,7 +56,9 @@ const buildSystemPrompt = (
   likelyRemaining?: string,
   lastAttemptSummary?: string,
   userUploadsSummary?: string,
-  repoTypeRules?: string
+  repoTypeRules?: string,
+  tokenBudgetHint?: string,
+  userHasMongoDB?: boolean
 ) => {
   let prompt = `You are G.R.I.P. (Guided Real-time Intelligence Partner) designed to help with software development projects. 
 You are G.R.I.P., an AI assistant built specifically for helping developers automate project creation. Do not claim to be or reference any other AI product or provider.
@@ -82,6 +85,8 @@ When you provide a README (at project completion OR when the user asks for a REA
 - ALWAYS provide: (1) exact file path/filename for every code block (see below), (2) a clear "next step" that matches automation (use Run in StackBlitz to preview or paste errors), (3) never ask the user to "save the block above" as the primary step—the system applies files automatically.
 - NEVER use generic filenames like snippet.json, snippet.txt, or any "snippet.*". Always use the real file path (e.g. package.json, src/App.tsx, .env, .env.local, README.txt). The path above the block is used to apply the file automatically; if you omit it, the user gets a generic name. It is MANDATORY to put the correct filename for every code block (e.g. .env for env vars, .env.local for local overrides, README.txt for plain text readme).
 
+${userHasMongoDB ? `## User backend: MongoDB connected
+The user has connected their own MongoDB database in Settings → Backend connections. When building fullstack apps, use \`MONGODB_URI\` from environment variables and wire the app to MongoDB. They can create collections in Settings; suggest using their connected DB for data persistence.\n\n` : ''}
 ## User instructions to remember (GRIP memory)
 - When the user asks you to **remember** something for future messages (e.g. "remember that I prefer TypeScript", "from now on always use Tailwind", "don't suggest npm install unless I ask"), you MUST save it so it applies in all future responses. Output a **grip-memory** block with a single instruction. Format exactly:
 \`\`\`grip-memory
@@ -109,6 +114,11 @@ When you provide a README (at project completion OR when the user asks for a REA
 Use plain text for each field; you may merge the user's plain-English answer with existing project info. The system will save this to the project so your next responses use it. After the block, say briefly in plain language that you've updated the project details with what they shared so future code will match their goals better. Do not ask the user to fill a form—you infer and convert their words into these fields.
 
 `
+
+  // Token budget: stay within user's remaining tokens (Starter/Pro/Team)
+  if (tokenBudgetHint && tokenBudgetHint.trim()) {
+    prompt += `\n${tokenBudgetHint}\n\n`
+  }
 
   // Add project context if available
   if (projectContext) {
@@ -213,6 +223,10 @@ ${userUploadsSummary}
 
   // Mandatory build quality so GRIP follows same bar (latest libs, modern UX/UI, token efficiency)
   prompt += `\n${MANDATORY_GRIP_BUILD_QUALITY}\n\n`
+  // Mandatory package.json and runnable StackBlitz: never blank, never incorrect; deps match code
+  prompt += `\n${MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE}\n\n`
+  // Mandatory .env files and production setup: build .env.example, use GRIP Settings, inform user how to set up and test for production
+  prompt += `\n${MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP}\n\n`
 
   // Development plan (phases and tasks) and file hierarchy so GRIP uses the same plan and paths
   if (planContext) {
@@ -324,6 +338,11 @@ ${userUploadsSummary}
       (Array.isArray(lastRunErrors.errors) && lastRunErrors.errors.some((e: string) => /memory access out of bounds|createHash|metro-file-map/i.test(e)))
     if (isStackBlitzMetroError) {
       prompt += `\nNOTE: This error is a known StackBlitz/WebContainers limitation with Metro (React Native/Expo). The project code is not at fault. Only in this case, tell the user: StackBlitz cannot run this stack in-browser. They can Export to GitHub or download the project and run locally (\`npm install\` then \`npm run dev\`) or in VS Code/Cursor. For web (Next, Vite, CRA), keep directing them to Run in StackBlitz first.\n`
+    }
+    const hasMissingModuleError = /Cannot find module|Module not found|Cannot find package|ERR_MODULE_NOT_FOUND/i.test(raw) ||
+      (Array.isArray(lastRunErrors.errors) && lastRunErrors.errors.some((e: string) => /Cannot find module|Module not found|Cannot find package|ERR_MODULE_NOT_FOUND/i.test(e)))
+    if (hasMissingModuleError) {
+      prompt += `\n**MANDATORY when errors mention a missing module or package:** You MUST add the missing package(s) to package.json (in \`dependencies\` or \`devDependencies\`) and output the COMPLETE package.json in a code block with \`package.json\` on the line above it. Do NOT suggest "run npm install X" or "add this dependency" without providing the full package.json file. Extract the package name from the error (e.g. "Cannot find module 'lodash'" → add "lodash"; "Module not found: Error: Can't resolve 'react-router-dom'" → add "react-router-dom") and include it with a valid semver range (e.g. \`"^6.0.0"\`). Then output the full package.json so the system can apply it and re-run the build.\n`
     }
     prompt += `\n`
   }
@@ -477,6 +496,14 @@ Based on the repository analysis, you can help with:
       const full = (f.path ? `${f.path}/` : '') + (f.filename || '')
       if (full.trim()) prompt += `- ${full.trim()}\n`
     })
+    const hasLockfile = savedFiles.some(
+      (f) => (f.filename || '').toLowerCase() === 'package-lock.json' || (f.filename || '').toLowerCase() === 'yarn.lock' || (f.filename || '').toLowerCase() === 'pnpm-lock.yaml'
+    )
+    if (hasLockfile) {
+      const lockfileName = savedFiles.find((f) => (f.filename || '').toLowerCase() === 'package-lock.json')?.filename ? 'package-lock.json' : savedFiles.find((f) => (f.filename || '').toLowerCase() === 'yarn.lock')?.filename ? 'yarn.lock' : 'pnpm-lock.yaml'
+      const manager = lockfileName === 'package-lock.json' ? 'npm' : lockfileName === 'yarn.lock' ? 'yarn' : 'pnpm'
+      prompt += `\n**Package manager:** This project has \`${lockfileName}\`. Prefer \`${manager}\` and keep dependency version ranges in package.json consistent so install and build succeed in StackBlitz and on export.\n`
+    }
     prompt += `\nWhen the user asks "which files used snippet.txt", "list files that are snippet.txt", "what files were saved as snippet", or similar: list from the above project files any file whose filename is \`snippet.txt\` or starts with \`snippet.\` (e.g. snippet.ts, snippet.json). For each, show the full path (path/filename) so the user can find and rename them in the project. If none exist, say so. This helps the user fix overwritten files.\n\n`
   }
 
@@ -499,10 +526,12 @@ Based on the repository analysis, you can help with:
 - Analyze the current file from context (repository reference or project files). Apply the requested change to that content and output the entire result. If the file is not in context, infer a minimal valid version and state that the file will be applied automatically.
 - After a full-file code block, say one line aligned with automation: "The file above will be applied and the build will run. Use **Run in StackBlitz** to preview or paste errors back." Do NOT say "Save the block above as [filename]"—the system applies it.
 
-## package.json: always provide full file
+## package.json: always provide full file (never blank, never incorrect)
+- **Strengthening rule:** You MUST never output a blank, empty, or invalid package.json. Every package.json MUST be valid JSON with at least \`name\`, \`version\`, and \`scripts\` (dev/start/build) so the project is runnable in StackBlitz. Dependencies MUST include every package the code imports or requires.
 - When the user asks to add a dependency, update scripts, change config, or modify package.json in any way, you MUST output the COMPLETE package.json with the change applied—never "add this to your package.json" or "add this dependency" without providing the full file.
 - Use the project's current package.json from context (repository reference or project files). Merge in the new dependency, script, or config change and output the full JSON in a code block with \`package.json\` (or \`package.json\` on its own line) directly above the block. Preserve existing fields (name, version, other dependencies, etc.); only add or update what is needed.
-- If package.json is not in context, build a minimal valid package.json that includes the requested change (e.g. new dependency or script) and say the user should save it as \`package.json\` in the project root. Always include at least: name, version, and scripts (e.g. dev, start, build) so the project remains runnable.
+- **Reuse repo dependencies for pattern alignment:** When the linked repo uses specific dependencies (e.g. for text-to-image, text-to-video, APIs, SDKs), reuse those **same package names and compatible versions** in the project's package.json so generated code aligns with the repo's patterns. Do not substitute different packages unless the user explicitly asks. Example: if the repo uses \`@fal-ai/client\` or \`replicate\` for image generation, include the same in the project's package.json and match the repo's usage patterns.
+- If package.json is not in context, build a minimal valid package.json that includes the requested change (e.g. new dependency or script). Always include at least: name, version, scripts (e.g. dev, start, build), and every dependency the project code uses—so the project remains runnable and passes \`npm install\` and the build.
 - After outputting package.json, say one line: "The file will be applied and the build will run. Use **Run in StackBlitz** in the Preview tab to preview, or paste any errors here." Do NOT say "save the block as package.json" or "go to Preview and click Run in StackBlitz" as a manual step—the system applies files and runs the build automatically.
 
 ## Code Automation Instructions
@@ -569,7 +598,8 @@ Based on the repository analysis, you can help with:
 
 ## MANDATORY: package.json when directing to StackBlitz or deployment
 - Whenever you (1) tell the user to **test in StackBlitz**, or (2) **finish the build** and inform the user to **test for deployment**, you MUST provide or update **package.json** in a code block with all dependency requirements—never suggest "add this dependency" or "update your package.json" without outputting the full package.json content.
-- Output the complete package.json (path above the block, e.g. \`package.json\`) so the user can save it. Include every dependency the project needs and correct \`scripts\` for \`build\`, \`dev\`, \`start\` (and \`test\` if applicable). This ensures the project runs in StackBlitz and after deployment without missing dependencies.
+- **Never blank, never incorrect:** The package.json you output MUST be valid JSON (no trailing commas, no truncation), MUST include \`name\`, \`version\`, and \`scripts\` with at least \`build\` and one of \`dev\` or \`start\`, and MUST list every npm package the project code imports or requires. This ensures \`npm install\` and the build succeed so the user gets runnable code in StackBlitz.
+- Output the complete package.json (path above the block, e.g. \`package.json\`) so the system can apply it. Include every dependency the project needs and correct \`scripts\` for \`build\`, \`dev\`, \`start\` (and \`test\` if applicable). Missing dependencies are the main reason "Run in StackBlitz" fails—cross-check your generated files and add any missing packages.
 
 ## MANDATORY: README.md — exactly ONE code block (no exceptions)
 - This rule applies whenever you provide a README (when the project is complete OR when the user asks you to build or create a README).
@@ -609,6 +639,13 @@ npm install
 - If your previous response was cut off (e.g. due to token limits), you MUST continue from exactly where you left off on the next user message. Do not start over or repeat what you already said.
 - When continuing after an interruption: (1) Briefly inform the user that an interruption occurred; (2) Reassure them that you did not lose where you were; (3) State clearly that you have picked up where you left off; (4) Confirm that any remaining code and file updates will be completed. Then immediately continue with the next unfinished part (e.g. the next code block, step, or file).
 - Do not ask the user to "ask me to continue"—treat continuation as mandatory whenever your prior reply was incomplete.
+
+## MANDATORY: Phase reversion when user says phases are not met
+- If the user says that GRIP's code is **not meeting phase completions** (e.g. "our project phases say production ready but we are not there", "we are still in phase 3 of 5", "grip code is not meeting the phase completions", "we're stuck in phase 2"), you MUST treat this as a **revert and rerun** instruction. You have **no choice** but to fix until the project aligns with where they are in the build.
+- **Revert to the mentioned phase:** Identify the phase the user indicated (e.g. "phase 3 of 5" → Phase 3). Treat the project as being at that phase. Do not argue or say the project is further along; the user's assessment is final.
+- **Rerun code generation and file updates:** Output ALL code blocks and file updates needed to **complete that phase** (and, in order, each subsequent phase) so the project actually meets the phase standards. Regenerate or update every file that belongs to that phase so the codebase aligns with the current state. Do not suggest manual steps; output full files and apply.
+- **Fix until aligned:** Keep fixing until the build succeeds and the project meets the phase completion criteria. If the user says they are still not at the right phase or not production ready, repeat: revert to the phase they name, rerun code generation for that phase (and following phases), and output complete files until the project aligns. Do not tell the user to "try again" or "run the build"—you output the fixes; the system will apply and run the build.
+- **Acknowledge clearly:** In your response, state: "Reverting to Phase [N]: [name]. I'm regenerating the code and file updates for this phase (and completing through to production ready) so the project aligns. Here are the updated files."
 
 ## General Instructions
 - ALWAYS respond directly to the user's latest message in the context of this conversation. Do not repeat a generic introduction; continue the dialogue.
@@ -1174,6 +1211,10 @@ export async function POST(request: NextRequest) {
     const tokenExhausted = await requireTokenBalance(session)
     if (tokenExhausted) return tokenExhausted
 
+    const access = await getAppAccess(session)
+    const remainingTokens = Math.max(0, (access.tokenAllowance ?? 0) - (access.tokensUsedThisPeriod ?? 0))
+    const tokenBudgetHint = buildTokenBudgetPromptFragment(remainingTokens, access.tier ?? 'starter', 'chat')
+
     const { message, projectId, messages: clientMessages, runAfterApply: runAfterApplyRaw } = await request.json()
 
     if (!projectId || !message) {
@@ -1637,7 +1678,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Build system prompt with context
-    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules)
+    const userDoc = session?.user?.id ? await db.collection('users').findOne({ _id: new ObjectId(session.user.id) }, { projection: { mongodbUri: 1 } }) as { mongodbUri?: string } | null : null
+    const userHasMongoDB = !!(userDoc?.mongodbUri && String(userDoc.mongodbUri).trim())
+    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, tokenBudgetHint, userHasMongoDB)
 
     // Production readiness: fail gracefully when AI is not configured
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
@@ -1673,7 +1716,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const totalTokens = (response.usage?.promptTokens ?? 0) + (response.usage?.completionTokens ?? 0)
+    const totalTokens = response.usage?.totalTokens ?? (response.usage?.promptTokens ?? 0) + (response.usage?.completionTokens ?? 0)
     if (totalTokens > 0 && session.user?.id) {
       addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('Enhanced chat: failed to record token usage', err)
@@ -1809,8 +1852,9 @@ export async function POST(request: NextRequest) {
     const MAX_BUILD_FIX_ATTEMPTS = 5
     let lastAppliedPaths = appliedPaths
     let buildRunCount = 0
+    let lastRunOutput = ''
 
-    const runBuildAndPersistErrors = async (): Promise<{ success: boolean; errors: string[] }> => {
+    const runBuildAndPersistErrors = async (): Promise<{ success: boolean; errors: string[]; output: string }> => {
       const runResult = await runMainProject(projectId, isSandbox)
       if (!runResult.success && runResult.errors.length > 0) {
         const lastRunErrorsPayload = {
@@ -1831,7 +1875,7 @@ export async function POST(request: NextRequest) {
           { $unset: { lastRunErrors: '' }, $set: { updatedAt: new Date() } }
         )
       }
-      return { success: runResult.success, errors: runResult.errors }
+      return { success: runResult.success, errors: runResult.errors, output: runResult.output ?? '' }
     }
 
     if (runAfterApply && appliedPaths.length > 0) {
@@ -1845,6 +1889,7 @@ export async function POST(request: NextRequest) {
 
         let result = await runBuildAndPersistErrors()
         buildRan = true
+        lastRunOutput = result.output ?? ''
         buildSucceeded = result.success && codeBreakMessages.length === 0
         runErrors = result.errors
         if (codeBreakMessages.length > 0) runErrors = [...runErrors, ...codeBreakMessages]
@@ -1874,10 +1919,10 @@ export async function POST(request: NextRequest) {
             { role: 'assistant' as const, content: aiMessage },
             { role: 'user' as const, content: buildFailedUserMessage },
           ]
-          const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules)
+          const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, tokenBudgetHint, userHasMongoDB)
 
           const responseRetry = await anthropicService.createMessage(historyForRetry, { system: systemPromptRetry })
-          const tokensRetry = (responseRetry.usage?.promptTokens ?? 0) + (responseRetry.usage?.completionTokens ?? 0)
+          const tokensRetry = responseRetry.usage?.totalTokens ?? (responseRetry.usage?.promptTokens ?? 0) + (responseRetry.usage?.completionTokens ?? 0)
           if (tokensRetry > 0 && session.user?.id) {
             addTokenUsage(session.user.id, tokensRetry).catch(() => {})
           }
@@ -1963,6 +2008,7 @@ export async function POST(request: NextRequest) {
           const codeBreakMessagesRetry = codeBreakForRetry.flatMap((e) => e.issues.map((i) => `[${e.path}] ${i}`))
           result = await runBuildAndPersistErrors()
           buildRunCount++
+          lastRunOutput = result.output ?? ''
           buildSucceeded = result.success && codeBreakMessagesRetry.length === 0
           runErrors = result.errors
           if (codeBreakMessagesRetry.length > 0) runErrors = [...runErrors, ...codeBreakMessagesRetry]
@@ -1989,6 +2035,30 @@ export async function POST(request: NextRequest) {
       if (runErrors.length > 0) {
         const errorBlock = '\n\n**Build errors:**\n```\n' + runErrors.join('\n').slice(0, 8000) + (runErrors.join('\n').length > 8000 ? '\n...(truncated)' : '') + '\n```'
         aiMessage = aiMessage + errorBlock
+      }
+      // Append build log (stdout/stderr from npm install + build) so user sees full outcome in chat
+      if (lastRunOutput.trim()) {
+        const BUILD_LOG_MAX = 6000
+        const logTrimmed = lastRunOutput.length > BUILD_LOG_MAX
+          ? lastRunOutput.slice(-BUILD_LOG_MAX)
+          : lastRunOutput
+        const logSuffix = lastRunOutput.length > BUILD_LOG_MAX ? '\n...(earlier output truncated)' : ''
+        const logBlock = '\n\n**Build log:**\n```\n' + logTrimmed + logSuffix + '\n```'
+        aiMessage = aiMessage + logBlock
+      }
+      // Create in-app notification so user sees build outcome in the bell
+      if (session?.user?.email && buildRan) {
+        const { createNotification } = await import('@/lib/notifications')
+        await createNotification({
+          userId: session.user.email,
+          type: buildSucceeded ? 'build_success' : 'build_failure',
+          title: buildSucceeded ? 'Build succeeded' : 'Build reported errors',
+          message: buildSucceeded
+            ? `Your project build completed successfully. Check the chat for details.`
+            : `The automated build reported errors. GRIP can fix them—check the chat for the error log.`,
+          projectId: String(projectId),
+          priority: buildSucceeded ? 'low' : 'medium',
+        })
       }
     }
 

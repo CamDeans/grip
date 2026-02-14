@@ -17,8 +17,8 @@ Dashboard → New Project → [Project Home] → Repo (Reference) → Plan → D
 - Click a project → Project Home (overview).
 
 ### 2. **New Project** (`/dashboard/projects/new`)
-- One flow: **Name + description** → **Link repo** (owner/name or URL) → **Ideation** (goals, audience, features, tech).
-- On create → redirect to **Project Home** for that project.
+- One flow: **Name + description** → **Select GitHub repo** (required; use Generate Keywords and Search) → **Ideation** (goals, audience, features, tech). A repo is required so GRIP can analyze it and use its structure and patterns.
+- On create → redirect to **Project Home** for that project. Repo analysis and plan generation run automatically.
 
 ### 3. **Project Home — Overview** (`/dashboard/projects/[id]`)
 - **One clear purpose**: "Here’s your project; here’s your next step."
@@ -43,7 +43,7 @@ Dashboard → New Project → [Project Home] → Repo (Reference) → Plan → D
 - Single chat experience (no "Standard" vs "Enhanced" in nav): always enhanced, project context, repo + analysis.
 - Actions: ask questions, request code changes, run commands (terminal bridge), see task progress.
 - GRIP generates new code following repository patterns—clean-room implementation, never copied.
-- **Automated workflow**: Code is automatically saved to project files, builds run automatically after saves.
+- **Full automation**: Code from chat is applied to the project automatically; the build runs automatically after applies. No manual save or run steps. Progress (phases and steps) syncs on the Overview tab.
 - Users can also manually save code blocks if they prefer to review first.
 
 ### 6b. **Sandbox Playground** (`/dashboard/projects/[id]/sandbox-chat`)
@@ -71,15 +71,16 @@ Dashboard → New Project → [Project Home] → Repo (Reference) → Plan → D
 
 ## Tab Order (Project Layout)
 
+All tabs are always visible: Overview, Settings, Repo, Develop, Preview.
+
 | Order | Tab       | Route                          | Purpose                    |
 |-------|-----------|---------------------------------|----------------------------|
 | 1     | Overview  | `/dashboard/projects/[id]`     | Home, status, next step, sandbox experiments |
-| 2     | Repo      | `.../repo`                     | Reference & analyze patterns                  |
-| 3     | Plan      | `.../planning`                 | Structure & tasks                            |
-| 4     | Develop   | `.../enhanced-chat`            | Chat with GRIP, build (main)                 |
+| 2     | Settings  | `.../settings`                 | Project config, ideation, repo link           |
+| 3     | Repo      | `.../repo`                     | Reference & analyze patterns                  |
+| 4     | Develop   | `.../enhanced-chat`            | Chat with GRIP, build (main); code applies and build runs automatically |
 | 4b    | Sandbox   | `.../sandbox-chat`             | Experiment safely (sandbox projects)         |
 | 5     | Preview   | `.../preview`                  | See it run                                   |
-| 6     | Settings  | `.../settings`                 | Project config                               |
 
 "Ship" (Export/Deploy) lives on **Overview** as primary actions, not a separate tab.
 

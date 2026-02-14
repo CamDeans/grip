@@ -21,7 +21,7 @@ export async function GET() {
   }
 }
 
-/** POST /api/admin/payouts — create payout (55% of revenue to admin). Admin can open/close. */
+/** POST /api/admin/payouts — create payout (45% of revenue to admin, 55% to app). Admin can open/close. */
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerAuthSession()
@@ -39,8 +39,8 @@ export async function POST(request: NextRequest) {
 
     const doc = {
       amountCents,
-      adminShareCents: Math.round(amountCents * 0.55),
-      appShareCents: Math.round(amountCents * 0.45),
+      adminShareCents: Math.round(amountCents * 0.45),
+      appShareCents: Math.round(amountCents * 0.55),
       status: 'open',
       note: (body.note || '').trim() || null,
       createdBy: session.user.id,

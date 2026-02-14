@@ -578,11 +578,17 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
 
       if (!response.ok) {
         let errorMessage = response.statusText
+        let errorData: { error?: string; message?: string; code?: string; tier?: string; upgradeSuggestions?: Array<{ action: string; targetTier?: string; label: string }> } = {}
         try {
-          const errorData = await response.json()
+          errorData = await response.json()
           if (typeof errorData?.error === 'string') errorMessage = errorData.error
+          if (typeof errorData?.message === 'string') errorMessage = errorData.message
         } catch {
           // ignore
+        }
+        if (response.status === 403 && errorData?.code === 'TOKENS_EXHAUSTED') {
+          window.location.href = '/plans?out=1'
+          return
         }
         const err = new Error(errorMessage) as Error & { status?: number }
         err.status = response.status

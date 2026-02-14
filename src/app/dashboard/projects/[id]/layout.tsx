@@ -13,10 +13,10 @@ interface Project {
   repository?: { owner: string; name: string }
 }
 
-/** Step order: Overview → Setup → Repo → Develop → Preview. Sandbox uses sandbox-chat for Develop. */
+/** Tab order: Overview, Settings, Repo, Develop, Preview. All tabs always visible. Sandbox uses sandbox-chat for Develop. */
 const STEP_CONFIG = [
   { id: 'overview', path: '', label: 'Overview', pathMatch: (base: string) => base === '' },
-  { id: 'setup', path: '/settings', label: 'Setup', pathMatch: (base: string) => base === 'settings' },
+  { id: 'setup', path: '/settings', label: 'Settings', pathMatch: (base: string) => base === 'settings' },
   { id: 'repo', path: '/repo', label: 'Repo', pathMatch: (base: string) => base === 'repo' },
   { id: 'develop', path: '/enhanced-chat', label: 'Develop', pathMatch: (base: string) => base === 'enhanced-chat' || base === 'sandbox-chat' },
   { id: 'preview', path: '/preview', label: 'Preview', pathMatch: (base: string) => base === 'preview' },
@@ -104,16 +104,8 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   }
   const nextStep = getNextStep()
 
-  // Visible tabs: only Overview + current + next (and immediate next steps when they make sense)
-  const visibleIds = new Set<string>(['overview'])
-  if (currentStep.id !== 'overview') visibleIds.add(currentStep.id)
-  if (nextStep) visibleIds.add(nextStep.id)
-  if (!hasRepo) visibleIds.add('setup')
-  if (hasRepo && (currentStep.id === 'overview' || currentStep.id === 'repo')) visibleIds.add('develop')
-  if (hasPlan === true && (currentStep.id === 'overview' || currentStep.id === 'develop')) visibleIds.add('develop')
-  if (hasPlan === true && (currentStep.id === 'develop' || currentStep.id === 'preview')) visibleIds.add('preview')
-
-  const orderedVisible = STEP_CONFIG.filter((s) => visibleIds.has(s.id))
+  // Always show all tabs: Overview, Setup (Settings), Repo, Develop, Preview
+  const orderedVisible = [...STEP_CONFIG]
 
   if (!projectId) {
     return (

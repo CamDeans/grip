@@ -135,7 +135,7 @@ Output ONLY the complete merged file content. No explanation, no markdown code f
         { system: systemPrompt }
       )
       mergedContent = (response.content || '').trim()
-      const totalTokens = (response.usage?.promptTokens ?? 0) + (response.usage?.completionTokens ?? 0)
+      const totalTokens = response.usage?.totalTokens ?? (response.usage?.promptTokens ?? 0) + (response.usage?.completionTokens ?? 0)
       if (totalTokens > 0 && session.user?.id) {
         addTokenUsage(session.user.id, totalTokens).catch((err) =>
           console.warn('Update-from-chat: failed to record token usage', err)

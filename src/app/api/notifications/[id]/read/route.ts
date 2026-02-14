@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import { Notification } from '@/lib/models/Notification'
 import clientPromise from '@/lib/db'
+import { ObjectId } from 'mongodb'
 
 export async function POST(
   request: NextRequest,
@@ -9,11 +9,9 @@ export async function POST(
 ) {
   try {
     const { id: notificationId } = await params
-    // Connect to database
     const client = await clientPromise
-    const db = client.db()
+    const db = client.db(process.env.MONGODB_DB_NAME || 'test')
     
-    // Get authenticated user
     const session = await getServerSession()
     if (!session?.user?.email) {
       return NextResponse.json(
@@ -23,10 +21,15 @@ export async function POST(
     }
     
     const userId = session.user.email
+    let oid: ObjectId
+    try {
+      oid = new ObjectId(notificationId)
+    } catch {
+      return NextResponse.json({ message: 'Invalid notification ID' }, { status: 400 })
+    }
     
-    // Validate the notification exists and belongs to the user
     const notification = await db.collection('notifications').findOne({
-      _id: notificationId,
+      _id: oid,
       userId
     })
     
@@ -37,9 +40,8 @@ export async function POST(
       )
     }
     
-    // Update the notification to mark it as read
     await db.collection('notifications').updateOne(
-      { _id: notificationId },
+      { _id: oid },
       { $set: { isRead: true } }
     )
     

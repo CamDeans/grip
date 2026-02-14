@@ -38,16 +38,27 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 })
     }
 
-    const token = process.env.VERCEL_TOKEN
+    const client = await clientPromise
+    const db = client.db(process.env.MONGODB_DB_NAME || 'test')
+
+    // Prefer user's Vercel token (Settings → System Integration); fall back to server VERCEL_TOKEN
+    let token = process.env.VERCEL_TOKEN
+    let teamId = process.env.VERCEL_TEAM_ID
+    const user = await db.collection('users').findOne(
+      { _id: new ObjectId(session.user.id) },
+      { projection: { vercelToken: 1, vercelTeamId: 1 } }
+    ) as { vercelToken?: string; vercelTeamId?: string } | null
+    if (user?.vercelToken && String(user.vercelToken).trim()) {
+      token = user.vercelToken.trim()
+      if (user.vercelTeamId && String(user.vercelTeamId).trim()) teamId = user.vercelTeamId.trim()
+    }
     if (!token?.trim()) {
       return NextResponse.json(
-        { error: 'Vercel is not configured. An admin must add VERCEL_TOKEN to the server environment. See docs (Deploy to Vercel & FAQs) for details.' },
+        { error: 'Vercel is not configured. Add your Vercel token in Dashboard → Settings → System Integration (Vercel), or ask an admin to set VERCEL_TOKEN in the server environment.' },
         { status: 503 }
       )
     }
 
-    const client = await clientPromise
-    const db = client.db('test')
     const project = await db.collection('projects').findOne({
       _id: new ObjectId(projectId),
     }) as {
@@ -89,7 +100,6 @@ export async function POST(
 
     // Vercel: project names up to 100 chars, lowercase; letters, digits, '.', '_', '-'; cannot contain '---'
     const projectName = sanitizeVercelProjectName(project.title || repo)
-    const teamId = process.env.VERCEL_TEAM_ID
 
     const url = new URL('/v13/deployments', VERCEL_API)
     if (teamId) url.searchParams.set('teamId', teamId)

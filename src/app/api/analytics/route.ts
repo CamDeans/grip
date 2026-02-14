@@ -3,6 +3,50 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import clientPromise from '@/lib/db'
 
+/** Map file extension or stored language key to a single display name for analytics. */
+function extensionToLanguageName(extOrLang: string): string {
+  if (!extOrLang || typeof extOrLang !== 'string') return 'Other'
+  const lower = extOrLang.toLowerCase().trim()
+  const map: Record<string, string> = {
+    ts: 'TypeScript',
+    tsx: 'TypeScript',
+    js: 'JavaScript',
+    jsx: 'JavaScript',
+    mjs: 'JavaScript',
+    cjs: 'JavaScript',
+    json: 'JSON',
+    md: 'Markdown',
+    markdown: 'Markdown',
+    css: 'CSS',
+    scss: 'SCSS',
+    sass: 'Sass',
+    html: 'HTML',
+    htm: 'HTML',
+    yaml: 'YAML',
+    yml: 'YAML',
+    py: 'Python',
+    rb: 'Ruby',
+    go: 'Go',
+    rs: 'Rust',
+    java: 'Java',
+    kt: 'Kotlin',
+    swift: 'Swift',
+    c: 'C',
+    cpp: 'C++',
+    cc: 'C++',
+    cxx: 'C++',
+    cs: 'C#',
+    php: 'PHP',
+    sql: 'SQL',
+    sh: 'Shell',
+    bash: 'Shell',
+    zsh: 'Shell',
+    plaintext: 'Other',
+    txt: 'Plain text',
+  }
+  return map[lower] || (lower.charAt(0).toUpperCase() + lower.slice(1))
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -46,7 +90,10 @@ export async function GET(request: NextRequest) {
     const [
       buildLogs,
       terminalSessions,
-      projectFiles
+      projectFiles,
+      analyses,
+      chatHistories,
+      projectStatesList
     ] = await Promise.all([
       projectIds.length > 0
         ? db.collection('buildLogs').find({
@@ -62,8 +109,27 @@ export async function GET(request: NextRequest) {
         : [],
       projectIds.length > 0
         ? db.collection('projectFiles').find({ projectId: { $in: projectIds } }).toArray()
+        : [],
+      projectIds.length > 0
+        ? db.collection('analyses').find({ projectId: { $in: projectIds } }).toArray()
+        : [],
+      projectIds.length > 0
+        ? db.collection('chatHistory').find({ projectId: { $in: projectIds } }).toArray()
+        : [],
+      projectIds.length > 0
+        ? db.collection('projectStates').find({ projectId: { $in: projectIds } }).toArray()
         : []
     ])
+
+    // Activity timeline: use file saves and builds (key GRIP usage), not terminal sessions
+    const dateFromMs = dateFrom.getTime()
+    const fileEvents = projectFiles
+      .filter((f: any) => {
+        const at = new Date(f.createdAt || f.updatedAt || 0).getTime()
+        return at >= dateFromMs
+      })
+      .map((f: any) => ({ at: new Date(f.createdAt || f.updatedAt || 0).getTime() }))
+    const buildEvents = buildLogs.map((b: any) => ({ at: new Date(b.createdAt || 0).getTime() }))
     
     // Calculate project growth
     const prevDateFrom = new Date(dateFrom)
@@ -97,7 +163,7 @@ export async function GET(request: NextRequest) {
       direction: recentProjects >= previousProjects ? 'up' : 'down'
     }
     
-    // Generate activity data (count of actions per day)
+    // Generate activity data from file saves + builds (per day or per hour)
     const activityData: Array<{ date: string, count: number }> = []
     const days = timeframe === '24h' ? 24 : 
                  timeframe === '7d' ? 7 : 
@@ -120,14 +186,15 @@ export async function GET(request: NextRequest) {
         nextDate.setDate(nextDate.getDate() + 1)
       }
       
-      const sessionsCount = terminalSessions.filter((s: any) => {
-        const sessionDate = new Date(s.createdAt)
-        return sessionDate >= date && sessionDate < nextDate
-      }).length
+      const startMs = date.getTime()
+      const endMs = nextDate.getTime()
+      const fileCount = fileEvents.filter((e) => e.at >= startMs && e.at < endMs).length
+      const buildCount = buildEvents.filter((e) => e.at >= startMs && e.at < endMs).length
+      const activityCount = fileCount + buildCount
       
       activityData.unshift({
         date: date.toISOString(),
-        count: sessionsCount
+        count: activityCount
       })
     }
     
@@ -166,15 +233,85 @@ export async function GET(request: NextRequest) {
         count: buildLogs.filter((b: any) => b.status === 'canceled').length
       }
     ]
-    
-    // Generate language distribution data
-    const languageCounts: Record<string, number> = {}
-    projectFiles.forEach((file: any) => {
-      if (file.language) {
-        languageCounts[file.language] = (languageCounts[file.language] || 0) + 1
-      }
+
+    // Build summary: total and avg duration (we track duration in buildLogs; may be ms or seconds)
+    const buildsWithDuration = buildLogs.filter((b: any) => b.duration != null && Number(b.duration) > 0)
+    const totalBuilds = buildLogs.length
+    const avgBuildDurationMs = buildsWithDuration.length > 0
+      ? buildsWithDuration.reduce((sum: number, b: any) => sum + Number(b.duration), 0) / buildsWithDuration.length
+      : null
+
+    // Builds by task type (install, build, test, etc.) — what we track
+    const taskTypeCounts: Record<string, number> = {}
+    buildLogs.forEach((b: any) => {
+      const t = (b.taskType || 'other').toString().toLowerCase()
+      taskTypeCounts[t] = (taskTypeCounts[t] || 0) + 1
+    })
+    const buildDataByTaskType = Object.entries(taskTypeCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([taskType, count]) => ({ taskType, count }))
+
+    // Chat: total messages across projects, and how many projects had chat activity in period
+    const totalChatMessages = chatHistories.reduce((sum: number, doc: any) => {
+      const n = doc.metadata?.totalMessages ?? (Array.isArray(doc.messages) ? doc.messages.length : 0)
+      return sum + Number(n || 0)
+    }, 0)
+    const lastUpdatedFrom = dateFrom.getTime()
+    const chatActivityInPeriod = chatHistories.filter((doc: any) => {
+      const t = doc.metadata?.lastUpdated ?? doc.metadata?.lastMessage
+      return t && new Date(t).getTime() >= lastUpdatedFrom
+    }).length
+
+    // Plans: projects with phases/steps, total steps completed
+    const projectsWithPlan = projectStatesList.filter((s: any) =>
+      Array.isArray(s.phases) && s.phases.length > 0
+    ).length
+    let totalStepsCompleted = 0
+    projectStatesList.forEach((s: any) => {
+      if (!Array.isArray(s.phases)) return
+      s.phases.forEach((p: any) => {
+        if (Array.isArray(p.steps)) {
+          totalStepsCompleted += p.steps.filter((st: any) => st.status === 'completed').length
+        }
+      })
     })
     
+    // Generate language distribution from all project files and all analyses (all project creations)
+    const languageCounts: Record<string, number> = {}
+
+    // 1. From projectFiles: derive language from filename (path + filename) or fall back to stored file.language
+    projectFiles.forEach((file: any) => {
+      const filename = (file.filename || '').trim() || (file.path || '').split('/').pop() || ''
+      const ext = filename.includes('.') ? filename.split('.').pop()?.toLowerCase() : null
+      const stored = (file.language || '').toLowerCase().trim()
+      const name = ext
+        ? extensionToLanguageName(ext)
+        : stored && stored !== 'plaintext'
+          ? extensionToLanguageName(stored)
+          : null
+      if (name && name !== 'Other') {
+        languageCounts[name] = (languageCounts[name] || 0) + 1
+      } else if (name === 'Other' && (ext || stored)) {
+        languageCounts.Other = (languageCounts.Other || 0) + 1
+      }
+    })
+
+    // 2. From analyses: merge repositoryStructure.languages and codeStructure.mainLanguages (extension -> count)
+    analyses.forEach((doc: any) => {
+      const repoLangs = doc.repositoryStructure?.languages || {}
+      const mainLangs = doc.codeStructure?.mainLanguages || {}
+      const merged: Record<string, number> = { ...repoLangs }
+      Object.entries(mainLangs).forEach(([ext, count]) => {
+        merged[ext] = (merged[ext] || 0) + Number(count)
+      })
+      Object.entries(merged).forEach(([ext, count]) => {
+        const name = extensionToLanguageName(ext)
+        if (name && count > 0) {
+          languageCounts[name] = (languageCounts[name] || 0) + Number(count)
+        }
+      })
+    })
+
     const languageColors: Record<string, string> = {
       'typescript': '#3178c6',
       'javascript': '#f7df1e',
@@ -194,20 +331,26 @@ export async function GET(request: NextRequest) {
       'json': '#292929',
       'markdown': '#083fa1',
       'yaml': '#cb171e',
+      'scss': '#cc6699',
+      'sass': '#cc6699',
       'other': '#8257e5',
     }
-    
+
     const languageData = Object.entries(languageCounts)
+      .filter(([, count]) => count > 0)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 6) // Top 6 languages
+      .slice(0, 12) // Top 12 so all detected languages can show
       .map(([language, count]) => ({
-        language: language.charAt(0).toUpperCase() + language.slice(1),
+        language,
         count,
         color: languageColors[language.toLowerCase()] || languageColors.other
       }))
-    
-    // If there are no languages yet, provide some defaults for a better UX
-    if (languageData.length === 0) {
+
+    // Only show placeholder when user has no projects or no files/analyses at all
+    if (languageData.length === 0 && (projectFiles.length > 0 || analyses.length > 0)) {
+      // Had data but no languages detected — keep empty or add Other
+      languageData.push({ language: 'Other', count: 1, color: languageColors.other })
+    } else if (languageData.length === 0) {
       languageData.push(
         { language: 'TypeScript', count: 5, color: languageColors.typescript },
         { language: 'JavaScript', count: 3, color: languageColors.javascript },
@@ -235,10 +378,20 @@ export async function GET(request: NextRequest) {
     const peakHourIndex = hourCounts.indexOf(Math.max(...hourCounts))
     const peakHour = peakHourIndex === -1 ? '--' : `${peakHourIndex}:00`
     
+    // Active days: distinct days in period with at least one file save or build (same as activity timeline)
+    const activeDaySet = new Set<number>()
+    ;[...fileEvents, ...buildEvents].forEach((e) => {
+      const d = new Date(e.at)
+      d.setHours(0, 0, 0, 0)
+      activeDaySet.add(d.getTime())
+    })
+    const activeDays = activeDaySet.size
+
     const timeData = {
       total: totalHours,
       average: avgHours,
-      peak: peakHour
+      peak: peakHour,
+      activeDays,
     }
     
     // Full project details for analytics page (titles, status, createdAt)
@@ -259,10 +412,15 @@ export async function GET(request: NextRequest) {
       activityData,
       distributionData,
       buildData,
+      buildDataByTaskType,
+      buildSummary: { totalBuilds, avgDurationMs: avgBuildDurationMs },
+      chatSummary: { totalChatMessages, chatActivityInPeriod },
+      planSummary: { projectsWithPlan, totalStepsCompleted },
       languageData,
       timeData,
       projectsDetail,
       filesGenerated,
+      repoAnalysesCount: analyses.length,
     }
 
     return NextResponse.json(analyticsData)

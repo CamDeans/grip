@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { Button } from '@/components/ui'
 import { useSession } from 'next-auth/react'
 import { toast } from '@/components/ui/use-toast'
+import { formatDateInTimezone } from '@/lib/utils/dateUtils'
+import { useUserTimezone } from '@/hooks/useUserTimezone'
 
 interface Notification {
   id: string
@@ -18,6 +20,7 @@ interface Notification {
 
 export function NotificationsPopover() {
   const { data: session } = useSession()
+  const timezone = useUserTimezone()
   const [isOpen, setIsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -210,7 +213,7 @@ export function NotificationsPopover() {
                             {getNotificationTypeLabel(notification.type)}
                           </span>
                           <span className="text-xs text-text-secondary">
-                            {new Date(notification.timestamp).toLocaleDateString()}
+                            {formatDateInTimezone(notification.timestamp, timezone)}
                           </span>
                         </div>
                         <h3 className="mt-1 text-sm font-medium text-text-primary">

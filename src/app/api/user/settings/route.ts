@@ -13,13 +13,16 @@ export async function GET() {
     const db = client.db(process.env.MONGODB_DB_NAME || 'test')
     const user = await db.collection('users').findOne(
       { _id: new ObjectId(session.user.id) },
-      { projection: { name: 1, githubToken: 1, notifications: 1 } }
-    ) as { name?: string; githubToken?: string; notifications?: boolean } | null
-    // Do not send the raw token to the client; only indicate whether one is set (so UI can show "saved" state).
+      { projection: { name: 1, githubToken: 1, notifications: 1, mongodbUri: 1, vercelToken: 1, vercelTeamId: 1 } }
+    ) as { name?: string; githubToken?: string; notifications?: boolean; mongodbUri?: string; vercelToken?: string; vercelTeamId?: string } | null
     const hasGithubToken = !!(user?.githubToken && String(user.githubToken).trim())
+    const hasMongodbConnection = !!(user?.mongodbUri && String(user.mongodbUri).trim())
+    const hasVercelConnection = !!(user?.vercelToken && String(user.vercelToken).trim())
     return NextResponse.json({
       name: user?.name ?? '',
       hasGithubToken,
+      hasMongodbConnection,
+      hasVercelConnection,
       notifications: user?.notifications ?? false,
     })
   } catch (error) {
@@ -36,7 +39,7 @@ export async function PUT(req: Request) {
     }
 
     const body = await req.json()
-    const { name, githubToken, notifications } = body
+    const { name, githubToken, notifications, mongodbUri, vercelToken, vercelTeamId } = body
 
     const client = await clientPromise
     const db = client.db(process.env.MONGODB_DB_NAME || 'test')
@@ -45,6 +48,9 @@ export async function PUT(req: Request) {
     if (name !== undefined) updates.name = name
     if (githubToken !== undefined) updates.githubToken = githubToken
     if (notifications !== undefined) updates.notifications = notifications
+    if (mongodbUri !== undefined) updates.mongodbUri = mongodbUri ? String(mongodbUri).trim() : ''
+    if (vercelToken !== undefined) updates.vercelToken = vercelToken ? String(vercelToken).trim() : ''
+    if (vercelTeamId !== undefined) updates.vercelTeamId = vercelTeamId ? String(vercelTeamId).trim() : ''
 
     await db.collection('users').updateOne(
       { _id: new ObjectId(session.user.id) },

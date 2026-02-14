@@ -15,7 +15,6 @@ import {
   Save,
   Trash,
   Archive,
-  GitFork,
   RefreshCw,
   Settings,
   Terminal,
@@ -54,17 +53,14 @@ export default function ProjectSettingsPage() {
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   
-  // Form state
+  // Form state (repo is set at project creation; GitHub token is in Dashboard → Settings)
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     goals: '',
     targetAudience: '',
     keyFeatures: '',
-    technicalRequirements: '',
-    enableRepository: false,
-    repositoryOwner: '',
-    repositoryName: ''
+    technicalRequirements: ''
   })
   
   // Settings state
@@ -75,10 +71,6 @@ export default function ProjectSettingsPage() {
     disableWebSocket: false,
     enableLogging: true
   })
-
-  const [githubToken, setGithubToken] = useState('')
-  const [hasGithubToken, setHasGithubToken] = useState(false)
-  const [githubTokenSaving, setGithubTokenSaving] = useState(false)
   
   // Fetch project details
   useEffect(() => {
@@ -105,10 +97,7 @@ export default function ProjectSettingsPage() {
           goals: data.ideation?.goals || '',
           targetAudience: data.ideation?.targetAudience || '',
           keyFeatures: data.ideation?.keyFeatures || '',
-          technicalRequirements: data.ideation?.technicalRequirements || '',
-          enableRepository: !!data.repository,
-          repositoryOwner: data.repository?.owner || '',
-          repositoryName: data.repository?.name || ''
+          technicalRequirements: data.ideation?.technicalRequirements || ''
         })
       } catch (err) {
         console.error('Error fetching project:', err)
@@ -121,21 +110,6 @@ export default function ProjectSettingsPage() {
     fetchProject()
   }, [projectId])
 
-  useEffect(() => {
-    const fetchUserSettings = async () => {
-      try {
-        const res = await fetch('/api/user/settings')
-        if (res.ok) {
-          const data = await res.json()
-          setHasGithubToken(!!data.hasGithubToken)
-        }
-      } catch {
-        // ignore
-      }
-    }
-    fetchUserSettings()
-  }, [])
-  
   // Handle form input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -145,37 +119,6 @@ export default function ProjectSettingsPage() {
   // Handle switch changes
   const handleSwitchChange = (name: string, checked: boolean) => {
     setSettings(prev => ({ ...prev, [name]: checked }))
-  }
-  
-  // Handle repository toggle
-  const handleRepositoryToggle = (checked: boolean) => {
-    setFormData(prev => ({ ...prev, enableRepository: checked }))
-  }
-
-  const saveGithubToken = async () => {
-    setGithubTokenSaving(true)
-    try {
-      const res = await fetch('/api/user/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ githubToken })
-      })
-      if (!res.ok) throw new Error('Failed to save token')
-      setHasGithubToken(true)
-      setGithubToken('')
-      toast({
-        title: 'GitHub token saved',
-        description: 'Used for Export to GitHub from project Preview.'
-      })
-    } catch (error) {
-      toast({
-        title: 'Failed to save GitHub token',
-        description: error instanceof Error ? error.message : 'An error occurred',
-        variant: 'destructive'
-      })
-    } finally {
-      setGithubTokenSaving(false)
-    }
   }
   
   // Handle form submission (save project details via API)
@@ -197,9 +140,6 @@ export default function ProjectSettingsPage() {
             keyFeatures: formData.keyFeatures,
             technicalRequirements: formData.technicalRequirements,
           },
-          repository: formData.enableRepository && formData.repositoryOwner && formData.repositoryName
-            ? { owner: formData.repositoryOwner, name: formData.repositoryName }
-            : undefined,
         }),
       })
       const data = await response.json().catch(() => ({}))
@@ -329,10 +269,6 @@ export default function ProjectSettingsPage() {
             <Settings className="h-4 w-4" />
             General
           </TabsTrigger>
-          <TabsTrigger value="repository" className="flex gap-2 items-center">
-            <GitFork className="h-4 w-4" />
-            Repository
-          </TabsTrigger>
           <TabsTrigger value="advanced" className="flex gap-2 items-center">
             <Terminal className="h-4 w-4" />
             Advanced
@@ -443,113 +379,6 @@ export default function ProjectSettingsPage() {
               <p className="text-xs text-muted-foreground mt-2">
                 Active = in progress. Completed = done (still editable). Archived = read-only; use &quot;Active&quot; to unarchive.
               </p>
-            </Card>
-            
-            <div className="flex justify-end gap-2">
-              <Button
-                type="submit"
-                disabled={isSaving}
-                className="flex items-center gap-2"
-              >
-                {isSaving ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" />
-                    Save Changes
-                  </>
-                )}
-              </Button>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="repository" className="space-y-6 mt-2">
-            <Card className="p-4">
-              <h2 className="text-lg font-semibold mb-4">Repository Settings</h2>
-              
-              <div className="flex items-center justify-between mb-6 p-3 bg-muted rounded-md">
-                <div>
-                  <Label htmlFor="enableRepository" className="text-base font-medium">Enable Repository</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Connect this project to a GitHub repository
-                  </p>
-                </div>
-                <Switch
-                  id="enableRepository"
-                  checked={formData.enableRepository}
-                  onCheckedChange={handleRepositoryToggle}
-                />
-              </div>
-              
-              {formData.enableRepository && (
-                <div className="space-y-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="repositoryOwner">Repository Owner</Label>
-                    <Input
-                      id="repositoryOwner"
-                      name="repositoryOwner"
-                      value={formData.repositoryOwner}
-                      onChange={handleInputChange}
-                      placeholder="GitHub username or organization"
-                    />
-                  </div>
-                  
-                  <div className="grid gap-2">
-                    <Label htmlFor="repositoryName">Repository Name</Label>
-                    <Input
-                      id="repositoryName"
-                      name="repositoryName"
-                      value={formData.repositoryName}
-                      onChange={handleInputChange}
-                      placeholder="repository-name"
-                    />
-                  </div>
-                  
-                  <div className="mt-4 p-3 bg-primary/10 rounded-md border border-primary/20 text-sm">
-                    <div className="text-primary">
-                      Connected repository:{' '}
-                      {formData.repositoryOwner && formData.repositoryName ? (
-                        <Badge variant="outline" className="ml-2">
-                          {formData.repositoryOwner}/{formData.repositoryName}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground ml-2">None</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </Card>
-
-            <Card className="p-4">
-              <h2 className="text-lg font-semibold mb-2">GitHub Personal Access Token</h2>
-              <p className="text-sm text-muted-foreground mb-3">
-                One token for <strong>all your projects</strong>. Required for Export to GitHub (Preview). Create a token with <strong>repo</strong> scope at{' '}
-                <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">GitHub Settings</a>.
-              </p>
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="flex-1 min-w-[180px] space-y-2">
-                  <Label htmlFor="githubToken">Token</Label>
-                  <Input
-                    id="githubToken"
-                    type="password"
-                    placeholder={hasGithubToken ? '••••••••••••' : 'ghp_...'}
-                    value={githubToken}
-                    onChange={(e) => setGithubToken(e.target.value)}
-                    className="font-mono text-sm"
-                    autoComplete="off"
-                  />
-                  {hasGithubToken && (
-                    <p className="text-xs text-green-600 dark:text-green-400">Token saved. Enter a new token above to replace.</p>
-                  )}
-                </div>
-                <Button type="button" onClick={saveGithubToken} disabled={githubTokenSaving || !githubToken.trim()} variant="outline">
-                  {githubTokenSaving ? 'Saving...' : 'Save token'}
-                </Button>
-              </div>
             </Card>
             
             <div className="flex justify-end gap-2">

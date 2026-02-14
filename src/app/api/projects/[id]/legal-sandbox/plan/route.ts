@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { requireAppAccess, requireTokenBalance } from '@/lib/access'
+import { requireAppAccess, requireTokenBalance, getAppAccess } from '@/lib/access'
+import { buildTokenBudgetPromptFragment } from '@/lib/constants/tokenBudgetPlan'
 import { addTokenUsage } from '@/lib/tokenUsage'
 import { ObjectId } from 'mongodb'
 import clientPromise from '@/lib/db'
@@ -152,6 +153,10 @@ export async function POST(
     const tokenExhausted = await requireTokenBalance(session)
     if (tokenExhausted) return tokenExhausted
 
+    const access = await getAppAccess(session)
+    const remainingTokens = Math.max(0, (access.tokenAllowance ?? 0) - (access.tokensUsedThisPeriod ?? 0))
+    const tokenBudgetHint = buildTokenBudgetPromptFragment(remainingTokens, access.tier ?? 'starter', 'plan')
+
     let repoPaths: string[] = []
     if (project.repository?.owner && project.repository?.name) {
       try {
@@ -213,6 +218,8 @@ ${repositoryAnalysisText ? `\n## Repository analysis (use this to align the plan
 ${structuredAnalysisSummary ? `\n## Structured repo analysis (tree-link JSON summary; no code)\n${structuredAnalysisSummary}\n` : ''}
 ${existingPaths.length > 0 ? `\nExisting sandbox files: ${existingPaths.join(', ')}` : ''}
 
+${tokenBudgetHint ? `\n## Token budget (mandatory — scope the plan to fit)\n${tokenBudgetHint}\n` : ''}
+
 Output a JSON object with this exact shape (no markdown, no code fence):
 {
   "phases": [
@@ -242,7 +249,7 @@ If the repo has both frontend and backend (e.g. separate api/ or server/ dirs, o
       { system: systemPrompt }
     )
 
-    const totalTokens = (response?.usage?.promptTokens ?? 0) + (response?.usage?.completionTokens ?? 0)
+    const totalTokens = response?.usage?.totalTokens ?? (response?.usage?.promptTokens ?? 0) + (response?.usage?.completionTokens ?? 0)
     if (totalTokens > 0 && session.user?.id) {
       addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('Legal-sandbox plan: failed to record token usage', err)

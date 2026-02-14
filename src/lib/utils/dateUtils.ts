@@ -1,6 +1,7 @@
 /**
  * Date Utilities for G.R.I.P.
- * Provides consistent date formatting across the application to avoid hydration errors
+ * Provides consistent date formatting across the application to avoid hydration errors.
+ * Use timeZone when available (from user settings) so dates show in the user's timezone.
  */
 
 type DateType = Date | string | number;
@@ -8,9 +9,10 @@ type DateType = Date | string | number;
 /**
  * Format a date as time (HH:MM:SS AM/PM)
  * @param date Date to format
+ * @param timeZone IANA timezone (e.g. America/New_York) or undefined for local
  * @returns Formatted time string
  */
-export function formatTime(date: DateType): string {
+export function formatTime(date: DateType, timeZone?: string): string {
   if (!date) return 'N/A';
   
   try {
@@ -18,13 +20,11 @@ export function formatTime(date: DateType): string {
       hour: '2-digit', 
       minute: '2-digit', 
       second: '2-digit', 
-      hour12: true 
+      hour12: true,
+      ...(timeZone && { timeZone })
     };
     
-    // Ensure we're working with a Date object
     const dateObj = date instanceof Date ? date : new Date(date);
-    
-    // Ensure consistent locale
     return dateObj.toLocaleTimeString('en-US', options);
   } catch (error) {
     console.error('Error formatting time:', error);
@@ -35,9 +35,10 @@ export function formatTime(date: DateType): string {
 /**
  * Format a date as a full date and time
  * @param date Date to format
+ * @param timeZone IANA timezone (e.g. America/New_York) or undefined for local
  * @returns Formatted date and time string
  */
-export function formatDateTime(date: DateType): string {
+export function formatDateTime(date: DateType, timeZone?: string): string {
   if (!date) return 'N/A';
   
   try {
@@ -47,17 +48,36 @@ export function formatDateTime(date: DateType): string {
       day: 'numeric',
       hour: '2-digit', 
       minute: '2-digit', 
-      second: '2-digit', 
-      hour12: true 
+      second: '2-digit',
+      hour12: true,
+      ...(timeZone && { timeZone })
     };
     
-    // Ensure we're working with a Date object
     const dateObj = date instanceof Date ? date : new Date(date);
-    
-    // Ensure consistent locale
     return dateObj.toLocaleString('en-US', options);
   } catch (error) {
     console.error('Error formatting date and time:', error);
+    return 'Invalid date';
+  }
+}
+
+/**
+ * Format a date for display in the user's timezone (date only)
+ * @param date Date to format
+ * @param timeZone IANA timezone from user settings
+ */
+export function formatDateInTimezone(date: DateType, timeZone?: string): string {
+  if (!date) return 'N/A';
+  try {
+    const options: Intl.DateTimeFormatOptions = {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      ...(timeZone && { timeZone })
+    };
+    const dateObj = date instanceof Date ? date : new Date(date);
+    return dateObj.toLocaleDateString('en-US', options);
+  } catch {
     return 'Invalid date';
   }
 }

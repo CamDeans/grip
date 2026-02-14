@@ -7,11 +7,11 @@ export const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION })
   : null
 
-// Token economics: 1,030,051 tokens = $4.47 (Claude). Cost/token ≈ $4.34/1M. Tier allowances set so token cost ≤ 15% of revenue (85% margin).
+// Token economics: tier allowances per paid plan (45/55 split). Based on actual cost ~$4.30/1M (6.04M tokens, $25.95): 2.3M / 6M / 12M.
 export const TIERS = [
-  { id: 'starter', name: 'Starter', priceCents: 1900, tokensPerMonth: 650_000, stripePriceId: process.env.STRIPE_PRICE_ID_STARTER },
-  { id: 'pro', name: 'Pro', priceCents: 4900, tokensPerMonth: 1_700_000, stripePriceId: process.env.STRIPE_PRICE_ID_PRO },
-  { id: 'team', name: 'Team', priceCents: 9900, tokensPerMonth: 3_400_000, stripePriceId: process.env.STRIPE_PRICE_ID_TEAM },
+  { id: 'starter', name: 'Starter', priceCents: 1900, tokensPerMonth: 2_300_000, stripePriceId: process.env.STRIPE_PRICE_ID_STARTER },
+  { id: 'pro', name: 'Pro', priceCents: 4900, tokensPerMonth: 6_000_000, stripePriceId: process.env.STRIPE_PRICE_ID_PRO },
+  { id: 'team', name: 'Team', priceCents: 9900, tokensPerMonth: 12_000_000, stripePriceId: process.env.STRIPE_PRICE_ID_TEAM },
 ] as const
 
 export type TierId = typeof TIERS[number]['id']
@@ -23,4 +23,16 @@ export function getTierByPriceId(priceId: string): (typeof TIERS)[number] | null
 export function getTokensPerMonthForTier(tierId: TierId): number {
   const t = TIERS.find((x) => x.id === tierId)
   return t?.tokensPerMonth ?? 0
+}
+
+/** One-time add-tokens packs (not subscription). Price IDs from env. */
+export const TOKEN_ADD_ONS = [
+  { id: '500k', name: '500K tokens', tokens: 500_000, stripePriceId: process.env.STRIPE_PRICE_ID_ADD_TOKENS_500K },
+  { id: '1M', name: '1M tokens', tokens: 1_000_000, stripePriceId: process.env.STRIPE_PRICE_ID_ADD_TOKENS_1M },
+] as const
+
+export type TokenAddOnId = typeof TOKEN_ADD_ONS[number]['id']
+
+export function getAddOnByPriceId(priceId: string): (typeof TOKEN_ADD_ONS)[number] | null {
+  return TOKEN_ADD_ONS.find((a) => a.stripePriceId === priceId) ?? null
 }

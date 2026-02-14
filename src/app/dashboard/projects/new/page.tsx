@@ -59,11 +59,12 @@ export default function NewProjectPage() {
     }
   })
 
-  // Validate form whenever data changes
+  // Validate form whenever data changes (repo required)
   useEffect(() => {
     const isValid = Boolean(
       formData.title.trim() &&
       formData.description.trim() &&
+      formData.repository &&
       formData.ideation.goals.trim() &&
       formData.ideation.targetAudience.trim() &&
       formData.ideation.keyFeatures.trim() &&
@@ -73,11 +74,18 @@ export default function NewProjectPage() {
   }, [formData])
 
   const handleNextStep = () => {
-    // Validate first step fields
     if (!formData.title.trim() || !formData.description.trim()) {
       toast({
         title: "Missing information",
-        description: "Please fill in all required fields to continue.",
+        description: "Please fill in title and description.",
+        variant: "destructive"
+      })
+      return
+    }
+    if (!formData.repository) {
+      toast({
+        title: "GitHub repository required",
+        description: "Select a GitHub repo so GRIP can analyze it and use its structure and patterns. Use Generate Keywords and Search above.",
         variant: "destructive"
       })
       return
@@ -205,7 +213,7 @@ export default function NewProjectPage() {
           <Card>
             <div className="px-6 py-5 border-b border-border">
               <h2 className="text-lg font-medium">Step 1: Project Details</h2>
-              <p className="text-sm text-text-secondary mt-1">Basic information about your project</p>
+              <p className="text-sm text-text-secondary mt-1">Basic information and a GitHub repo so GRIP can analyze it and use its structure and patterns</p>
             </div>
             <div className="p-6 space-y-6">
               <div className="space-y-4">
@@ -235,7 +243,7 @@ export default function NewProjectPage() {
                 </div>
 
                 <div>
-                  <Label>GitHub Repository (optional)</Label>
+                  <Label>GitHub Repository</Label>
                   <div className="mt-3 mb-2 rounded-md border border-border overflow-hidden">
                     <button
                       type="button"
@@ -245,7 +253,7 @@ export default function NewProjectPage() {
                       aria-expanded={githubExplanationOpen ? 'true' : 'false'}
                       aria-controls="github-explanation-content"
                     >
-                      <span className="font-medium text-text-primary">GitHub optional — what is it and how do I find a repo?</span>
+                      <span className="font-medium text-text-primary">What is a GitHub repo and how do I find one?</span>
                       <span className="flex items-center gap-1 shrink-0 text-text-secondary">
                         {githubExplanationOpen ? 'Collapse' : 'Expand'}
                         {githubExplanationOpen ? (
@@ -262,9 +270,12 @@ export default function NewProjectPage() {
                       className={githubExplanationOpen ? 'px-4 pt-4 pb-3 text-xs text-text-secondary border-t border-border' : 'hidden'}
                     >
                       <p>
-                        <strong>GitHub is optional.</strong> A <strong>repository</strong> (repo) is a code project on GitHub. You can link any public repo as reference—you don't need to own it. G.R.I.P. uses it for structure and patterns only and never copies code. Starting from an idea only? Leave this blank and click <strong>Continue</strong>. To find a repo: fill in title and description above, then <strong>Generate Keywords</strong> → <strong>Use Keywords</strong> → <strong>Search</strong>. More in the <Link href="/#faq" className="text-primary hover:underline">FAQ on the home page</Link>.
+                        A <strong>repository</strong> (repo) is a code project on GitHub. A repo is <strong>required</strong>: G.R.I.P. analyzes it and uses its structure and patterns to guide your build. You can use any public repo—you don&apos;t need to own it. G.R.I.P. never copies code; it uses the repo as reference only. To find a repo: fill in title and description above, then <strong>Generate Keywords</strong> → pick a keyword or <strong>Use Keywords</strong> → <strong>Search</strong>, then select one from the list. More in the <Link href="/#faq" className="text-primary hover:underline">FAQ on the home page</Link>.
                       </p>
                     </div>
+                  </div>
+                  <div className="mt-2 p-3 rounded-md bg-primary/10 border border-primary/20 text-sm text-text-primary">
+                    <strong>Full automation:</strong> After you create the project, G.R.I.P. runs analysis, generates the plan, and writes code for each file in one run. All files are built with code automatically. In Develop, code you get from chat is applied to the project and the build runs automatically—no manual save or run steps. Progress (phases and steps) syncs on the Overview tab.
                   </div>
                   <div className="mt-1">
                     <RepoSelector
@@ -287,7 +298,7 @@ export default function NewProjectPage() {
                 <Button
                   variant="default"
                   onClick={handleNextStep}
-                  disabled={!formData.title.trim() || !formData.description.trim()}
+                  disabled={!formData.title.trim() || !formData.description.trim() || !formData.repository}
                 >
                   Continue
                 </Button>
@@ -302,7 +313,7 @@ export default function NewProjectPage() {
               <div className="mt-3 p-3 rounded-md bg-primary/10 border border-primary/20 flex gap-2">
                 <CheckCircleIcon className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <div className="text-sm text-text-primary">
-                  <strong>Tips:</strong> Plain language works best (e.g. "simple to-do list", "works on phones"). You can add or change details later in chat or in <strong>Settings</strong>. More in the <Link href="/#faq" className="text-primary hover:underline">FAQ on the home page</Link>.
+                  <strong>Tips:</strong> Plain language works for everyone (e.g. &quot;simple to-do list&quot;, &quot;works on phones&quot;). For higher-level or technical projects, you can add stack preferences, architecture notes, or acceptance criteria here—G.R.I.P. uses both simple and detailed input. You can add or change details later in chat or in <strong>Settings</strong>. More in the <Link href="/#faq" className="text-primary hover:underline">FAQ on the home page</Link>.
                 </div>
               </div>
             </div>
@@ -385,7 +396,7 @@ export default function NewProjectPage() {
                     <WrenchScrewdriverIcon className="h-4 w-4 mr-2 text-primary" />
                     Technical Requirements
                   </Label>
-                  <p className="text-xs text-text-secondary mt-0.5 mb-1">Any must-haves? (optional — use plain language)</p>
+                  <p className="text-xs text-text-secondary mt-0.5 mb-1">Any must-haves? Use plain language or technical details (e.g. stack, architecture, performance)</p>
                   <textarea
                     id="technical-requirements"
                     value={formData.ideation.technicalRequirements}
@@ -440,7 +451,7 @@ export default function NewProjectPage() {
             Questions?
           </h2>
           <p className="text-sm text-text-secondary mt-1">
-            Full FAQ (GitHub optional, repo reference only, steps, plans) is on the <Link href="/#faq" className="text-primary hover:underline">home page</Link>. Here, two quick answers:
+            Full FAQ (GitHub repo reference, steps, plans) is on the <Link href="/#faq" className="text-primary hover:underline">home page</Link>. Here, two quick answers:
           </p>
         </div>
         <div className="px-6 py-4 space-y-4">
