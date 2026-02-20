@@ -308,6 +308,34 @@ checkFileContent('src/app/dashboard/projects/[id]/page.tsx', [
   'parentProjectId',
 ], 'Project overview has sandbox type definitions');
 
+// 15. Middle (plan context from analysis) & Token Budget
+log('\n15. Testing Middle & Token Budget...', colors.yellow);
+checkFileExists('src/lib/services/planContextFromAnalysisService.ts', 'Plan context from analysis (middle)');
+checkFileContent('src/lib/services/planContextFromAnalysisService.ts', [
+  'buildPlanContextFromAnalysis',
+  'checklistSummary',
+  'layerPrompts',
+], 'Middle builds plan context from analysis');
+checkImportExists('src/lib/services/planGeneratorService.ts', '@/lib/services/planContextFromAnalysisService', 'Plan generator uses middle');
+checkFileContent('src/lib/services/planGeneratorService.ts', ['buildPlanContextFromAnalysis'], 'Plan generator calls buildPlanContextFromAnalysis');
+checkFileExists('src/lib/constants/tokenLimitsByTier.ts', 'Token limits by tier');
+checkFileContent('src/lib/constants/tokenLimitsByTier.ts', [
+  'getChatSectionBudgets',
+  'getAnalysisRawSummaryMaxChars',
+], 'Token limits exports chat budgets and analysis caps');
+checkFileExists('src/lib/constants/tokenBudgetPlan.ts', 'Token budget plan');
+checkFileContent('src/lib/constants/tokenBudgetPlan.ts', [
+  'getChatResponseMaxTokens',
+  'buildTokenBudgetPromptFragment',
+], 'Token budget exports response cap and prompt fragment');
+checkFileContent('src/app/api/enhanced-chat/route.ts', [
+  'getChatSectionBudgets',
+  'getChatResponseMaxTokens',
+  'sectionBudgets',
+  'responseMaxTokens',
+], 'Enhanced chat uses tier budgets and response cap');
+checkFileContent('src/app/api/enhanced-chat/route.ts', ['stopReason', 'max_tokens'], 'Enhanced chat handles cut-off (max_tokens)');
+
 // Summary
 log('\n' + '='.repeat(60), colors.cyan);
 log('TEST SUMMARY', colors.cyan);

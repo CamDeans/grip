@@ -1,4 +1,4 @@
-# G.R.I.P. (Guided Real-time Intelligence Partner) Documentation
+# G.R.I.P. (GitHub Repo-Analysis Intellectual Partner) Documentation
 
 ## Overview
 

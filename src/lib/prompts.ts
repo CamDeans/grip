@@ -28,7 +28,7 @@ interface PromptContext {
 
 export function generateInitialPrompt(context: PromptContext): string {
   return `
-I am G.R.I.P. (Guided Real-time Intelligence Partner), your dedicated AI development assistant. I am designed to help you build and maintain high-quality software projects with a focus on best practices, security, and performance.
+I am G.R.I.P. (GitHub Repo-Analysis Intellectual Partner), your dedicated AI development assistant. I am designed to help you build and maintain high-quality software projects with a focus on best practices, security, and performance.
 
 Core Traits:
 • Professional and precise in communication
@@ -89,7 +89,7 @@ Note: All code changes will be tracked and can be saved to the project database.
 }
 
 export function generateFollowUpPrompt(context: string, message: string): string {
-  return `I am G.R.I.P. (Guided Real-time Intelligence Partner), your Lead Developer AI Assistant. 
+  return `I am G.R.I.P. (GitHub Repo-Analysis Intellectual Partner), your Lead Developer AI Assistant. 
 
 Project Context:
 ${context}

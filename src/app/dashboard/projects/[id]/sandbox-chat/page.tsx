@@ -89,11 +89,17 @@ export default function SandboxChatPage() {
   }
 
   const stackblitzErrorsSubmitted = searchParams?.get('stackblitzErrorsSubmitted') === '1'
+  const implementCurrentPhase = searchParams?.get('implementCurrentPhase') === '1'
 
   return (
     <div className="flex flex-col h-[calc(100vh-12rem)] w-full max-w-full min-w-0 overflow-hidden">
       <EnhancedChatProvider projectId={projectId}>
-        <TaskSpecificChat projectId={projectId} task={taskParam} autoSendRunErrors={stackblitzErrorsSubmitted} />
+        <TaskSpecificChat
+          projectId={projectId}
+          task={taskParam}
+          autoSendRunErrors={stackblitzErrorsSubmitted}
+          implementCurrentPhase={implementCurrentPhase}
+        />
       </EnhancedChatProvider>
     </div>
   )
@@ -104,7 +110,7 @@ function buildWelcomeMessage(currentPhase: string | null): string {
   const phaseLine = currentPhase
     ? `We're in **${currentPhase}**. `
     : ''
-  return `I'm G.R.I.P., your Guided Real-time Intelligence Partner. ${phaseLine}Here's how we can start:
+  return `I'm G.R.I.P., your GitHub Repo-Analysis Intellectual Partner. ${phaseLine}Here's how we can start:
 
 **Option 1 — Add a few details (recommended)**  
 I may ask you in plain English about your goals, who it's for, and what it should do. Your answers help me align the build with what you want. You can answer in your own words; I'll turn that into the right technical choices.
@@ -116,17 +122,37 @@ Reply with Option 1, Option 2, or type anything you'd like to do first.`
 }
 
 // Component to handle task-specific messaging
-function TaskSpecificChat({ projectId, task, autoSendRunErrors }: { projectId: string, task: string | null, autoSendRunErrors?: boolean }) {
+function TaskSpecificChat({
+  projectId,
+  task,
+  autoSendRunErrors,
+  implementCurrentPhase
+}: {
+  projectId: string
+  task: string | null
+  autoSendRunErrors?: boolean
+  implementCurrentPhase?: boolean
+}) {
   const { sendInitialTaskMessage, sendMessage, contextEnabled, projectContext, messages } = useEnhancedChat()
   const runErrorsAutoSendDone = useRef(false)
-  const [projectState, setProjectState] = useState<{ currentPhase?: string } | null>(null)
+  const implementPhaseSentRef = useRef(false)
+  const [projectState, setProjectState] = useState<{
+    currentPhase?: string
+    phases?: Array<{ name: string; steps?: Array<{ title?: string }> }>
+  } | null>(null)
 
-  // Fetch project state (current phase) so welcome message can ask for context in phase
+  // Fetch project state (current phase + phases/steps) for welcome message and implement-current-phase
   useEffect(() => {
     if (!projectId) return
     fetch(`/api/projects/${projectId}/state`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => data && setProjectState({ currentPhase: data.currentPhase }))
+      .then((data) => {
+        if (!data) return
+        setProjectState({
+          currentPhase: data.currentPhase,
+          phases: data.phases
+        })
+      })
       .catch(() => {})
   }, [projectId])
 
@@ -200,6 +226,27 @@ function TaskSpecificChat({ projectId, task, autoSendRunErrors }: { projectId: s
     }, delayMs)
     return () => clearTimeout(timer)
   }, [autoSendRunErrors, projectId, messages, sendMessage])
+
+  // When arriving from Overview "Implement current phase in Develop", send one user message so GRIP implements the current phase steps.
+  useEffect(() => {
+    if (!implementCurrentPhase || !projectId || implementPhaseSentRef.current || !projectState?.phases?.length || !projectContext || !contextEnabled) return
+    const currentPhaseName = projectState.currentPhase || projectState.phases[0]?.name
+    const phase = projectState.phases.find((p) => p.name === currentPhaseName)
+    const stepTitles = phase?.steps?.map((s) => s.title).filter(Boolean) as string[] | undefined
+    if (!currentPhaseName || !stepTitles?.length) return
+    const timer = setTimeout(() => {
+      if (implementPhaseSentRef.current) return
+      implementPhaseSentRef.current = true
+      const prompt = `Implement all steps in the **${currentPhaseName}** phase: ${stepTitles.join(', ')}. Output the code for each file needed; I will apply and run the build.`
+      sendMessage(prompt)
+      if (typeof window !== 'undefined' && window.history.replaceState) {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('implementCurrentPhase')
+        window.history.replaceState({}, '', url.pathname + (url.search || ''))
+      }
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [implementCurrentPhase, projectId, projectState, projectContext, contextEnabled, sendMessage])
 
   // Determine if we should show the default welcome message
   // Only show default welcome if:

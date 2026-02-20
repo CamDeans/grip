@@ -26,7 +26,25 @@ const nextConfig = {
         'ssh2',
         'tree-sitter',
         'tree-sitter-javascript',
-        'tree-sitter-typescript'
+        'tree-sitter-typescript',
+        'tree-sitter-python',
+        'tree-sitter-html',
+        'tree-sitter-css',
+        'tree-sitter-json',
+        'tree-sitter-c',
+        'tree-sitter-cpp',
+        'tree-sitter-go',
+        'tree-sitter-rust',
+        'tree-sitter-ruby',
+        'tree-sitter-java',
+        'tree-sitter-lua',
+        'tree-sitter-bash',
+        'tree-sitter-markdown',
+        'tree-sitter-yaml',
+        'tree-sitter-toml',
+        'tree-sitter-php',
+        'tree-sitter-kotlin',
+        'tree-sitter-swift'
       ]
     }
 

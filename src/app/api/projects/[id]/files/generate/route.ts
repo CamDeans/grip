@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
 import { getFilesToGenerate } from '@/lib/services/projectPlanningService'
-import { generateFile, FileGenerationRequest } from '@/lib/services/fileGeneratorService'
+import { generateFile, getGeneratedFiles, FileGenerationRequest } from '@/lib/services/fileGeneratorService'
+import { getProjectState } from '@/lib/services/projectStateService'
+import { getProjectContextForHighLevelFiles } from '@/lib/services/highLevelFileContextService'
 import { ObjectId } from 'mongodb'
 
 /**
@@ -26,20 +28,50 @@ export async function POST(
     }
 
     // Get request body
-    const body = await request.json()
-    
-    // Get plan ID (optional - if not provided, will use the latest plan)
-    const { planId } = body
+    const body = await request.json().catch(() => ({}))
+    const { planId, forceRegenerate } = body as { planId?: string; forceRegenerate?: boolean }
 
-    // Get files to generate
+    // Get target file list first (from plan suggestedFiles or derived from plan; else structure-based)
     const filesToGenerate = await getFilesToGenerate(id)
-    
+
     if (!filesToGenerate || filesToGenerate.length === 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         message: 'No files to generate',
         fileCount: 0,
         generatedFiles: []
       })
+    }
+
+    // Skip only when we already have at least as many files as the plan wants (avoids duplicate token use unless we need to top up)
+    const existingFiles = await getGeneratedFiles(id)
+    if (!forceRegenerate && existingFiles.length >= filesToGenerate.length) {
+      return NextResponse.json({
+        message: 'Project already has full file set; skipping generation',
+        fileCount: existingFiles.length,
+        successCount: existingFiles.length,
+        errorCount: 0,
+        skipped: true,
+        generatedFiles: existingFiles.slice(0, 20).map((f) => ({ id: f._id?.toString(), name: f.filename, path: f.path, success: true }))
+      })
+    }
+
+    // Load project state so generated content aligns with current build phase and steps
+    const projectState = await getProjectState(id)
+    const currentPhase = projectState?.currentPhase || projectState?.phases?.[0]?.name
+    const currentPhaseData = projectState?.phases?.find((p: { name: string }) => p.name === currentPhase)
+    const phaseContext = currentPhase && currentPhaseData?.steps?.length
+      ? {
+          currentPhase,
+          stepTitles: (currentPhaseData.steps as { title?: string }[]).map((s) => s.title || '').filter(Boolean)
+        }
+      : undefined
+
+    // Project-specific context for high-level files (package.json name + scripts, entry path)
+    let highLevelContext: Awaited<ReturnType<typeof getProjectContextForHighLevelFiles>> | null = null
+    try {
+      highLevelContext = await getProjectContextForHighLevelFiles(id)
+    } catch (e) {
+      console.warn('Could not load project context for high-level files, using defaults:', e)
     }
 
     // Generate files
@@ -51,13 +83,27 @@ export async function POST(
         const filePath = file.path || ''
         const fileName = file.name || filePath.split('/').pop() || 'file.txt'
         const fullPath = filePath && !filePath.endsWith(fileName) ? `${filePath.replace(/\/$/, '')}/${fileName}` : (filePath || fileName)
+        const templateId = meta.template || 'ts-utility'
+
+        // Inject project-specific variables for package.json so name and scripts match the project
+        let variables = meta.variables || {}
+        if (templateId === 'package-json' && highLevelContext) {
+          variables = {
+            ProjectName: highLevelContext.projectName,
+            DevScript: highLevelContext.devScript,
+            BuildScript: highLevelContext.buildScript,
+            StartScript: highLevelContext.startScript,
+          }
+        }
+
         const genRequest: FileGenerationRequest = {
           projectId: id,
           filePath: fullPath,
           filename: fileName,
-          templateId: meta.template || 'ts-utility',
-          variables: meta.variables || {},
-          description: meta.description || 'Generated from plan'
+          templateId,
+          variables,
+          description: meta.description || 'Generated from plan',
+          phaseContext
         }
         
         const result = await generateFile(genRequest)

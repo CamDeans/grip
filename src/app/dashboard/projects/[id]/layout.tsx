@@ -17,7 +17,7 @@ interface Project {
 const STEP_CONFIG = [
   { id: 'overview', path: '', label: 'Overview', pathMatch: (base: string) => base === '' },
   { id: 'setup', path: '/settings', label: 'Settings', pathMatch: (base: string) => base === 'settings' },
-  { id: 'repo', path: '/repo', label: 'Repo', pathMatch: (base: string) => base === 'repo' },
+  { id: 'repo', path: '/repo', label: 'Repos', pathMatch: (base: string) => base === 'repo' },
   { id: 'develop', path: '/enhanced-chat', label: 'Develop', pathMatch: (base: string) => base === 'enhanced-chat' || base === 'sandbox-chat' },
   { id: 'preview', path: '/preview', label: 'Preview', pathMatch: (base: string) => base === 'preview' },
 ] as const

@@ -63,7 +63,7 @@ export function UserSettingsForm({ initialData }: Props) {
           id="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="form-input mt-1"
+          className="form-input mt-1.5"
         />
       </div>
 
@@ -71,7 +71,7 @@ export function UserSettingsForm({ initialData }: Props) {
         <label htmlFor="githubToken" className="block text-sm font-medium text-text-primary">
           GitHub Personal Access Token
         </label>
-        <div className="mt-1">
+        <div className="mt-1.5">
           <input
             type="password"
             id="githubToken"

@@ -458,7 +458,7 @@ export async function ensureProjectState(projectId: string, phases: IProjectStat
         const welcomeMessage: AIMessage = {
           id: 'initial',
           role: 'assistant',
-          content: 'Welcome! I am G.R.I.P., your Guided Real-time Intelligence Partner. I have analyzed your requirements and I am ready to help you build your project. What would you like to work on first?',
+          content: 'Welcome! I am G.R.I.P., your GitHub Repo-Analysis Intellectual Partner. I have analyzed your requirements and I am ready to help you build your project. What would you like to work on first?',
           timestamp: new Date()
         }
 

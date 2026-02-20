@@ -1,6 +1,6 @@
 # G.R.I.P. Documentation
 
-Welcome to the G.R.I.P. (Guided Real-time Intelligence Partner) documentation. This directory contains comprehensive documentation for using, developing, and extending the G.R.I.P. platform.
+Welcome to the G.R.I.P. (GitHub Repo-Analysis Intellectual Partner) documentation. This directory contains comprehensive documentation for using, developing, and extending the G.R.I.P. platform.
 
 ## Documentation Index
 

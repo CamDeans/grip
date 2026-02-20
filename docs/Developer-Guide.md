@@ -354,7 +354,7 @@ export function createCodeGenerationPrompt(
   projectContext: ProjectContext,
   existingCode?: string[]
 ) {
-  const systemPrompt = `You are G.R.I.P. (Guided Real-time Intelligence Partner), an AI assistant specialized in generating code.
+  const systemPrompt = `You are G.R.I.P. (GitHub Repo-Analysis Intellectual Partner), an AI assistant specialized in generating code.
   
 Project Context:
 Title: ${projectContext.title}

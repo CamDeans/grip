@@ -13,16 +13,18 @@ export async function GET() {
     const db = client.db(process.env.MONGODB_DB_NAME || 'test')
     const user = await db.collection('users').findOne(
       { _id: new ObjectId(session.user.id) },
-      { projection: { name: 1, githubToken: 1, notifications: 1, mongodbUri: 1, vercelToken: 1, vercelTeamId: 1 } }
-    ) as { name?: string; githubToken?: string; notifications?: boolean; mongodbUri?: string; vercelToken?: string; vercelTeamId?: string } | null
+      { projection: { name: 1, githubToken: 1, notifications: 1, mongodbUri: 1, vercelToken: 1, vercelTeamId: 1, anthropicApiKey: 1 } }
+    ) as { name?: string; githubToken?: string; notifications?: boolean; mongodbUri?: string; vercelToken?: string; vercelTeamId?: string; anthropicApiKey?: string } | null
     const hasGithubToken = !!(user?.githubToken && String(user.githubToken).trim())
     const hasMongodbConnection = !!(user?.mongodbUri && String(user.mongodbUri).trim())
     const hasVercelConnection = !!(user?.vercelToken && String(user.vercelToken).trim())
+    const hasAnthropicApiKey = !!(user?.anthropicApiKey && String(user.anthropicApiKey).trim())
     return NextResponse.json({
       name: user?.name ?? '',
       hasGithubToken,
       hasMongodbConnection,
       hasVercelConnection,
+      hasAnthropicApiKey,
       notifications: user?.notifications ?? false,
     })
   } catch (error) {
@@ -39,7 +41,7 @@ export async function PUT(req: Request) {
     }
 
     const body = await req.json()
-    const { name, githubToken, notifications, mongodbUri, vercelToken, vercelTeamId } = body
+    const { name, githubToken, notifications, mongodbUri, vercelToken, vercelTeamId, anthropicApiKey } = body
 
     const client = await clientPromise
     const db = client.db(process.env.MONGODB_DB_NAME || 'test')
@@ -51,6 +53,7 @@ export async function PUT(req: Request) {
     if (mongodbUri !== undefined) updates.mongodbUri = mongodbUri ? String(mongodbUri).trim() : ''
     if (vercelToken !== undefined) updates.vercelToken = vercelToken ? String(vercelToken).trim() : ''
     if (vercelTeamId !== undefined) updates.vercelTeamId = vercelTeamId ? String(vercelTeamId).trim() : ''
+    if (anthropicApiKey !== undefined) updates.anthropicApiKey = anthropicApiKey ? String(anthropicApiKey).trim() : ''
 
     await db.collection('users').updateOne(
       { _id: new ObjectId(session.user.id) },

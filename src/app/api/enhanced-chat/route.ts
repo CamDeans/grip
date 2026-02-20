@@ -4,7 +4,8 @@ import clientPromise from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireAppAccess, requireTokenBalance, getAppAccess } from '@/lib/access'
-import { buildTokenBudgetPromptFragment } from '@/lib/constants/tokenBudgetPlan'
+import { buildTokenBudgetPromptFragment, getChatResponseMaxTokens } from '@/lib/constants/tokenBudgetPlan'
+import { getChatSectionBudgets } from '@/lib/constants/tokenLimitsByTier'
 import { addTokenUsage } from '@/lib/tokenUsage'
 import { anthropicService } from '@/lib/services/anthropicService'
 import { getOrBuildRepoContextDocument } from '@/lib/services/repoContextService'
@@ -14,14 +15,15 @@ import { getProjectState, updateProjectState, recordFileSaveAndAdvanceStep } fro
 import { createProjectFolder, saveProjectFile } from '@/lib/services/gripProjectActions'
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 import { runMainProject } from '@/lib/runMainProject'
-import { MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { STYLING_REQUIREMENTS_FOR_GRIP } from '@/lib/constants/stylingReferenceRepos'
 import { detectRepoType, getMandatoryRepoTypeRules } from '@/lib/repoTypeDetection'
 
 // Phase 2, Step 2: Create Project Data Fetcher for enhanced chat
 //
 // Token/section budgets (for consistency; truncation applied in each section):
-// - projectAnalysis: 8000 chars; structuredSummary: 4000; repoReferenceDoc: 28000; build errors raw: 4000
-const PROMPT_SECTION_BUDGETS = { projectAnalysis: 8000, structuredSummary: 4000, repoReference: 28000, buildErrorsRaw: 4000 } as const
+// Section budgets are tier + remaining-token based (see getChatSectionBudgets). Fallback when not provided:
+const DEFAULT_PROMPT_SECTION_BUDGETS = { projectAnalysis: 8000, structuredSummary: 4000, repoReference: 28000, buildErrorsRaw: 4000 } as const
 //
 // Strengthening insights (main + sandbox parity). See docs/GRIP_SANDBOX_PARITY.md for full checklist.
 // - Analysis: tree-sitter runs for both; main → analyses, sandbox → sandboxAnalyses; full repo via repoFiles.
@@ -58,9 +60,14 @@ const buildSystemPrompt = (
   userUploadsSummary?: string,
   repoTypeRules?: string,
   tokenBudgetHint?: string,
-  userHasMongoDB?: boolean
+  userHasMongoDB?: boolean,
+  sectionBudgets?: { projectAnalysis: number; structuredSummary: number; repoReference: number; buildErrorsRaw: number }
 ) => {
-  let prompt = `You are G.R.I.P. (Guided Real-time Intelligence Partner) designed to help with software development projects. 
+  const pa = sectionBudgets?.projectAnalysis ?? DEFAULT_PROMPT_SECTION_BUDGETS.projectAnalysis
+  const ss = sectionBudgets?.structuredSummary ?? DEFAULT_PROMPT_SECTION_BUDGETS.structuredSummary
+  const rr = sectionBudgets?.repoReference ?? DEFAULT_PROMPT_SECTION_BUDGETS.repoReference
+  const be = sectionBudgets?.buildErrorsRaw ?? DEFAULT_PROMPT_SECTION_BUDGETS.buildErrorsRaw
+  let prompt = `You are G.R.I.P. (GitHub Repo-Analysis Intellectual Partner) designed to help with software development projects. 
 You are G.R.I.P., an AI assistant built specifically for helping developers automate project creation. Do not claim to be or reference any other AI product or provider.
 
 Your primary purpose is to help guide users through building out projects by writing code, creating files, and implementing features
@@ -223,10 +230,17 @@ ${userUploadsSummary}
 
   // Mandatory build quality so GRIP follows same bar (latest libs, modern UX/UI, token efficiency)
   prompt += `\n${MANDATORY_GRIP_BUILD_QUALITY}\n\n`
+  // Mandatory project-specific scaffolding: package.json/tsconfig/README project-specific; scripts match stack
+  prompt += `\n${MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING}\n\n`
+  // Mandatory production readiness: real implementations, valid Route Handlers/App Router, no stubs or code-as-string
+  prompt += `\n${MANDATORY_GRIP_PRODUCTION_READINESS}\n\n`
   // Mandatory package.json and runnable StackBlitz: never blank, never incorrect; deps match code
   prompt += `\n${MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE}\n\n`
   // Mandatory .env files and production setup: build .env.example, use GRIP Settings, inform user how to set up and test for production
   prompt += `\n${MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP}\n\n`
+
+  // Styling reference: shadcn-ui/ui and tailwindlabs/headlessui so GRIP receives styling requirements in prompts
+  prompt += `\n## Styling reference (web/UI projects)\nFor web and UI projects, follow these styling requirements so generated UIs match shadcn/ui and Headless UI patterns:\n\n${STYLING_REQUIREMENTS_FOR_GRIP}\n\n`
 
   // Development plan (phases and tasks) and file hierarchy so GRIP uses the same plan and paths
   if (planContext) {
@@ -332,7 +346,7 @@ ${userUploadsSummary}
     }
     const raw = typeof lastRunErrors.raw === 'string' ? lastRunErrors.raw.trim() : ''
     if (raw.length > 0) {
-      prompt += `\nRaw build/runtime log (use this to understand context and file paths):\n\`\`\`\n${raw.slice(0, 4000)}${raw.length > 4000 ? '\n...(truncated)' : ''}\n\`\`\`\n`
+      prompt += `\nRaw build/runtime log (use this to understand context and file paths):\n\`\`\`\n${raw.slice(0, be)}${raw.length > be ? '\n...(truncated)' : ''}\n\`\`\`\n`
     }
     const isStackBlitzMetroError = /memory access out of bounds|createHash|metro-file-map/i.test(raw) ||
       (Array.isArray(lastRunErrors.errors) && lastRunErrors.errors.some((e: string) => /memory access out of bounds|createHash|metro-file-map/i.test(e)))
@@ -358,7 +372,7 @@ ${userUploadsSummary}
       // Tree-sitter analysis available - use it as primary analysis (what to implement; do not copy repo code)
       prompt += `\n## Repository Analysis (tree-sitter AST analysis — use for what to implement; do NOT copy repo code)\n`
       prompt += `The text below is derived from tree-sitter analysis of the repo (structure, flows, entrypoints). Use it together with the "Repository features and APIs" checklist to know what to build; implement each in new code only.\n\n`
-      prompt += `${ra.projectAnalysis.slice(0, 8000)}\n`
+      prompt += `${ra.projectAnalysis.slice(0, pa)}\n`
     } else if (Array.isArray(ra?.fileAnalyses) && ra.fileAnalyses.length > 0) {
       // Fallback: Use file-level analyses from tree-sitter
       prompt += `\n## Repository Analysis (tree-sitter file-level analysis)\n`
@@ -455,7 +469,7 @@ Based on the repository analysis, you can help with:
   if (structuredSummary && structuredSummary.trim()) {
     prompt += `\n## Structured repo analysis (tree-link summary — capabilities vs requirements; no repo code)\n`
     prompt += `Summary from tree-sitter analysis. Use with the "Repository features and APIs" checklist: implement each item in new code; align with user stories and acceptance criteria when present.\n\n`
-    prompt += `${structuredSummary.slice(0, 4000)}\n`
+    prompt += `${structuredSummary.slice(0, ss)}\n`
   }
 
   if (repoReferenceDoc && repoReferenceDoc.length > 0) {
@@ -463,8 +477,8 @@ Based on the repository analysis, you can help with:
     prompt += `Use this **together with the tree-sitter analysis** (Repository Analysis, Structured repo analysis, and "Repository features and APIs" checklist above): the analysis tells you **what** to implement (routes, entrypoints, capabilities, user stories); this section shows **how** the repo implements it (patterns, APIs, file layout). You MUST use it only to understand patterns, architecture, and APIs—**never** to copy or closely paraphrase code.\n`
     prompt += `- Base the development plan and phases on what the repo does (features, flows, routes, APIs), but implement everything here as new, clean-room code.\n`
     prompt += `- When a file exists in the repo, you may mirror its responsibilities and structure in new files in this project, but do not paste its contents. Integrate via compatible APIs and data shapes.\n\n`
-    prompt += repoReferenceDoc.slice(0, 28000)
-    if (repoReferenceDoc.length > 28000) prompt += '\n_(document truncated)_'
+    prompt += repoReferenceDoc.slice(0, rr)
+    if (repoReferenceDoc.length > rr) prompt += '\n_(document truncated)_'
     prompt += '\n\n'
   } else if (projectContext?.repository) {
     prompt += `\n## Repository context note\n`
@@ -1214,6 +1228,7 @@ export async function POST(request: NextRequest) {
     const access = await getAppAccess(session)
     const remainingTokens = Math.max(0, (access.tokenAllowance ?? 0) - (access.tokensUsedThisPeriod ?? 0))
     const tokenBudgetHint = buildTokenBudgetPromptFragment(remainingTokens, access.tier ?? 'starter', 'chat')
+    const sectionBudgets = getChatSectionBudgets(access.tier ?? 'starter', remainingTokens)
 
     const { message, projectId, messages: clientMessages, runAfterApply: runAfterApplyRaw } = await request.json()
 
@@ -1680,7 +1695,7 @@ export async function POST(request: NextRequest) {
     // Build system prompt with context
     const userDoc = session?.user?.id ? await db.collection('users').findOne({ _id: new ObjectId(session.user.id) }, { projection: { mongodbUri: 1 } }) as { mongodbUri?: string } | null : null
     const userHasMongoDB = !!(userDoc?.mongodbUri && String(userDoc.mongodbUri).trim())
-    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, tokenBudgetHint, userHasMongoDB)
+    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, tokenBudgetHint, userHasMongoDB, sectionBudgets)
 
     // Production readiness: fail gracefully when AI is not configured
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
@@ -1702,11 +1717,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const responseMaxTokens = getChatResponseMaxTokens(remainingTokens)
     let response
     try {
       response = await anthropicService.createMessage(
         history.map(m => ({ role: m.role, content: m.content })),
-        { system: systemPrompt }
+        { system: systemPrompt, maxTokens: responseMaxTokens }
       )
     } catch (apiErr) {
       console.error('G.R.I.P. AI request failed:', apiErr)
@@ -1732,6 +1748,10 @@ export async function POST(request: NextRequest) {
     const backtickCount = (aiMessage.match(/```/g) || []).length
     if (backtickCount % 2 !== 0) {
       aiMessage = aiMessage.trimEnd() + '\n```'
+    }
+    // When the API stopped due to max_tokens, show the user so they know the response was cut off and can ask for less or add tokens
+    if (response.stopReason === 'max_tokens') {
+      aiMessage += '\n\n---\n**Note:** This response was cut off due to the token limit. To avoid incomplete files, try asking for a smaller change (e.g. one file at a time), or add more tokens in Settings → Token limits.'
     }
 
     // Parse and execute grip-actions (create_folder) so GRIP can create folders for the user
@@ -1919,7 +1939,7 @@ export async function POST(request: NextRequest) {
             { role: 'assistant' as const, content: aiMessage },
             { role: 'user' as const, content: buildFailedUserMessage },
           ]
-          const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, tokenBudgetHint, userHasMongoDB)
+          const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, tokenBudgetHint, userHasMongoDB, sectionBudgets)
 
           const responseRetry = await anthropicService.createMessage(historyForRetry, { system: systemPromptRetry })
           const tokensRetry = responseRetry.usage?.totalTokens ?? (responseRetry.usage?.promptTokens ?? 0) + (responseRetry.usage?.completionTokens ?? 0)

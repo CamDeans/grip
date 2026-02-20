@@ -79,7 +79,7 @@ export async function setupProject(options: SetupOptions) {
     const readme = `# ${projectName}
 
 ## Project Overview
-This project was set up using GRIP (Guided Real-time Intelligence Partner).
+This project was set up using GRIP (GitHub Repo-Analysis Intellectual Partner).
 
 ## Getting Started
 1. Install dependencies:

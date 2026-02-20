@@ -216,6 +216,150 @@ export function {{name}}({{#params}}{{name}}: {{type}}{{^last}}, {{/last}}{{/par
       isBuiltIn: true
     })
     
+    // package.json — mandatory for StackBlitz preview (GRIP must always include)
+    templates.push({
+      id: 'package-json',
+      name: 'package.json',
+      description: 'Root package.json for npm/StackBlitz',
+      language: 'json',
+      fileType: 'json',
+      template: `{
+  "name": "{{ProjectName}}",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "{{DevScript}}",
+    "build": "{{BuildScript}}",
+    "start": "{{StartScript}}"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}`,
+      variables: ['ProjectName', 'DevScript', 'BuildScript', 'StartScript'],
+      defaultValues: {
+        ProjectName: 'my-app',
+        DevScript: 'vite',
+        BuildScript: 'tsc && vite build',
+        StartScript: 'vite preview'
+      },
+      isBuiltIn: true
+    })
+
+    // src/index.tsx — mandatory entry point for StackBlitz preview
+    templates.push({
+      id: 'index-tsx',
+      name: 'index.tsx',
+      description: 'Entry point for app preview',
+      language: 'typescript',
+      fileType: 'tsx',
+      template: `import React from 'react'
+import { createRoot } from 'react-dom/client'
+import App from './App'
+
+const root = document.getElementById('root')
+if (root) createRoot(root).render(<App />)
+`,
+      variables: [],
+      defaultValues: {},
+      isBuiltIn: true
+    })
+
+    // tsconfig.json — mandatory for TypeScript/StackBlitz preview
+    templates.push({
+      id: 'tsconfig-json',
+      name: 'tsconfig.json',
+      description: 'TypeScript config for build and preview',
+      language: 'json',
+      fileType: 'json',
+      template: `{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true
+  },
+  "include": ["src"]
+}`,
+      variables: [],
+      defaultValues: {},
+      isBuiltIn: true
+    })
+
+    // .env.example — mandatory so user can run preview; placeholders map to GRIP Dashboard → Settings
+    templates.push({
+      id: 'env-example',
+      name: '.env.example',
+      description: 'Environment template for StackBlitz and local run; copy from GRIP Settings',
+      language: 'plaintext',
+      fileType: 'example',
+      template: `# Copy this to .env.local or .env and fill in values.
+# Many values can be copied from GRIP: Dashboard → Settings (Backend connections, AI API Keys, System Integration).
+
+# Backend (copy from Dashboard → Settings → Backend connections)
+MONGODB_URI="your_mongodb_uri_here"
+
+# AI / chat (copy from Dashboard → Settings → AI API Keys)
+ANTHROPIC_API_KEY="your-anthropic-api-key"
+
+# System integration (copy from Dashboard → Settings → System Integration)
+GITHUB_API_TOKEN="your-github-api-token"
+VERCEL_TOKEN="your-vercel-token"
+VERCEL_TEAM_ID=""
+
+# App URL (for auth callbacks; set in production to your deployed URL)
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+# VITE_* or NEXT_PUBLIC_* — add any project-specific vars below.
+{{ProjectSpecificVars}}`,
+      variables: ['ProjectSpecificVars'],
+      defaultValues: { ProjectSpecificVars: '' },
+      isBuiltIn: true
+    })
+
+    // README.md — mandatory project-specific README (name, description, getting started, tech stack)
+    templates.push({
+      id: 'readme-md',
+      name: 'README.md',
+      description: 'Project-specific README: project name, description, getting started, tech stack',
+      language: 'markdown',
+      fileType: 'md',
+      template: `# {{ProjectName}}
+
+{{ProjectDescription}}
+
+## Getting started
+
+{{GettingStarted}}
+
+## Tech stack
+
+{{TechStack}}
+
+## Scripts
+
+- \`npm install\` — Install dependencies
+- \`npm run dev\` — Start development server
+- \`npm run build\` — Build for production
+- \`npm run start\` — Start production server (if applicable)
+`,
+      variables: ['ProjectName', 'ProjectDescription', 'GettingStarted', 'TechStack'],
+      defaultValues: {
+        ProjectName: 'My App',
+        ProjectDescription: 'Application description. Replace with project-specific summary.',
+        GettingStarted: '1. Copy `.env.example` to `.env.local` and fill in values.\\n2. Run `npm install` then `npm run dev`.',
+        TechStack: 'List the frameworks and libraries used in this project.'
+      },
+      isBuiltIn: true
+    })
+
     // API route template
     templates.push({
       id: 'api-route',
@@ -450,6 +594,40 @@ export async function getTemplateById(templateId: string): Promise<ITemplate | n
 }
 
 /**
+ * Try to parse AI JSON that may contain backticks, unterminated strings, or truncation.
+ * Returns null if no valid object can be extracted.
+ */
+function parseJsonRelaxed(jsonString: string): Record<string, string> | null {
+  try {
+    return JSON.parse(jsonString) as Record<string, string>
+  } catch {
+    // no-op
+  }
+  // Extract "key":"value" or "key":`value` pairs so we still get variables when JSON is malformed
+  const out: Record<string, string> = {}
+  // Double-quoted value: "key":"value" (value stops at first unescaped ")
+  const doubleRe = /"([A-Za-z_][A-Za-z0-9_]*)":\s*"((?:[^"\\]|\\.)*)"/g
+  let m
+  while ((m = doubleRe.exec(jsonString)) !== null) {
+    out[m[1]] = m[2].replace(/\\"/g, '"').slice(0, 500)
+  }
+  // Backtick value: "key":`value` (AI sometimes uses backticks; invalid JSON)
+  const backtickRe = /"([A-Za-z_][A-Za-z0-9_]*)":\s*`([^`]*)`/g
+  while ((m = backtickRe.exec(jsonString)) !== null) {
+    out[m[1]] = m[2].replace(/\\/g, '\\\\').slice(0, 500)
+  }
+  if (Object.keys(out).length > 0) return out
+  return null
+}
+
+/** Derive ComponentName from file path (e.g. incident-form.tsx -> IncidentForm). */
+function componentNameFromPath(filePath: string): string {
+  const name = filePath.split('/').pop() || 'Component'
+  const base = name.replace(/\.[^.]+$/, '')
+  return base.split(/[-_]/).map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('')
+}
+
+/**
  * Generate template variables using AI
  * @param template Template to use
  * @param projectContext Context information about the project
@@ -463,6 +641,7 @@ export async function generateTemplateVariables(
     fileNode: IFileNode;
     projectStructure: IProjectStructureData;
     description?: string;
+    phaseContext?: { currentPhase: string; stepTitles: string[] };
   }
 ): Promise<ITemplateVariables> {
   try {
@@ -477,6 +656,10 @@ export async function generateTemplateVariables(
       return {}
     }
     
+    const phaseBlock = projectContext.phaseContext?.stepTitles?.length
+      ? `\nCurrent build phase: "${projectContext.phaseContext.currentPhase}". Steps in this phase: ${projectContext.phaseContext.stepTitles.join('; ')}. Generate variable values that support implementing these steps.\n`
+      : ''
+    
     // Build prompt for AI
     const prompt = `
 I need to generate appropriate values for variables in a code template.
@@ -486,9 +669,9 @@ Template Variables: ${missingVariables.join(', ')}
 
 File Path: ${projectContext.filePath}
 Project Description: ${projectContext.description || 'Not provided'}
+${phaseBlock}
 
-Please generate appropriate values for these variables that would make sense in the context 
-of this template and file path. Return the values in JSON format.
+Return ONLY a single JSON object. Use double quotes for keys and string values. Do not use backticks. Keep string values short (under 200 chars) so the JSON is valid. Example: {"ComponentName":"MyComponent","ComponentContent":"<p>Hello</p>"}
 `
     const anthropic = getAnthropicClient()
     if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
@@ -503,26 +686,33 @@ of this template and file path. Return the values in JSON format.
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     const jsonString = jsonMatch ? jsonMatch[0] : '{}'
     
-    try {
-      const generatedVariables = JSON.parse(jsonString) as Record<string, string>
-      
-      // Add any complex variables that might need special handling
-      if (template.variables.includes('props') && !Object.keys(generatedVariables).includes('props')) {
-        generatedVariables.props = [] as any; // Cast to any to fix type error
+    let generatedVariables: Record<string, string> | null = parseJsonRelaxed(jsonString)
+    
+    if (!generatedVariables || Object.keys(generatedVariables).length === 0) {
+      // Fallback: use template defaultValues and derive ComponentName from path so the file still renders
+      generatedVariables = { ...(template.defaultValues || {}) } as Record<string, string>
+      if (template.variables.includes('ComponentName')) {
+        generatedVariables.ComponentName = componentNameFromPath(projectContext.filePath)
       }
-      
-      if (template.variables.includes('functions') && !Object.keys(generatedVariables).includes('functions')) {
-        generatedVariables.functions = [] as any; // Cast to any to fix type error
-      }
-      
-      return generatedVariables
-    } catch (jsonError) {
-      console.error('Error parsing AI-generated variables:', jsonError)
-      return {}
     }
+    
+    // Add any complex variables that might need special handling
+    if (template.variables.includes('props') && !Object.keys(generatedVariables).includes('props')) {
+      (generatedVariables as any).props = []
+    }
+    if (template.variables.includes('functions') && !Object.keys(generatedVariables).includes('functions')) {
+      (generatedVariables as any).functions = []
+    }
+    
+    return generatedVariables as ITemplateVariables
   } catch (error) {
     console.error('Error generating template variables:', error)
-    return {}
+    // Fallback so the file still generates
+    const fallback: Record<string, string> = { ...(template.defaultValues || {}) } as Record<string, string>
+    if (template.variables?.includes('ComponentName')) {
+      fallback.ComponentName = componentNameFromPath(projectContext.filePath)
+    }
+    return fallback as ITemplateVariables
   }
 }
 

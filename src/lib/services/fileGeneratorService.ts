@@ -25,6 +25,12 @@ import { getFileDependencies } from '@/lib/services/dependencyResolverService'
 /**
  * Interface for file generation request
  */
+/** Optional context from build phases so generated content aligns with current phase steps */
+export interface PhaseContext {
+  currentPhase: string;
+  stepTitles: string[];
+}
+
 export interface FileGenerationRequest {
   projectId: string;
   filePath: string;
@@ -32,6 +38,8 @@ export interface FileGenerationRequest {
   templateId: string;
   variables?: ITemplateVariables;
   description?: string;
+  /** When set, template variables and descriptions align with this phase and its steps */
+  phaseContext?: PhaseContext;
 }
 
 /**
@@ -106,13 +114,19 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
     // Generate variables if not provided
     let variables = request.variables || {}
     if (Object.keys(variables).length === 0) {
-      variables = await generateTemplateVariables(template, {
-        projectId: request.projectId,
-        filePath: request.filePath,
-        fileNode,
-        projectStructure,
-        description: request.description
-      })
+      // Use template defaultValues for mandatory StackBlitz files (no AI call)
+      if (template.defaultValues && Object.keys(template.defaultValues).length > 0 && (request.templateId === 'package-json' || request.templateId === 'tsconfig-json' || request.templateId === 'env-example')) {
+        variables = { ...template.defaultValues } as ITemplateVariables
+      } else {
+        variables = await generateTemplateVariables(template, {
+          projectId: request.projectId,
+          filePath: request.filePath,
+          fileNode,
+          projectStructure,
+          description: request.description,
+          phaseContext: request.phaseContext
+        })
+      }
     }
     
     // Generate filename if not provided
@@ -138,7 +152,8 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
       imports.push(match[1])
     }
     
-    const pathDir = request.filePath.includes('/') ? request.filePath.slice(0, request.filePath.lastIndexOf('/')) : ''
+    const pathDirRaw = request.filePath.includes('/') ? request.filePath.slice(0, request.filePath.lastIndexOf('/')) : ''
+    const pathDir = pathDirRaw || '/' // root-level files (package.json, tsconfig.json, .env.example) use '/' per ProjectFile convention
 
     const existingFile = await ProjectFile.findOne({
       projectId: new ObjectId(request.projectId),

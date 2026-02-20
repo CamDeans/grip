@@ -8,7 +8,7 @@ import clientPromise from '@/lib/db'
 export async function GET(request: NextRequest) {
   try {
     const client = await clientPromise
-    const db = client.db()
+    const db = client.db(process.env.MONGODB_DB_NAME || 'test')
     
     // Get authenticated user
     const session = await getServerSession()
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const client = await clientPromise
-    const db = client.db()
+    const db = client.db(process.env.MONGODB_DB_NAME || 'test')
     
     // This endpoint should be protected and only accessible internally
     // In production, use API keys or other authentication methods

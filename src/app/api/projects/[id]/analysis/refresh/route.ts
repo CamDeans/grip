@@ -7,7 +7,7 @@ import { ObjectId } from 'mongodb'
 import { analyzeProject } from '@/lib/services/analysisService'
 import { getSandboxProject } from '@/lib/services/sandboxProjectService'
 import { getOrCloneRepository } from '@/lib/repository'
-import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/sandbox/treeSitterAnalysis'
+import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/treeSitter/treeSitterAnalysis'
 import { buildTechnicalAnalysisPromptFromIdeation } from '@/lib/sandbox/ideationToTechnicalPrompt'
 
 const SANDBOX_ANALYSES_COLLECTION = 'sandboxAnalyses'

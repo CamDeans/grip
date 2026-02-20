@@ -100,7 +100,7 @@ export async function POST(
     const remainingTokens = Math.max(0, (access.tokenAllowance ?? 0) - (access.tokensUsedThisPeriod ?? 0))
     const tokenBudgetHint = buildTokenBudgetPromptFragment(remainingTokens, access.tier ?? 'starter', 'plan')
 
-    const result = await generateProjectPlan(id, { tokenBudgetHint })
+    const result = await generateProjectPlan(id, { tokenBudgetHint, tier: access.tier ?? 'starter' })
     const totalTokens = (result as { totalTokens?: number }).totalTokens ?? 0
     if (totalTokens > 0 && session.user?.id) {
       addTokenUsage(session.user.id, totalTokens).catch((err) =>

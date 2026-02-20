@@ -158,7 +158,7 @@ class AnthropicService extends EventEmitter {
   // Create message with validation
   async createMessage(
     messages: Array<{ role: string; content: string }>,
-    options?: { system?: string }
+    options?: { system?: string; maxTokens?: number }
   ): Promise<AnthropicResponse> {
     if (!this.isInitialized) {
       throw new Error('Service not initialized')
@@ -167,9 +167,10 @@ class AnthropicService extends EventEmitter {
     await this.waitForRateLimit()
 
     return this.withRetry(async () => {
+      const maxTokens = options?.maxTokens ?? this.config.maxTokens ?? 8192
       const response = await this.client.messages.create({
         model: this.config.model,
-        max_tokens: this.config.maxTokens ?? 8192,
+        max_tokens: maxTokens,
         temperature: this.config.temperature || 0.7,
         top_p: this.config.topP,
         top_k: this.config.topK,

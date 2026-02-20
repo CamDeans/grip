@@ -1,16 +1,8 @@
 /**
- * AST-based repository analysis (tree-sitter style). Used for **both** main GRIP project
- * builds and sandbox experiments. Callers decide where to store results:
- * - Main project: analysisService → analyses (projectId = main project).
- * - Sandbox: legal-sandbox/analyze → sandboxAnalyses (projectId = sandbox project).
- * No cross-talk: each project uses its own analysis doc and ideation; input-override and
- * checklist rules apply per conversation.
- *
- * Uses full native tree-sitter when optionalDependencies are installed (VS Code–style);
- * falls back to @babel/parser and @typescript-eslint/typescript-estree when not.
+ * AST-based repository analysis (tree-sitter). Used for both main GRIP and sandbox.
+ * Callers decide where to store results: analysisService → analyses; legal-sandbox/analyze → sandboxAnalyses.
+ * Uses native tree-sitter (required dependency) with multi-language support; falls back to Babel/TS-estree for JS/TS when needed.
  * Repo separation: only the user's linked repo is analyzed—never GRIP codebase.
- * When repoFiles (full cached repo) is provided, analyzes the entire repo tree so no
- * routes/APIs/features in nested dirs (e.g. src/api, src/lib) are missed.
  */
 
 import { parse as parseJS } from '@babel/parser'
@@ -19,9 +11,10 @@ import * as path from 'path'
 import { getRepositoryContentServer } from '@/lib/github'
 import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
 import Anthropic from '@anthropic-ai/sdk'
-import { parseWithTreeSitter, isTreeSitterAvailable, loadNativeTreeSitterAsync, type TreeSitterExtract } from './treeSitterNative'
+import { parseWithTreeSitter, isTreeSitterAvailable, loadNativeTreeSitterAsync, type TreeSitterExtract, PARSABLE_EXTENSIONS } from './treeSitterNative'
+import { getAnalysisRawSummaryMaxChars } from '@/lib/constants/tokenLimitsByTier'
 
-const SOURCE_EXT = /\.(ts|tsx|js|jsx)$/i
+const SOURCE_EXT = new RegExp('\\.(' + PARSABLE_EXTENSIONS.join('|') + ')$', 'i')
 const SKIP_DIRS = /(node_modules|\.next|dist|__tests__|\.git)\b/
 
 interface GhItem {
@@ -713,23 +706,22 @@ function identifyFeatures(components: SandboxAnalysisResult['components']): Sand
 }
 
 /**
- * Analyze repository using AST parsing (tree-sitter style). Sandbox-only.
- * Only analyzes the user's linked repo (owner/repo)—never GRIP codebase.
- * Fetches repo from GitHub, decodes base64, parses with native tree-sitter when
- * available else Babel/TS-estree. If technicalPrompt is provided (from user
- * ideation), it guides the project analysis so results align with user goals.
+ * Analyze repository using AST parsing (tree-sitter). Only analyzes the user's linked repo (owner/repo)—never GRIP codebase.
+ * Fetches repo from GitHub, decodes base64, parses with native tree-sitter (multi-language); falls back to Babel/TS-estree for JS/TS when needed.
+ * If technicalPrompt is provided (from user ideation), it guides the project analysis so results align with user goals.
  */
 export async function analyzeRepositoryStructureWithTreeSitter(
   owner: string,
   repo: string,
   projectId: string,
-  options?: { technicalPrompt?: string; repoFiles?: Array<{ path: string; content: string | null }> }
+  options?: { technicalPrompt?: string; repoFiles?: Array<{ path: string; content: string | null }>; tier?: string }
 ): Promise<SandboxAnalysisResult> {
   const technicalPrompt = options?.technicalPrompt?.trim() || ''
   const repoFiles = options?.repoFiles
+  const maxRawSummaryChars = getAnalysisRawSummaryMaxChars(options?.tier)
   await loadNativeTreeSitterAsync()
   const treeSitterAvailable = isTreeSitterAvailable()
-  console.log(`[Sandbox analyze] parser: ${treeSitterAvailable ? 'tree-sitter (native)' : 'Babel/TS-estree (fallback)'} | repo: ${owner}/${repo} | fullRepo: ${!!repoFiles?.length}`)
+  console.log(`[GRIP analyze] parser: ${treeSitterAvailable ? 'tree-sitter (native)' : 'Babel/TS-estree (fallback)'} | repo: ${owner}/${repo} | fullRepo: ${!!repoFiles?.length}`)
   // Repo separation: owner/repo are the user's linked repo only. We never fetch or analyze GRIP codebase.
   let sourceFileEntries: Array<{ path: string; content: string }>
   let directoryStructure: string[]
@@ -776,12 +768,13 @@ export async function analyzeRepositoryStructureWithTreeSitter(
 
   const features = identifyFeatures(allComponents)
   const structureSummary = buildTopLevelStructureSummary(directoryStructure, fileAnalyses, allComponents)
-  const rawSummary = [
-    'AST-based repository analysis (sandbox).',
+  let rawSummary = [
+    'AST-based repository analysis.',
     `Files analyzed: ${fileAnalyses.length}.`,
     structureSummary,
     fileAnalyses.length ? 'Per-file summaries:\n' + fileAnalyses.map((f) => f.analysis).join('\n\n') : '',
   ].join('\n\n')
+  rawSummary = rawSummary.slice(0, maxRawSummaryChars)
 
   let projectAnalysisText: string
   let totalTokens = 0

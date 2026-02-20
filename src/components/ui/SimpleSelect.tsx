@@ -22,7 +22,7 @@ const Select: React.FC<SelectProps> = ({ children, onValueChange, ...props }) =>
       {...props}
       onChange={handleChange}
       className={cn(
-        "w-full h-10 rounded-md border border-border-default text-black bg-white dark:text-white dark:bg-background-tertiary px-3 py-2 text-sm",
+        "w-full h-10 rounded-md border border-border bg-background-primary px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 transition-colors duration-200",
         props.className
       )}
       aria-label={accessibleName}

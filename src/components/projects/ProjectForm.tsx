@@ -98,7 +98,7 @@ export function ProjectForm({ owner, repo }: ProjectFormProps) {
             type="text"
             value={formData.title}
             onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-            className="form-input"
+            className="form-input mt-1.5"
             placeholder="Enter project title"
             aria-label="Project title"
             required
@@ -134,6 +134,14 @@ export function ProjectForm({ owner, repo }: ProjectFormProps) {
           <RepoSelector
             id="github-repo"
             onSelect={(repo) => setFormData(prev => ({ ...prev, repository: repo }))}
+            projectTitle={formData.title}
+            projectDescription={formData.description}
+            ideation={{
+              goals: formData.ideation.goals,
+              targetAudience: formData.ideation.targetAudience,
+              keyFeatures: formData.ideation.keyFeatures,
+              technicalRequirements: formData.ideation.technicalRequirements,
+            }}
           />
         </div>
 
@@ -155,7 +163,7 @@ export function ProjectForm({ owner, repo }: ProjectFormProps) {
                   ...prev,
                   ideation: { ...prev.ideation, goals: e.target.value }
                 }))}
-                className="form-input"
+                className="form-input mt-1.5"
                 rows={2}
                 placeholder="What are the main goals of this project?"
                 aria-label="Project goals"
@@ -178,7 +186,7 @@ export function ProjectForm({ owner, repo }: ProjectFormProps) {
                   ...prev,
                   ideation: { ...prev.ideation, targetAudience: e.target.value }
                 }))}
-                className="form-input"
+                className="form-input mt-1.5"
                 placeholder="Who is this project for?"
                 aria-label="Target audience"
                 required
@@ -199,7 +207,7 @@ export function ProjectForm({ owner, repo }: ProjectFormProps) {
                   ...prev,
                   ideation: { ...prev.ideation, keyFeatures: e.target.value }
                 }))}
-                className="form-input"
+                className="form-input mt-1.5"
                 rows={3}
                 placeholder="List the main features of your project"
                 aria-label="Key features"
@@ -221,7 +229,7 @@ export function ProjectForm({ owner, repo }: ProjectFormProps) {
                   ...prev,
                   ideation: { ...prev.ideation, technicalRequirements: e.target.value }
                 }))}
-                className="form-input"
+                className="form-input mt-1.5"
                 rows={2}
                 placeholder="Specify technical requirements and constraints"
                 aria-label="Technical requirements"

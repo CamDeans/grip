@@ -14,7 +14,8 @@ import {
 import { getOrCloneRepository } from '@/lib/repository'
 import { runSandboxProject } from '@/lib/sandbox/runSandboxProject'
 import { getSandboxProject } from '@/lib/services/sandboxProjectService'
-import { MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { STYLING_REQUIREMENTS_FOR_GRIP } from '@/lib/constants/stylingReferenceRepos'
 
 const MAX_HISTORY = 16
 const SANDBOX_CHAT_HISTORY_COLLECTION = 'sandboxChatHistory'
@@ -27,7 +28,7 @@ function buildLegalSandboxSystemPrompt(
   analysisContext?: string,
   structuredSummary?: string
 ): string {
-  let p = `You are G.R.I.P. (Guided Real-time Intelligence Partner) in **legal-sandbox mode** for testing a clean-room build flow. Do not claim to be or reference any other AI product or provider.
+  let p = `You are G.R.I.P. (GitHub Repo-Analysis Intellectual Partner) in **legal-sandbox mode** for testing a clean-room build flow. Do not claim to be or reference any other AI product or provider.
 
 The same GRIP main chat rules apply here: assume the user may be non-technical, always give exact file paths and real file names, and never use generic or placeholder filenames.
 
@@ -83,6 +84,16 @@ The same GRIP main chat rules apply here: assume the user may be non-technical, 
     p += `\n## Structured repo analysis (tree-link JSON summary; capabilities vs requirements; no code)\n${structuredSummary.slice(0, 4000)}\n`
   }
   p += `
+## Styling reference (web/UI projects)
+For web and UI projects, follow these styling requirements (shadcn-ui/ui, tailwindlabs/headlessui):
+${STYLING_REQUIREMENTS_FOR_GRIP}
+
+## MANDATORY: Project-specific scaffolding
+${MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING}
+
+## MANDATORY: Production readiness (real implementations, valid conventions)
+${MANDATORY_GRIP_PRODUCTION_READINESS}
+
 ## MANDATORY: package.json — never blank, never incorrect (runnable StackBlitz)
 ${MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE}
 

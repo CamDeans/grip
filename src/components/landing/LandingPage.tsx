@@ -399,7 +399,7 @@ export function LandingPage() {
             <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden />
             <span className="grip-hero-tagline font-extrabold">
               <TypingEffect
-                text="Guided Real-time Intelligence Partner"
+                text="GitHub Repo-Analysis Intellectual Partner"
                 speed={55}
                 delay={400}
                 className="grip-hero-tagline"

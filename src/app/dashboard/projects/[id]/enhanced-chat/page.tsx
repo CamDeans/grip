@@ -71,44 +71,70 @@ export default function EnhancedChatPage() {
   }
 
   const stackblitzErrorsSubmitted = searchParams?.get('stackblitzErrorsSubmitted') === '1'
+  const implementCurrentPhase = searchParams?.get('implementCurrentPhase') === '1'
 
   return (
     <div className="flex flex-col h-[calc(100vh-12rem)] w-full max-w-full min-w-0 overflow-hidden">
       <EnhancedChatProvider projectId={projectId}>
-        <TaskSpecificChat projectId={projectId} task={taskParam} autoSendRunErrors={stackblitzErrorsSubmitted} />
+        <TaskSpecificChat
+          projectId={projectId}
+          task={taskParam}
+          autoSendRunErrors={stackblitzErrorsSubmitted}
+          implementCurrentPhase={implementCurrentPhase}
+        />
       </EnhancedChatProvider>
     </div>
   )
 }
 
-// Build the GRIP starting message: user can add extra details (plain English) or just start the build
+// Build the GRIP starting message aligned with Develop flow (Overview → Develop → Preview, plan/phases)
 function buildWelcomeMessage(currentPhase: string | null): string {
   const phaseLine = currentPhase
-    ? `We're in **${currentPhase}**. `
+    ? `Your plan's current phase is **${currentPhase}**. `
     : ''
-  return `I'm G.R.I.P., your Guided Real-time Intelligence Partner. ${phaseLine}Here’s how we can start:
+  return `I'm G.R.I.P., your GitHub Repo-Analysis Intellectual Partner. You're in **Develop** — I have your project context (ideation, repo, plan, and phases from Overview). ${phaseLine}
 
-**Option 1 — Add a few details (recommended)**  
-I may ask you in plain English about your goals, who it’s for, and what it should do. Your answers help me align the build with what you want. You can answer in your own words; I’ll turn that into the right technical choices.
+**What you can do here:**
+• **Implement the current phase** — Say "implement the current phase" or "implement all steps in [phase name]" and I'll output the code for each file; you can apply and run the build from here or from Overview.
+• **Fix build or StackBlitz errors** — Paste errors or say what's failing; I'll suggest fixes and updated code.
+• **Add or change a feature** — Describe what you want in plain English; I'll align with your plan and generated files.
+• **Ask anything** — Goals, structure, next steps, or specific code; I'll stay in context with this project.
 
-**Option 2 — Start the build now**  
-If you’re ready, just say **"start the build"** or **"let’s go"** and we’ll begin with the current phase. You can add or clarify details anytime later.
-
-Reply with Option 1, Option 2, or type anything you’d like to do first.`
+Reply with one of the above, or type what you'd like to do first.`
 }
 
 // Component to handle task-specific messaging
-function TaskSpecificChat({ projectId, task, autoSendRunErrors }: { projectId: string, task: string | null, autoSendRunErrors?: boolean }) {
+function TaskSpecificChat({
+  projectId,
+  task,
+  autoSendRunErrors,
+  implementCurrentPhase
+}: {
+  projectId: string
+  task: string | null
+  autoSendRunErrors?: boolean
+  implementCurrentPhase?: boolean
+}) {
   const { sendInitialTaskMessage, sendMessage, contextEnabled, projectContext, messages } = useEnhancedChat()
   const runErrorsAutoSendDone = useRef(false)
-  const [projectState, setProjectState] = useState<{ currentPhase?: string } | null>(null)
+  const implementPhaseSentRef = useRef(false)
+  const [projectState, setProjectState] = useState<{
+    currentPhase?: string
+    phases?: Array<{ name: string; steps?: Array<{ title?: string }> }>
+  } | null>(null)
 
-  // Fetch project state (current phase) so welcome message can ask for context in phase
+  // Fetch project state (current phase + phases/steps) for welcome message and implement-current-phase
   useEffect(() => {
     if (!projectId) return
     fetch(`/api/projects/${projectId}/state`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => data && setProjectState({ currentPhase: data.currentPhase }))
+      .then((data) => {
+        if (!data) return
+        setProjectState({
+          currentPhase: data.currentPhase,
+          phases: data.phases
+        })
+      })
       .catch(() => {})
   }, [projectId])
 
@@ -182,6 +208,27 @@ function TaskSpecificChat({ projectId, task, autoSendRunErrors }: { projectId: s
     }, delayMs)
     return () => clearTimeout(timer)
   }, [autoSendRunErrors, projectId, messages, sendMessage])
+
+  // When arriving from Overview "Implement current phase in Develop", send one user message so GRIP implements the current phase steps.
+  useEffect(() => {
+    if (!implementCurrentPhase || !projectId || implementPhaseSentRef.current || !projectState?.phases?.length || !projectContext || !contextEnabled) return
+    const currentPhaseName = projectState.currentPhase || projectState.phases[0]?.name
+    const phase = projectState.phases.find((p) => p.name === currentPhaseName)
+    const stepTitles = phase?.steps?.map((s) => s.title).filter(Boolean) as string[] | undefined
+    if (!currentPhaseName || !stepTitles?.length) return
+    const timer = setTimeout(() => {
+      if (implementPhaseSentRef.current) return
+      implementPhaseSentRef.current = true
+      const prompt = `Implement all steps in the **${currentPhaseName}** phase: ${stepTitles.join(', ')}. Output the code for each file needed; I will apply and run the build.`
+      sendMessage(prompt)
+      if (typeof window !== 'undefined' && window.history.replaceState) {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('implementCurrentPhase')
+        window.history.replaceState({}, '', url.pathname + (url.search || ''))
+      }
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [implementCurrentPhase, projectId, projectState, projectContext, contextEnabled, sendMessage])
 
   // Determine if we should show the default welcome message
   // Only show default welcome if:

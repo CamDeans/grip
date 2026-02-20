@@ -86,7 +86,7 @@ export default function SupportPage() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Your name"
                 required
-                className="form-input"
+                className="form-input mt-1.5"
               />
             </div>
             <div>
@@ -100,7 +100,7 @@ export default function SupportPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 required
-                className="form-input"
+                className="form-input mt-1.5"
               />
             </div>
             <div>
@@ -113,7 +113,7 @@ export default function SupportPage() {
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Brief subject"
                 required
-                className="form-input"
+                className="form-input mt-1.5"
               />
             </div>
             <div>
@@ -125,7 +125,7 @@ export default function SupportPage() {
                 value={domain}
                 onChange={(e) => setDomain(e.target.value)}
                 placeholder="e.g. app.yourdomain.com"
-                className="form-input"
+                className="form-input mt-1.5"
               />
             </div>
             <div>
@@ -139,7 +139,7 @@ export default function SupportPage() {
                 placeholder="Describe your issue or request..."
                 required
                 rows={5}
-                className="form-input w-full resize-y"
+                className="form-input mt-1.5 w-full resize-y"
               />
             </div>
             <div className="flex flex-wrap gap-3">

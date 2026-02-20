@@ -4,7 +4,8 @@ import { Anthropic } from '@anthropic-ai/sdk'
 import { getOrCreateProjectStructure } from './structureGeneratorService'
 import { IProjectStructureData } from '@/lib/models/ProjectStructure'
 import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
-import { MANDATORY_GRIP_BUILD_QUALITY } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { buildPlanContextFromAnalysis, type PlanContextFromAnalysis } from './planContextFromAnalysisService'
 
 /**
  * Plan Generator Service - Creates development plan with tasks
@@ -96,12 +97,22 @@ export interface Phase {
   completedAt?: Date
 }
 
+/** File path derived from the plan so the full build file set is generated in one run (not just structure-derived files) */
+export interface SuggestedPlanFile {
+  path: string
+  phaseId?: string
+  taskId?: string
+  description?: string
+}
+
 export interface DevelopmentPlan {
   _id?: ObjectId
   projectId: ObjectId
   name: string
   description: string
   phases: Phase[]
+  /** Full file list for the build; when set, file generation uses this instead of structure-only (avoids "3 files" focus) */
+  suggestedFiles?: SuggestedPlanFile[]
   status: 'draft' | 'active' | 'completed' | 'archived'
   createdAt: Date
   updatedAt: Date
@@ -113,29 +124,7 @@ export type GenerateDevelopmentPlanResult = { plan: DevelopmentPlan; totalTokens
 /**
  * Generate a development plan for a project
  */
-/**
- * Build a short checklist summary from tree-sitter structured analysis for plan/phase alignment.
- * Used so development plan phases and tasks align with routes, entrypoints, and capabilities (main and sandbox).
- */
-function buildChecklistSummaryFromStructuredAnalysis(sa: any): string {
-  if (!sa) return ''
-  const routes = Array.isArray(sa.route_map) ? sa.route_map : []
-  const entrypoints = Array.isArray(sa.entrypoints) ? sa.entrypoints : []
-  const missing = Array.isArray(sa.ideation_alignment?.missing_capabilities) ? sa.ideation_alignment.missing_capabilities : []
-  const lines: string[] = []
-  if (routes.length) {
-    lines.push('Routes to implement: ' + routes.map((r: any) => `${r.method || 'GET'} ${r.route || ''}`).join('; '))
-  }
-  if (entrypoints.length) {
-    lines.push('Entrypoints: ' + entrypoints.map((e: any) => `${e.file}:${e.symbol || ''}`).join('; '))
-  }
-  if (missing.length) {
-    lines.push('Missing capabilities: ' + missing.map((c: any) => c.needed_capability || '').join('; '))
-  }
-  return lines.join('\n')
-}
-
-export type GenerateDevelopmentPlanOptions = { tokenBudgetHint?: string }
+export type GenerateDevelopmentPlanOptions = { tokenBudgetHint?: string; tier?: string }
 
 export async function generateDevelopmentPlan(projectId: string, options?: GenerateDevelopmentPlanOptions): Promise<GenerateDevelopmentPlanResult> {
   try {
@@ -150,25 +139,32 @@ export async function generateDevelopmentPlan(projectId: string, options?: Gener
     if (!project) {
       throw new Error(`Project not found: ${projectId}`)
     }
-    
-    // Tree-sitter checklist so phases/tasks align with repo (main GRIP)
-    let checklistSummary = ''
+
+    // Middle: tree-sitter analysis + ideation → plan context (checklist, layer prompts, stack guidance)
+    let planContext: PlanContextFromAnalysis
     try {
       const analysis = await db.collection('analyses').findOne(
         { projectId: new ObjectId(projectId) },
         { projection: { repositoryAnalysis: 1 } }
-      ) as { repositoryAnalysis?: { structuredAnalysis?: any } } | null
-      const sa = analysis?.repositoryAnalysis?.structuredAnalysis
-      if (sa) checklistSummary = buildChecklistSummaryFromStructuredAnalysis(sa)
+      ) as { repositoryAnalysis?: { structuredAnalysis?: any; projectAnalysis?: string } } | null
+      const ra = analysis?.repositoryAnalysis
+      planContext = buildPlanContextFromAnalysis({
+        structuredAnalysis: ra?.structuredAnalysis,
+        projectAnalysis: ra?.projectAnalysis,
+        ideation: project.ideation,
+        enhancedBuildRequirements: project.enhancedBuildRequirements,
+        hasRepo: !!(project.repository?.owner && project.repository?.name),
+        tier: options?.tier,
+      })
     } catch {
-      // optional
+      planContext = buildPlanContextFromAnalysis({ hasRepo: !!(project.repository?.owner && project.repository?.name) })
     }
-    
+
     // Get project structure
     const structure = await getOrCreateProjectStructure(projectId)
-    
-    // Generate initial plan (with checklist so AI aligns phases/tasks; token budget so plan fits user's allowance)
-    const { plan, totalTokens } = await createInitialPlan(projectId, project, structure, checklistSummary, options?.tokenBudgetHint)
+
+    // Generate initial plan (with plan context: checklist, layer prompts, stack guidance; token budget so plan fits user's allowance)
+    const { plan, totalTokens } = await createInitialPlan(projectId, project, structure, planContext, options?.tokenBudgetHint)
 
     // Add resource requirements
     await addResourceRequirements(plan)
@@ -201,14 +197,14 @@ export async function generateDevelopmentPlan(projectId: string, options?: Gener
 
 /**
  * Create an initial development plan
- * @param checklistSummary - From tree-sitter structured analysis; aligns phases/tasks with routes, entrypoints, capabilities
+ * @param planContext - From middle (tree-sitter + ideation): checklist, layer prompts, stack guidance
  * @param tokenBudgetHint - Optional prompt fragment so plan fits within user's remaining token allowance
  */
 async function createInitialPlan(
   projectId: string,
   project: any,
   structure: IProjectStructureData,
-  checklistSummary?: string,
+  planContext: PlanContextFromAnalysis,
   tokenBudgetHint?: string
 ): Promise<{ plan: DevelopmentPlan; totalTokens: number }> {
   const phases: Phase[] = [
@@ -219,13 +215,14 @@ async function createInitialPlan(
     createPhase('5', 'Deployment', 'Deployment preparation and launch', 4)
   ]
 
-  const totalTokens = await addTasksToPhases(phases, project, structure, checklistSummary, tokenBudgetHint)
+  const { totalTokens, suggestedFiles } = await addTasksToPhases(phases, project, structure, planContext, tokenBudgetHint)
 
   const plan: DevelopmentPlan = {
     projectId: new ObjectId(projectId),
     name: `${project.title} Development Plan`,
     description: `Development plan for ${project.title}`,
     phases,
+    suggestedFiles: suggestedFiles && suggestedFiles.length > 0 ? suggestedFiles : undefined,
     status: 'draft',
     createdAt: new Date(),
     updatedAt: new Date()
@@ -251,15 +248,15 @@ function createPhase(id: string, name: string, description: string, order: numbe
 
 /**
  * Add tasks to phases using AI
- * @param checklistSummary - From tree-sitter; align tasks with routes, entrypoints, capabilities (implement each in new code)
+ * @param planContext - From middle: checklist, layer prompts (website/web app/data), stack guidance (Shadcn, Refine, GitHub)
  */
 async function addTasksToPhases(
   phases: Phase[],
   project: any,
   structure: IProjectStructureData,
-  checklistSummary?: string,
+  planContext: PlanContextFromAnalysis,
   tokenBudgetHint?: string
-): Promise<number> {
+): Promise<{ totalTokens: number; suggestedFiles?: SuggestedPlanFile[] }> {
   try {
     // Prefer enhanced build requirements (from ideation enhancement step) so AI gets best input
     const buildReqsText = project.enhancedBuildRequirements?.fullPromptText
@@ -268,8 +265,20 @@ async function addTasksToPhases(
         ? `Project Goals: ${project.ideation.goals ?? ''}\nKey Features: ${project.ideation.keyFeatures ?? ''}\nTechnical Requirements: ${project.ideation.technicalRequirements ?? ''}`
         : ''
 
-    const checklistBlock = checklistSummary?.trim()
+    const checklistSummary = planContext.checklistSummary?.trim() ?? ''
+    const checklistBlock = checklistSummary
       ? `\nImplementation checklist from tree-sitter analysis (align phases and tasks with these; implement each in new code—do not copy repo source):\n${checklistSummary}\n\nIf the repo has both frontend and backend (e.g. separate api/ or server/ dirs), include a task for a single root dev script (e.g. concurrently or npm-run-all) so Run in StackBlitz starts the full stack.\n`
+      : ''
+
+    const lp = planContext.layerPrompts
+    const layerBlocks: string[] = []
+    if (lp.website) layerBlocks.push(`\n## Website layer\n${lp.website}`)
+    if (lp.webApp) layerBlocks.push(`\n## Web app layer\n${lp.webApp}`)
+    if (lp.data) layerBlocks.push(`\n## Data layer\n${lp.data}`)
+    const layerBlock = layerBlocks.length ? '\n' + layerBlocks.join('\n') + '\n' : ''
+
+    const stackBlock = planContext.stackGuidance?.trim()
+      ? `\n## Stack and reference guidance\n${planContext.stackGuidance}\n`
       : ''
 
     // Build prompt for AI
@@ -281,8 +290,14 @@ Project Title: ${project.title}
 Project Description: ${project.description}
 ${buildReqsText ? `\nBuild requirements (use these for task scope and quality):\n${buildReqsText}\n` : ''}
 ${checklistBlock}
+${layerBlock}
+${stackBlock}
 
 ${MANDATORY_GRIP_BUILD_QUALITY}
+
+${MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING}
+
+${MANDATORY_GRIP_PRODUCTION_READINESS}
 ${tokenBudgetHint ? `\n${tokenBudgetHint}\n` : ''}
 
 Here are the phases I've defined:
@@ -295,6 +310,8 @@ For each phase, I need a list of specific tasks. Each task should include:
 - Estimated effort (small, medium, large)
 - Dependencies (IDs of tasks that must be completed before this one)
 - Tags (relevant categories or technologies)
+
+Also output a "files" array listing every file path that should be created to implement this plan in one run. Each item: "path" (e.g. package.json, tsconfig.json, .env.example, README.md, src/app/layout.tsx), "phaseId" (e.g. "1"), "taskId" (e.g. "1.1", optional), "description" (short purpose). You MUST include: package.json (full dependencies and scripts matching the stack), tsconfig.json (project-specific), .env.example (variables this app uses), README.md (project-specific: name, description, getting started, tech stack—never generic or .env copy), plus all app/layout/pages, API routes, lib, and components. Include all config, entry, and feature files needed for the complete build—not just a few placeholders.
 
 Please output your response as a JSON object with this structure:
 {
@@ -315,6 +332,14 @@ Please output your response as a JSON object with this structure:
       ]
     },
     ...more phases
+  ],
+  "files": [
+    { "path": "package.json", "phaseId": "1", "taskId": "1.1", "description": "Dependencies and scripts (match stack)" },
+    { "path": "tsconfig.json", "phaseId": "1", "description": "TypeScript config" },
+    { "path": ".env.example", "phaseId": "1", "description": "Env template for this app" },
+    { "path": "README.md", "phaseId": "1", "description": "Project-specific README" },
+    { "path": "src/app/layout.tsx", "phaseId": "1", "description": "Root layout" },
+    ...all files for the complete build
   ]
 }
 
@@ -329,7 +354,7 @@ For dependencies, use task IDs (e.g., "1.1", "2.3") to reference tasks that must
     if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     const response = await anthropic.messages.create({
       model: ANTHROPIC_MODEL_CHAT,
-      max_tokens: 4000,
+      max_tokens: 6000,
       temperature: 0.2,
       messages: [{ role: 'user', content: prompt }]
     })
@@ -372,13 +397,27 @@ For dependencies, use task IDs (e.g., "1.1", "2.3") to reference tasks that must
           }))
         }
       }
+
+      // Parse full file list for the build (so file generation uses plan files in one run, not just structure-derived files)
+      let suggestedFiles: SuggestedPlanFile[] | undefined
+      if (Array.isArray(planData.files) && planData.files.length > 0) {
+        suggestedFiles = planData.files.map((f: { path?: string; phaseId?: string; taskId?: string; description?: string }) => ({
+          path: typeof f.path === 'string' ? f.path.trim() : '',
+          phaseId: typeof f.phaseId === 'string' ? f.phaseId : undefined,
+          taskId: typeof f.taskId === 'string' ? f.taskId : undefined,
+          description: typeof f.description === 'string' ? f.description : undefined
+        })).filter((f: SuggestedPlanFile) => f.path.length > 0)
+        if (suggestedFiles.length > 0) {
+          return { totalTokens, suggestedFiles }
+        }
+      }
     } catch (parseError) {
       console.error('Error parsing AI response:', parseError)
       
       // Fallback: create default tasks for each phase
       addDefaultTasks(phases)
     }
-    return totalTokens
+    return { totalTokens }
   } catch (error) {
     console.error('Error adding tasks to phases:', error)
     addDefaultTasks(phases)
@@ -559,17 +598,134 @@ function addDefaultTasks(phases: Phase[]): void {
 export async function getDevelopmentPlan(projectId: string): Promise<DevelopmentPlan | null> {
   try {
     const db = (await clientPromise).db()
-    
+
     // Find existing plan
     const plan = await db.collection('developmentPlans').findOne<DevelopmentPlan>({
       projectId: new ObjectId(projectId)
     })
-    
+
     return plan
   } catch (error) {
     console.error('Error getting development plan:', error)
     throw error
   }
+}
+
+/**
+ * Derive full file list from plan phases/tasks when plan has no suggestedFiles (e.g. existing plans).
+ * Calls AI once, updates plan in DB with suggestedFiles, returns the list so file generation uses the full build set.
+ */
+export async function deriveSuggestedFilesFromPlan(projectId: string): Promise<SuggestedPlanFile[]> {
+  const plan = await getDevelopmentPlan(projectId)
+  if (!plan?.phases?.length) return []
+
+  if (plan.suggestedFiles?.length) return plan.suggestedFiles
+
+  const anthropic = getAnthropicClient()
+  if (!anthropic) {
+    console.warn('deriveSuggestedFilesFromPlan: no Anthropic client, returning empty')
+    return []
+  }
+
+  const phasesText = plan.phases
+    .map(
+      (p) =>
+        `Phase ${p.id}: ${p.name}\n${(p.tasks || []).map((t) => `  - ${t.id}: ${t.title}${t.description ? ` — ${t.description}` : ''}`).join('\n')}`
+    )
+    .join('\n\n')
+
+  const prompt = `Given this development plan, output a JSON object with a single key "files": an array of file paths to implement the full build. Each item: {"path":"package.json","phaseId":"1","description":"deps"} or {"path":"src/app/layout.tsx","phaseId":"1","taskId":"1.1","description":"root layout"}. Include package.json, tsconfig.json, .env.example, README.md, src/app/layout.tsx, src/app/page.tsx, API routes, lib, and key components. For Next.js do not include src/index.tsx; for Vite include src/index.tsx. Output only valid JSON: no markdown, no trailing commas, no text after the closing brace. List 25-50 key files.
+
+Plan:
+${phasesText}`
+
+  try {
+    const response = await anthropic.messages.create({
+      model: ANTHROPIC_MODEL_CHAT,
+      max_tokens: 4000,
+      temperature: 0.2,
+      messages: [{ role: 'user', content: prompt }]
+    })
+    const content = response?.content?.[0]?.text || '{}'
+    const jsonMatch = content.match(/\{[\s\S]*\}/)
+    const jsonString = jsonMatch ? jsonMatch[0] : '{}'
+
+    let data: { files?: unknown[] }
+    try {
+      data = JSON.parse(jsonString) as { files?: unknown[] }
+    } catch {
+      data = parseFilesArrayFromText(content)
+    }
+
+    const files: SuggestedPlanFile[] = Array.isArray(data.files)
+      ? data.files
+          .map((f: { path?: string; phaseId?: string; taskId?: string; description?: string }) => ({
+            path: typeof f.path === 'string' ? f.path.trim() : '',
+            phaseId: typeof f.phaseId === 'string' ? f.phaseId : undefined,
+            taskId: typeof f.taskId === 'string' ? f.taskId : undefined,
+            description: typeof f.description === 'string' ? f.description : undefined
+          }))
+          .filter((f: SuggestedPlanFile) => f.path.length > 0)
+      : []
+
+    if (files.length > 0) {
+      const db = (await clientPromise).db()
+      await db.collection('developmentPlans').updateOne(
+        { projectId: new ObjectId(projectId) },
+        { $set: { suggestedFiles: files, updatedAt: new Date() } }
+      )
+      console.log(`deriveSuggestedFilesFromPlan: stored ${files.length} suggestedFiles for project ${projectId}`)
+      return files
+    }
+  } catch (e) {
+    console.warn('deriveSuggestedFilesFromPlan failed:', e)
+  }
+  return []
+}
+
+/**
+ * When the AI returns malformed JSON (e.g. truncated), try to extract the "files" array by bracket-matching.
+ */
+function parseFilesArrayFromText(content: string): { files: SuggestedPlanFile[] } {
+  const files: SuggestedPlanFile[] = []
+  const start = content.indexOf('"files"')
+  if (start === -1) return { files }
+  const bracketStart = content.indexOf('[', start)
+  if (bracketStart === -1) return { files }
+  let depth = 1
+  let i = bracketStart + 1
+  while (i < content.length && depth > 0) {
+    const c = content[i]
+    if (c === '[') depth++
+    else if (c === ']') depth--
+    i++
+  }
+  const arrayStr = content.slice(bracketStart, depth === 0 ? i : content.length)
+  try {
+    const arr = JSON.parse(arrayStr) as unknown[]
+    if (Array.isArray(arr)) {
+      for (const f of arr) {
+        if (f && typeof f === 'object' && typeof (f as { path?: string }).path === 'string') {
+          const o = f as { path: string; phaseId?: string; taskId?: string; description?: string }
+          files.push({
+            path: o.path.trim(),
+            phaseId: typeof o.phaseId === 'string' ? o.phaseId : undefined,
+            taskId: typeof o.taskId === 'string' ? o.taskId : undefined,
+            description: typeof o.description === 'string' ? o.description : undefined
+          })
+        }
+      }
+    }
+  } catch {
+    // Fallback: match "path":"..." with regex and collect paths (handles truncated/malformed JSON)
+    const pathRe = /"path"\s*:\s*"((?:[^"\\]|\\.)*)"/g
+    let m
+    while ((m = pathRe.exec(content)) !== null) {
+      const path = m[1].replace(/\\"/g, '"').trim()
+      if (path.length > 0 && !files.some((f) => f.path === path)) files.push({ path })
+    }
+  }
+  return { files }
 }
 
 /**

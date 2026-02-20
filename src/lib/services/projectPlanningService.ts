@@ -3,13 +3,13 @@ import clientPromise from '@/lib/db'
 import { IProjectStructureData, IFileNode } from '@/lib/models/ProjectStructure'
 import { analyzeProject, analyzeAndCreateProjectStructure } from './projectAnalyzerService'
 import { enhanceProjectStructure, generateStructurePlan, getOrCreateProjectStructure } from './structureGeneratorService'
-import { generateDevelopmentPlan, getOrCreateDevelopmentPlan, DevelopmentPlan } from './planGeneratorService'
+import { generateDevelopmentPlan, getOrCreateDevelopmentPlan, getDevelopmentPlan, deriveSuggestedFilesFromPlan, DevelopmentPlan } from './planGeneratorService'
 import { analyzeProjectDependencies, getProjectDependencyTree, getFileDependencies, getFileDependents } from './dependencyResolverService'
 import { storeProjectStructure, getProjectStructure, linkPlanToStructure, storeFileGenerationPlan } from './planStorageService'
 import { syncProjectStateFromPlan } from './projectStateService'
 import { enhanceIdeationForBuild } from './ideationEnhancementService'
 import { buildTechnicalPromptFromEnhancedRequirements } from '@/lib/sandbox/ideationToTechnicalPrompt'
-import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/sandbox/treeSitterAnalysis'
+import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/treeSitter/treeSitterAnalysis'
 
 /**
  * Project Planning Service - Integrates all Phase 3 components into a unified API
@@ -78,7 +78,7 @@ function getRecommendedDependenciesFromIdeation(project: { ideation?: { technica
  * @param projectId The ID of the project to plan
  * @returns The complete planning result
  */
-export type GenerateProjectPlanOptions = { tokenBudgetHint?: string }
+export type GenerateProjectPlanOptions = { tokenBudgetHint?: string; tier?: string }
 
 export async function generateProjectPlan(projectId: string, options?: GenerateProjectPlanOptions): Promise<PlanningResult> {
   try {
@@ -126,7 +126,7 @@ export async function generateProjectPlan(projectId: string, options?: GenerateP
             projectForTree.repository.owner,
             projectForTree.repository.name,
             projectId,
-            { technicalPrompt }
+            { technicalPrompt, tier: options?.tier }
           )
           treeAnalysisTokens = treeResult?.totalTokens ?? 0
           const { totalTokens: _t, ...analysisForDb } = treeResult
@@ -156,7 +156,7 @@ export async function generateProjectPlan(projectId: string, options?: GenerateP
     const { structure: enhancedStructure, totalTokens: structureTokens } = await enhanceProjectStructure(projectId, structure)
 
     console.log('Step 4: Generating development plan')
-    const { plan, totalTokens: planTokens } = await generateDevelopmentPlan(projectId, { tokenBudgetHint: options?.tokenBudgetHint })
+    const { plan, totalTokens: planTokens } = await generateDevelopmentPlan(projectId, { tokenBudgetHint: options?.tokenBudgetHint, tier: options?.tier })
     const totalTokens = enhancementTokens + treeAnalysisTokens + structureTokens + planTokens
     
     // Step 5: Link plan to structure
@@ -296,9 +296,23 @@ export async function planFileGeneration(
 /**
  * Default template ID by file extension (for files without generationMetadata)
  */
+/** Mandatory high-level files so the user can run preview in StackBlitz upon completion. GRIP automation always includes these when missing. */
+const MANDATORY_STACKBLITZ_FILES: Array<{ path: string; description: string }> = [
+  { path: 'package.json', description: 'Dependencies and scripts for npm/StackBlitz preview' },
+  { path: 'tsconfig.json', description: 'TypeScript config for build and preview' },
+  { path: '.env.example', description: 'Env placeholders for StackBlitz/local run; copy from Dashboard → Settings' },
+  { path: 'README.md', description: 'Project-specific README: project name, description, getting started, tech stack' },
+  { path: 'src/index.tsx', description: 'Entry point for app preview' }
+]
+
 function defaultTemplateForPath(pathOrName: string): string {
   const name = pathOrName.split('/').pop() || ''
   const ext = name.split('.').pop()?.toLowerCase() || ''
+  if (name === 'package.json') return 'package-json'
+  if (name === 'tsconfig.json') return 'tsconfig-json'
+  if (name === '.env.example') return 'env-example'
+  if (name === 'README.md') return 'readme-md'
+  if (name === 'index.tsx' && pathOrName.includes('src')) return 'index-tsx'
   if (name === 'page.tsx') return 'nextjs-page'
   if (ext === 'tsx' || ext === 'jsx') return 'react-component'
   if (ext === 'ts' || ext === 'js') return 'ts-utility'
@@ -306,11 +320,44 @@ function defaultTemplateForPath(pathOrName: string): string {
   return 'ts-utility'
 }
 
+/** Ensure package.json, tsconfig.json, and entry (src/index.tsx) are in the list so the user can preview in StackBlitz. */
+function ensureMandatoryStackBlitzFiles(
+  list: Array<IFileNode & { generationMetadata: any }>
+): Array<IFileNode & { generationMetadata: any }> {
+  const paths = new Set(list.map((f) => (f.path || '').replace(/^\/+/, '')))
+  const toAdd: Array<IFileNode & { generationMetadata: any }> = []
+  for (const { path, description } of MANDATORY_STACKBLITZ_FILES) {
+    const normalized = path.replace(/^\/+/, '')
+    if (paths.has(normalized)) continue
+    const name = normalized.includes('/') ? normalized.split('/').pop()! : normalized
+    toAdd.push({
+      type: 'file',
+      name,
+      path: normalized,
+      description,
+      generationMetadata: {
+        template: defaultTemplateForPath(normalized),
+        variables: {},
+        priority: 999,
+        dependencies: [],
+        description
+      }
+    } as IFileNode & { generationMetadata: any })
+    paths.add(normalized)
+  }
+  if (toAdd.length > 0) {
+    console.log(`Adding ${toAdd.length} mandatory StackBlitz file(s): ${toAdd.map((f) => f.path).join(', ')}`)
+    return [...toAdd, ...list]
+  }
+  return list
+}
+
 /**
  * Find and return all files in a project that need to be generated.
- * - Collects nodes with type === 'file' (with or without generationMetadata).
- * - If the structure has no file nodes (analyzer only creates directories), derives
- *   synthetic file entries from directories so the Files tab is never empty.
+ * - Prefers the plan's full file list (suggestedFiles) when present so the complete build
+ *   is generated in one run instead of only structure-derived files (e.g. the "3 files").
+ * - Otherwise collects nodes with type === 'file' from structure, or derives synthetic
+ *   file entries from directories so the Files tab is never empty.
  *
  * @param projectId The ID of the project
  * @returns Array of file nodes with generation metadata
@@ -318,14 +365,48 @@ function defaultTemplateForPath(pathOrName: string): string {
 export async function getFilesToGenerate(projectId: string): Promise<Array<IFileNode & { generationMetadata: any }>> {
   try {
     console.log(`Getting files to generate for project: ${projectId}`)
-    
+
+    let plan = await getDevelopmentPlan(projectId)
+    // When plan has no suggestedFiles (e.g. existing plans or AI didn't return "files"), derive from phases/tasks once and store
+    if (plan?.phases?.length && !plan.suggestedFiles?.length) {
+      const derived = await deriveSuggestedFilesFromPlan(projectId)
+      if (derived.length > 0) {
+        plan = await getDevelopmentPlan(projectId)
+      }
+    }
+    if (plan?.suggestedFiles?.length) {
+      const filesToGenerate: Array<IFileNode & { generationMetadata: any }> = plan.suggestedFiles.map((f, idx) => {
+        const path = f.path.replace(/^\/+/, '')
+        const name = path.includes('/') ? path.split('/').pop()! : path
+        const isAppOrPages = /(^|\/)(app|pages)(\/|$)/.test(path)
+        return {
+          type: 'file' as const,
+          name,
+          path,
+          description: f.description || `From plan phase ${f.phaseId || '—'}`,
+          generationMetadata: {
+            template: isAppOrPages ? 'nextjs-page' : defaultTemplateForPath(path),
+            variables: {},
+            priority: plan.suggestedFiles!.length - idx,
+            dependencies: [],
+            description: f.description || `From plan phase ${f.phaseId || '—'}`,
+            phaseId: f.phaseId,
+            taskId: f.taskId
+          }
+        }
+      })
+      filesToGenerate.sort((a, b) => (b.generationMetadata.priority ?? 0) - (a.generationMetadata.priority ?? 0))
+      console.log(`Using plan suggestedFiles (${filesToGenerate.length} files) for full build in one run`)
+      return ensureMandatoryStackBlitzFiles(filesToGenerate)
+    }
+
     const structure = await getProjectStructure(projectId)
     if (!structure) {
       throw new Error(`Project structure not found: ${projectId}`)
     }
-    
+
     const filesToGenerate: Array<IFileNode & { generationMetadata: any }> = []
-    
+
     const collectFiles = (node: any) => {
       if (node.type === 'file') {
         const meta = node.generationMetadata || {
@@ -383,7 +464,7 @@ export async function getFilesToGenerate(projectId: string): Promise<Array<IFile
       (b.generationMetadata?.priority ?? 0) - (a.generationMetadata?.priority ?? 0)
     )
     
-    return filesToGenerate
+    return ensureMandatoryStackBlitzFiles(filesToGenerate)
   } catch (error) {
     console.error(`Error getting files to generate: ${error}`)
     throw error

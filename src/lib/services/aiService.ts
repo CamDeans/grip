@@ -3,9 +3,19 @@ import { getAnthropicApiKey, ANTHROPIC_MODEL_OPUS } from '@/lib/anthropicConfig'
 
 // Don't use NEXT_PUBLIC_ for API keys to avoid exposing them to the client
 // Instead, we'll create an API endpoint to handle this server-side
-export async function generateKeywords(title: string, description: string): Promise<string[]> {
+export type IdeationContext = {
+  goals?: string
+  targetAudience?: string
+  keyFeatures?: string
+  technicalRequirements?: string
+}
+
+export async function generateKeywords(
+  title: string,
+  description: string,
+  ideation?: IdeationContext
+): Promise<string[]> {
   try {
-    // Call our secure API endpoint instead of directly using the Anthropic client
     const response = await fetch('/api/ai/generate-keywords', {
       method: 'POST',
       headers: {
@@ -14,6 +24,7 @@ export async function generateKeywords(title: string, description: string): Prom
       body: JSON.stringify({
         title,
         description,
+        ...(ideation && Object.values(ideation).some(Boolean) ? { ideation } : {}),
       }),
     });
 
@@ -32,27 +43,53 @@ export async function generateKeywords(title: string, description: string): Prom
 
 export type GenerateKeywordsServerResult = { keywords: string[]; totalTokens: number }
 
-// Server-side helper function for use in API routes
-export async function generateKeywordsServer(title: string, description: string): Promise<GenerateKeywordsServerResult> {
+export type IdeationContextServer = {
+  goals?: string
+  targetAudience?: string
+  keyFeatures?: string
+  technicalRequirements?: string
+}
+
+// Server-side helper: generate keywords that surface GitHub repos best aligned with the user's project
+export async function generateKeywordsServer(
+  title: string,
+  description: string,
+  ideation?: IdeationContextServer
+): Promise<GenerateKeywordsServerResult> {
   try {
     const apiKey = getAnthropicApiKey()
     if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set')
     const anthropic = new Anthropic({ apiKey })
 
-    const response = await anthropic.messages.create({
-      model: ANTHROPIC_MODEL_OPUS,
-      max_tokens: 300,
-      temperature: 0.7,
-      messages: [{
-        role: 'user',
-        content: `Based on this project information, generate 5 relevant keywords that would be effective for searching GitHub repositories. The keywords should be specific and targeted. Return ONLY the keywords themselves as a comma-separated list without explanation.
+    const hasIdeation = ideation && Object.values(ideation).some((v) => v && String(v).trim())
+
+    const prompt = `You are helping a user find the best GitHub repository to use as a reference for their project. Generate 6–8 search keywords that will surface repos that strongly align with their project intent. The goal is the best possible repo match for their ideation.
+
+Guidelines:
+- Include framework, stack, or language terms when inferable (e.g. react, nextjs, typescript, tailwind, node).
+- Include problem-domain and use-case terms (e.g. todo app, recipe, dashboard, ecommerce, auth).
+- Prefer terms that match real repo topics and descriptions (e.g. starter, template, boilerplate, example, demo when relevant).
+- Mix broad and specific terms so search results are relevant but not empty.
+- Return ONLY a comma-separated list of keywords, no explanation.
 
 Project Title: ${title}
 Project Description: ${description}
+${hasIdeation ? `
+Additional context (use this to align keywords with their goals and features):
+Goals: ${ideation!.goals?.trim() || '—'}
+Target audience: ${ideation!.targetAudience?.trim() || '—'}
+Key features: ${ideation!.keyFeatures?.trim() || '—'}
+Technical requirements: ${ideation!.technicalRequirements?.trim() || '—'}
+` : ''}
 
-Example response format:
-nextjs, react, tailwind, authentication, dashboard`
-      }]
+Example format:
+nextjs, react, typescript, todo app, tailwind, authentication`
+
+    const response = await anthropic.messages.create({
+      model: ANTHROPIC_MODEL_OPUS,
+      max_tokens: 320,
+      temperature: 0.5,
+      messages: [{ role: 'user', content: prompt }],
     });
 
     const totalTokens = (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0)

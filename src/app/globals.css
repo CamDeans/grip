@@ -51,13 +51,24 @@
 }
 
 @layer components {
-  /* Enhanced form controls */
+  /* Form controls — same dark background, border, and focus app-wide (matches Project Title input) */
   .form-input {
-    @apply block w-full rounded-md border border-border bg-background-secondary
-    px-4 py-2 text-text-primary placeholder-text-muted shadow-sm
+    @apply block w-full rounded-md border border-border bg-background-primary
+    px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary
     transition-colors duration-200 ease-in-out
-    focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background-primary
+    focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary
     disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Consistent spacing: wrap label + control in .form-group; use space-y-form between groups */
+  .form-group {
+    @apply mb-5;
+  }
+  .form-group:last-child {
+    @apply mb-0;
+  }
+  .form-group .form-control-spacing {
+    @apply mt-1.5;
   }
 
   /* Safe containment for cards/containers: prevents overflow on mobile */

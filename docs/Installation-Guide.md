@@ -1,6 +1,6 @@
 # G.R.I.P. Installation Guide
 
-This guide provides detailed instructions for installing and configuring G.R.I.P. (Guided Real-time Intelligence Partner) in various environments.
+This guide provides detailed instructions for installing and configuring G.R.I.P. (GitHub Repo-Analysis Intellectual Partner) in various environments.
 
 ## Table of Contents
 

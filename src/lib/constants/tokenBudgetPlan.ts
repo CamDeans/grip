@@ -13,7 +13,23 @@ const LOW_BUDGET_THRESHOLD = 100_000
 /** Very low: one small change per message. */
 const VERY_LOW_BUDGET_THRESHOLD = 30_000
 
+/** Max fraction of remaining tokens a single chat response may use (so one reply cannot exhaust budget). */
+const CHAT_RESPONSE_BUDGET_FRACTION = 0.35
+/** Minimum response max_tokens so we still get useful answers when budget is low. */
+const CHAT_RESPONSE_MIN_TOKENS = 2048
+/** Hard cap for a single response. */
+const CHAT_RESPONSE_MAX_TOKENS = 8192
+
 export type TokenBudgetContext = 'plan' | 'chat'
+
+/**
+ * Max tokens allowed for one chat response so we stay within budget and reduce cut-off.
+ * Use this as max_tokens when calling the model; when the model hits this limit we show a cut-off notice.
+ */
+export function getChatResponseMaxTokens(remainingTokens: number): number {
+  const budgeted = Math.floor(remainingTokens * CHAT_RESPONSE_BUDGET_FRACTION)
+  return Math.min(CHAT_RESPONSE_MAX_TOKENS, Math.max(CHAT_RESPONSE_MIN_TOKENS, budgeted))
+}
 
 /**
  * Build a prompt fragment for plan generation: user's tier and remaining tokens so the plan
@@ -62,6 +78,8 @@ export function buildTokenBudgetPromptFragment(
 ## Token budget (mandatory — stay within user's allowance)
 - The user has approximately **${remainingTokens.toLocaleString()}** tokens remaining this period (${tierLower} plan).
 - **Stay within budget:** ${scopeLine}
+- **Never output incomplete or truncated code.** Always output complete files only. If your full answer would exceed the budget, output fewer items that are complete (e.g. one full file) rather than multiple incomplete ones. Never leave a code block or file mid-way—either output the full file or say you will do it in the next message.
+- **Scope your response so it fits:** Prefer one or two complete files per reply when budget is limited. If you cannot fit everything the user asked for, do the part that fits completely and add one short line like: "I kept this to [what you did] to stay within your token budget. Next step: [suggested next step]." That way the user knows the response was intentionally scoped, not cut off.
 - Avoid dumping the full checklist in one reply when budget is limited; scope to what fits so the build succeeds and the user does not hit an overage.
 `.trim()
 }

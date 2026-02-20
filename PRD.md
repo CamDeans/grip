@@ -1,4 +1,4 @@
-# G.R.I.P (Guided Real-time Intelligence Partner)
+# G.R.I.P. (GitHub Repo-Analysis Intellectual Partner)
 
 Product Requirements Document
 

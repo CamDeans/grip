@@ -18,7 +18,8 @@ import {
   RefreshCw,
   Settings,
   Terminal,
-  ListTodo
+  ListTodo,
+  Database
 } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
 import { LoadingState } from '@/components/ui/LoadingState'
@@ -71,6 +72,12 @@ export default function ProjectSettingsPage() {
     disableWebSocket: false,
     enableLogging: true
   })
+
+  // Database (project-specific collections): uses user's MongoDB from main Settings
+  const [hasMongodbConnection, setHasMongodbConnection] = useState(false)
+  const [newCollectionName, setNewCollectionName] = useState('')
+  const [newCollectionHint, setNewCollectionHint] = useState('')
+  const [createCollectionSubmitting, setCreateCollectionSubmitting] = useState(false)
   
   // Fetch project details
   useEffect(() => {
@@ -109,6 +116,22 @@ export default function ProjectSettingsPage() {
     
     fetchProject()
   }, [projectId])
+
+  // Fetch user MongoDB connection status (collections use main Settings connection)
+  useEffect(() => {
+    const fetchUserSettings = async () => {
+      try {
+        const res = await fetch('/api/user/settings')
+        if (res.ok) {
+          const data = await res.json()
+          setHasMongodbConnection(!!data.hasMongodbConnection)
+        }
+      } catch {
+        // ignore
+      }
+    }
+    fetchUserSettings()
+  }, [])
 
   // Handle form input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -272,6 +295,10 @@ export default function ProjectSettingsPage() {
           <TabsTrigger value="advanced" className="flex gap-2 items-center">
             <Terminal className="h-4 w-4" />
             Advanced
+          </TabsTrigger>
+          <TabsTrigger value="database" className="flex gap-2 items-center">
+            <Database className="h-4 w-4" />
+            Database
           </TabsTrigger>
         </TabsList>
         
@@ -528,6 +555,66 @@ export default function ProjectSettingsPage() {
                 )}
               </Button>
             </div>
+          </TabsContent>
+
+          <TabsContent value="database" className="space-y-6 mt-2">
+            <Card className="p-4">
+              <h2 className="text-lg font-semibold mb-2">Project database collections</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Create collections in your MongoDB (connection is set in Dashboard → Settings → Backend connections). GRIP uses these when building your app in Develop.
+              </p>
+              {!hasMongodbConnection ? (
+                <p className="text-sm text-muted-foreground p-3 rounded-md bg-muted">
+                  Save a MongoDB connection in <strong>Dashboard → Settings → Backend connections</strong> first, then you can create collections here.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2 items-end">
+                  <div className="space-y-2 min-w-[140px]">
+                    <Label>Collection name</Label>
+                    <Input
+                      placeholder="e.g. users"
+                      value={newCollectionName}
+                      onChange={(e) => setNewCollectionName(e.target.value.replace(/\s/g, '_'))}
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[180px] space-y-2">
+                    <Label>What it stores (optional)</Label>
+                    <Input
+                      placeholder="e.g. user profiles and preferences"
+                      value={newCollectionHint}
+                      onChange={(e) => setNewCollectionHint(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    disabled={!newCollectionName.trim() || createCollectionSubmitting}
+                    onClick={async () => {
+                      setCreateCollectionSubmitting(true)
+                      try {
+                        const res = await fetch('/api/user/backend-connections/mongodb/collections', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ collectionName: newCollectionName.trim(), schemaHint: newCollectionHint.trim() || undefined }),
+                        })
+                        const data = await res.json()
+                        if (!res.ok) {
+                          toast({ title: 'Failed', description: data.error ?? 'Could not create collection', variant: 'destructive' })
+                          return
+                        }
+                        toast({ title: 'Collection created', description: data.message ?? `"${newCollectionName}" is ready.` })
+                        setNewCollectionName('')
+                        setNewCollectionHint('')
+                      } finally {
+                        setCreateCollectionSubmitting(false)
+                      }
+                    }}
+                  >
+                    {createCollectionSubmitting ? 'Creating…' : 'Create collection'}
+                  </Button>
+                </div>
+              )}
+            </Card>
           </TabsContent>
         </form>
       </Tabs>

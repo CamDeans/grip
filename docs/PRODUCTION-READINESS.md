@@ -2,7 +2,7 @@
 
 ## Identity
 
-- **G.R.I.P.** (Guided Real-time Intelligence Partner) is the product identity. User-facing copy uses "G.R.I.P." or "GRIP AI"; no references to Claude or Anthropic in UI, errors, or placeholders.
+- **G.R.I.P.** (GitHub Repo-Analysis Intellectual Partner) is the product identity. User-facing copy uses "G.R.I.P." or "GRIP AI"; no references to Claude or Anthropic in UI, errors, or placeholders.
 - System prompts in `/api/enhanced-chat`, `/api/ai/chat`, and `/api/chat/completion` define the assistant as G.R.I.P., not Claude/Anthropic.
 - Chat UI shows "GRIP is thinking…" and surfaces errors as "G.R.I.P. AI is temporarily unavailable" (or the API message) when the AI backend is down or misconfigured.
 

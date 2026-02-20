@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the comprehensive testing strategy for the G.R.I.P. (Guided Real-time Intelligence Partner) application. Our testing approach is designed to ensure the application is production-ready, with robust error handling, consistent performance, and seamless component interactions.
+This document outlines the comprehensive testing strategy for the G.R.I.P. (GitHub Repo-Analysis Intellectual Partner) application. Our testing approach is designed to ensure the application is production-ready, with robust error handling, consistent performance, and seamless component interactions.
 
 ## Testing Layers
 

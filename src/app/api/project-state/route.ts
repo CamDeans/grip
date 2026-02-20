@@ -169,7 +169,7 @@ export async function POST(request: Request) {
       projectId: projectId, // Use string ID for chat history lookup consistency
       id: new ObjectId().toString(),
       role: 'assistant',
-      content: `Welcome! I am G.R.I.P., your Guided Real-time Intelligence Partner. I have analyzed your project:
+      content: `Welcome! I am G.R.I.P., your GitHub Repo-Analysis Intellectual Partner. I have analyzed your project:
 
 📋 Project Overview
 -----------------

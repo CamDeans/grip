@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { MagnifyingGlassIcon, SparklesIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { MagnifyingGlassIcon, SparklesIcon, XMarkIcon, DocumentMagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui'
 import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { generateKeywords } from '@/lib/services/aiService'
+import { RepoPreviewModal } from '@/components/projects/RepoPreviewModal'
 
 interface Repository {
   id: number
@@ -16,22 +17,35 @@ interface Repository {
   language: string
 }
 
+export interface RepoSelectorIdeation {
+  goals?: string
+  targetAudience?: string
+  keyFeatures?: string
+  technicalRequirements?: string
+}
+
 interface RepoSelectorProps {
-  onSelect: (repo: { owner: string; name: string }) => void
+  onSelect: (repo: { owner: string; name: string } | null) => void
+  /** Called when user confirms repo in preview popup and clicks "Continue to next step" (optional, e.g. advance to next page) */
+  onConfirmAndContinue?: (repo: { owner: string; name: string }) => void
   projectTitle?: string
   projectDescription?: string
+  /** Optional ideation context to improve keyword generation and repo match */
+  ideation?: RepoSelectorIdeation
   id: string
 }
 
-export function RepoSelector({ 
-  onSelect, 
-  projectTitle = '', 
+export function RepoSelector({
+  onSelect,
+  projectTitle = '',
   projectDescription = '',
-  id
+  ideation,
+  id,
 }: RepoSelectorProps) {
   const [search, setSearch] = useState('')
   const [repos, setRepos] = useState<Repository[]>([])
   const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null)
+  const [previewRepo, setPreviewRepo] = useState<Repository | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false)
   const [showKeywordsPopup, setShowKeywordsPopup] = useState(false)
@@ -60,9 +74,18 @@ export function RepoSelector({
     }
   }
 
-  const handleSelectRepo = (repo: Repository) => {
-    setSelectedRepo(repo)
-    onSelect({ owner: repo.owner.login, name: repo.name })
+  /** Open preview popup (pre-selection). Repo is only set when user confirms in popup and clicks Continue. */
+  const handleOpenPreview = (repo: Repository) => {
+    setPreviewRepo(repo)
+  }
+
+  /** User confirmed repo in popup and clicked "Continue to next step". */
+  const handleConfirmAndContinueFromModal = (repo: { owner: string; name: string }) => {
+    const fullRepo = repos.find((r) => r.owner.login === repo.owner && r.name === repo.name)
+    if (fullRepo) setSelectedRepo(fullRepo)
+    onSelect(repo)
+    setPreviewRepo(null)
+    onConfirmAndContinue?.(repo)
   }
 
   const handleGenerateKeywords = async () => {
@@ -76,7 +99,7 @@ export function RepoSelector({
     setShowKeywordsPopup(false)
     setIsGeneratingKeywords(true)
     try {
-      const keywords = await generateKeywords(projectTitle, projectDescription)
+      const keywords = await generateKeywords(projectTitle, projectDescription, ideation)
       setGeneratedKeywords(keywords)
       setShowKeywordsPopup(true)
       refreshTokenUsage()
@@ -201,27 +224,60 @@ export function RepoSelector({
 
       {repos.length > 0 && (
         <div className="space-y-2">
-          {repos.map((repo) => (
+          <p className="text-xs text-text-secondary">
+            Click a repo to <strong>preview its README and images</strong> in a popup. Confirm there to select it, then use &quot;Continue to next step&quot; to proceed.
+          </p>
+          {(selectedRepo ? [selectedRepo] : repos).map((repo) => (
             <div
               key={repo.id}
               className={`p-4 rounded-lg border transition-all duration-300 ${
-                selectedRepo?.id === repo.id 
-                  ? 'border-[3px] border-transparent bg-gradient-to-r from-[#3b82f6]/20 to-[#8b5cf6]/20 shadow-[0_0_15px_rgba(59,130,246,0.3)] dark:shadow-[0_0_15px_rgba(139,92,246,0.3)] before:absolute before:inset-0 before:rounded-lg before:p-[3px] before:bg-gradient-to-r before:from-[#3b82f6] before:to-[#8b5cf6] relative before:-z-10' 
+                selectedRepo?.id === repo.id
+                  ? 'border-[3px] border-transparent bg-gradient-to-r from-[#3b82f6]/20 to-[#8b5cf6]/20 shadow-[0_0_15px_rgba(59,130,246,0.3)] dark:shadow-[0_0_15px_rgba(139,92,246,0.3)] before:absolute before:inset-0 before:rounded-lg before:p-[3px] before:bg-gradient-to-r before:from-[#3b82f6] before:to-[#8b5cf6] relative before:-z-10'
                   : 'border-border-default hover:border-border-hover hover:bg-background-hover dark:hover:bg-background-tertiary'
               } cursor-pointer`}
-              onClick={() => handleSelectRepo(repo)}
+              onClick={() => (selectedRepo?.id === repo.id ? undefined : handleOpenPreview(repo))}
               role="button"
               tabIndex={0}
-              aria-label={`Select repository: ${repo.owner.login}/${repo.name}`}
+              aria-label={selectedRepo?.id === repo.id ? `Selected: ${repo.owner.login}/${repo.name}` : `Preview repository: ${repo.owner.login}/${repo.name}`}
             >
               <div className="flex flex-col gap-2">
-                <h3 className={`font-medium ${
-                  selectedRepo?.id === repo.id 
-                    ? 'text-white'
-                    : 'text-primary-500/90 dark:text-white'
-                }`}>
-                  {repo.owner.login}/{repo.name}
-                </h3>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className={`font-medium ${
+                    selectedRepo?.id === repo.id ? 'text-white' : 'text-primary-500/90 dark:text-white'
+                  }`}>
+                    {repo.owner.login}/{repo.name}
+                  </h3>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {selectedRepo?.id === repo.id ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedRepo(null)
+                          onSelect(null)
+                        }}
+                      >
+                        Change repo
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleOpenPreview(repo)
+                        }}
+                        icon={<DocumentMagnifyingGlassIcon className="h-4 w-4" />}
+                        title="Preview README and images"
+                      >
+                        Preview
+                      </Button>
+                    )}
+                  </div>
+                </div>
                 <p className="text-sm text-text-secondary dark:text-text-secondary">{repo.description}</p>
                 {repo.language && (
                   <span className="text-xs text-text-secondary dark:text-text-secondary mt-1 inline-block bg-background-tertiary px-2 py-0.5 rounded-full">
@@ -233,6 +289,15 @@ export function RepoSelector({
           ))}
         </div>
       )}
+
+      <RepoPreviewModal
+        isOpen={!!previewRepo}
+        onClose={() => setPreviewRepo(null)}
+        owner={previewRepo?.owner.login ?? ''}
+        repo={previewRepo?.name ?? ''}
+        repoFullName={previewRepo ? `${previewRepo.owner.login}/${previewRepo.name}` : ''}
+        onConfirmAndContinue={handleConfirmAndContinueFromModal}
+      />
     </div>
   )
 }

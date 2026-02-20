@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui'
-import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, ChevronDown, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, ChevronDown, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle, Plus, RefreshCw, Trash2, Rocket } from 'lucide-react'
 import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { toast as sonnerToast } from 'sonner'
 import Link from 'next/link'
@@ -62,6 +62,8 @@ export default function ProjectOverviewPage() {
   const [deploying, setDeploying] = useState(false)
   const [loadingFiles, setLoadingFiles] = useState(false)
   const [generatedFiles, setGeneratedFiles] = useState<Array<{ id: string; path: string; filename: string; size?: number; content?: string; language?: string }>>([])
+  const [openBuildPhases, setOpenBuildPhases] = useState(false)
+  const [openIdeation, setOpenIdeation] = useState(false)
   const [viewingFile, setViewingFile] = useState<{ path: string; filename: string; content?: string } | null>(null)
   const [projectState, setProjectState] = useState<{
     currentPhase?: string
@@ -76,11 +78,13 @@ export default function ProjectOverviewPage() {
   const [sandboxes, setSandboxes] = useState<SandboxExperiment[]>([])
   const [loadingSandboxes, setLoadingSandboxes] = useState(false)
   const [creatingSandbox, setCreatingSandbox] = useState(false)
-  const [setupStep, setSetupStep] = useState<null | 'analysis' | 'plan' | 'files' | 'done'>(null)
+  const [setupStep, setSetupStep] = useState<null | 'preparing' | 'analysis' | 'plan' | 'files' | 'build' | 'done'>(null)
   const [uploads, setUploads] = useState<Array<{ path: string; filename: string; size: number; purpose: string }>>([])
   const [loadingUploads, setLoadingUploads] = useState(false)
   const [uploading, setUploading] = useState(false)
   const uploadInputRef = useRef<HTMLInputElement>(null)
+  const inFlightToastRef = useRef<HTMLDivElement>(null)
+  const inFlightCardRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const projectId = params?.id || ''
@@ -296,18 +300,38 @@ export default function ProjectOverviewPage() {
     return () => document.removeEventListener('visibilitychange', onVisibilityChange)
   }, [refetchPhaseStatus])
 
-  // Auto-run plan + sync so user can get to Develop without pressing buttons (smoother flow)
-  // Skip for sandbox projects - they use their own plan flow
+  // Rerun trigger: when user clicks "Rerun plan and build phase automation" we run the full flow again (skip the "already complete" check)
+  const [rerunTrigger, setRerunTrigger] = useState(0)
   const autoPlanRanRef = useRef<string | null>(null)
+
+  // Auto-run plan + sync + build only when plan/phases are not already complete (saves tokens on revisit). Skip for sandbox.
   useEffect(() => {
     if (!projectId || project?.isSandbox || !project?.repository?.owner || !project?.repository?.name) return
-    if (autoPlanRanRef.current === projectId) return
-    if (hasPlan === true && projectState?.phases?.length) return
-    if (hasPlan === null) return
-    autoPlanRanRef.current = projectId
+    if (autoPlanRanRef.current === projectId && rerunTrigger === 0) return
+
     const run = async () => {
       try {
-        // Step 1: Show "Analyzing repository…" until analysis is ready (poll if needed); otherwise start at plan
+        // If not a forced rerun, check whether plan and build phases are already complete — skip to save tokens
+        if (rerunTrigger === 0) {
+          const [stateRes, planRes] = await Promise.all([
+            fetch(`/api/projects/${projectId}/state`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+            fetch(`/api/projects/${projectId}/plan`).then((r) => r.ok).catch(() => false),
+          ])
+          const hasPlanAlready = !!planRes
+          const hasPhasesAlready = !!(stateRes?.phases?.length)
+          if (hasPlanAlready && hasPhasesAlready) {
+            autoPlanRanRef.current = projectId
+            setHasPlan(true)
+            setProjectState(stateRes && (stateRes.phases?.length || stateRes.currentPhase) ? stateRes : null)
+            return
+          }
+        }
+        autoPlanRanRef.current = projectId
+        if (rerunTrigger > 0) setRerunTrigger(0)
+
+        setSetupStep('preparing')
+        await new Promise((resolve) => setTimeout(resolve, 1800))
+
         if (!hasAnalysis) {
           setSetupStep('analysis')
           let done = false
@@ -322,10 +346,10 @@ export default function ProjectOverviewPage() {
             }
           }
         }
-        // Step 2: Generating plan
+
         setSetupStep('plan')
-        const planRes = await fetch(`/api/projects/${projectId}/plan`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-        if (!planRes.ok) {
+        const planPostRes = await fetch(`/api/projects/${projectId}/plan`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        if (!planPostRes.ok) {
           setSetupStep(null)
           return
         }
@@ -335,29 +359,59 @@ export default function ProjectOverviewPage() {
           setSetupStep(null)
           return
         }
-        // Step 3: Generating files
+
         setSetupStep('files')
         const filesRes = await fetch(`/api/projects/${projectId}/files/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
         const filesData = filesRes.ok ? await filesRes.json().catch(() => ({})) : {}
-        const fileCount = filesData.successCount ?? filesData.generatedFiles?.filter((f: { success?: boolean }) => f.success).length ?? 0
-        const [state] = await Promise.all([
-          fetch(`/api/projects/${projectId}/state`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-        ])
+        const fileCount = filesData.skipped ? (filesData.fileCount ?? 0) : (filesData.successCount ?? filesData.generatedFiles?.filter((f: { success?: boolean }) => f.success).length ?? 0)
+        const state = await fetch(`/api/projects/${projectId}/state`).then((r) => (r.ok ? r.json() : null)).catch(() => null)
         setProjectState(state && (state.phases?.length || state.currentPhase) ? state : null)
         setHasPlan(true)
+
+        setSetupStep('build')
+        const buildRes = await fetch(`/api/projects/${projectId}/run-build`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        const buildData = buildRes.ok ? await buildRes.json().catch(() => ({})) : { success: false, errors: ['Build request failed'] }
+
         setSetupStep('done')
+        refetchPhaseStatus()
+        refreshGeneratedFiles()
         sonnerToast.success(
-          'Plan ready',
-          { description: fileCount > 0 ? `Phases and ${fileCount} file(s) created. Go to Develop to build with GRIP.` : 'You can go to Develop to start building with GRIP.' }
+          'Automation complete',
+          {
+            description: buildData.success
+              ? (fileCount > 0 ? `Phases, ${fileCount} file(s), and build finished. Go to Develop or Preview.` : 'Plan and build finished. Go to Develop or Preview.')
+              : (fileCount > 0 ? `Phases and ${fileCount} file(s) created. Build reported errors; open Develop to fix or preview.` : 'Plan created. Go to Develop to build with GRIP.'),
+          }
         )
-        setTimeout(() => setSetupStep(null), 1500)
       } catch {
         autoPlanRanRef.current = null
         setSetupStep(null)
       }
     }
     run()
-  }, [projectId, project?.repository?.owner, project?.repository?.name, hasPlan, hasAnalysis, projectState?.phases?.length])
+  }, [projectId, project?.repository?.owner, project?.repository?.name, hasAnalysis, rerunTrigger])
+
+  // Keep in-flight toast in view: allow scroll inside overlay, bring card into view when toast appears
+  useEffect(() => {
+    if (setupStep != null) {
+      document.body.style.overflow = 'hidden'
+      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+      // After paint, scroll the overlay so the toast card is in view (handles zoom / small viewport)
+      const t = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          inFlightCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+        })
+      })
+      return () => {
+        cancelAnimationFrame(t)
+        document.body.style.overflow = ''
+      }
+    }
+    document.body.style.overflow = ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [setupStep])
 
   if (isLoading) {
     return <LoadingState message="Loading project information..." />
@@ -423,30 +477,100 @@ export default function ProjectOverviewPage() {
   }
 
   const setupStepLabel =
-    setupStep === 'analysis'
-      ? 'Analyzing repository…'
-      : setupStep === 'plan'
-        ? 'Generating plan…'
-        : setupStep === 'files'
-          ? 'Generating files…'
-          : setupStep === 'done'
-            ? 'Done'
-            : ''
+    setupStep === 'preparing'
+      ? 'Preparing your project…'
+      : setupStep === 'analysis'
+        ? 'Analyzing repository…'
+        : setupStep === 'plan'
+          ? 'Generating plan…'
+          : setupStep === 'files'
+            ? 'Generating files…'
+            : setupStep === 'build'
+              ? 'Running build…'
+              : setupStep === 'done'
+                ? 'Automation completed'
+                : ''
+
+  const setupStepStage =
+    setupStep === 'preparing' ? 1
+      : setupStep === 'analysis' ? 2
+        : setupStep === 'plan' ? 3
+          : setupStep === 'files' ? 4
+            : setupStep === 'build' ? 5
+              : setupStep === 'done' ? 6 : 0
+  const setupStepDetail =
+    setupStep === 'preparing'
+      ? 'Initializing automation and loading your repository context.'
+      : setupStep === 'analysis'
+        ? 'Scanning repo structure, entrypoints, and patterns to guide the build.'
+        : setupStep === 'plan'
+          ? 'Creating development phases and tasks from your ideation and repo.'
+          : setupStep === 'files'
+            ? 'Generating code for each file in the plan; build runs next.'
+              : setupStep === 'build'
+              ? 'Running npm install and npm run build to validate the project.'
+              : ''
 
   return (
     <div className="space-y-8">
-      {/* Setup loader overlay: analysis → plan → files */}
+      {/* In-flight toast: scrollable overlay so user can scroll to the card when zoomed in */}
       {setupStep != null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-4 rounded-lg border bg-card p-8 shadow-lg">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden />
-            <p className="text-lg font-medium text-foreground">{setupStepLabel}</p>
-            <p className="text-sm text-muted-foreground">
-              {setupStep === 'analysis' && 'Understanding your repo structure and patterns.'}
-              {setupStep === 'plan' && 'Creating phases and build steps.'}
-              {setupStep === 'files' && 'Writing code for each file.'}
-              {setupStep === 'done' && 'You can go to Develop.'}
-            </p>
+        <div
+          ref={inFlightToastRef}
+          className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-background/80 backdrop-blur-sm"
+          role="dialog"
+          aria-live="polite"
+          aria-label="Build automation in progress"
+        >
+          <div className="min-h-[100dvh] flex items-center justify-center p-4">
+            <div
+              ref={inFlightCardRef}
+              className="flex flex-col items-center gap-5 rounded-xl border-2 border-primary/20 bg-card p-8 shadow-xl text-center w-[min(90vw,28rem)] shrink-0"
+            >
+            {setupStep === 'done' ? (
+              <>
+                <CheckCircle2 className="h-14 w-14 text-success" aria-hidden />
+                <p className="text-xl font-semibold text-foreground">Automation completed</p>
+                <p className="text-sm text-muted-foreground">
+                  The automated build process is complete. You can now move to <strong>Develop</strong> or <strong>Preview</strong>.
+                </p>
+                <div className="flex flex-wrap gap-2 justify-center pt-2">
+                  <Button
+                    variant="default"
+                    onClick={() => {
+                      setSetupStep(null)
+                      router.push(`/dashboard/projects/${projectId}/enhanced-chat`)
+                    }}
+                  >
+                    Develop
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSetupStep(null)
+                      router.push(`/dashboard/projects/${projectId}/preview`)
+                    }}
+                  >
+                    Preview
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setSetupStep(null)}>
+                    Dismiss
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <Rocket className="h-14 w-14 text-primary shrink-0 animate-pulse" aria-hidden />
+                <p className="text-lg font-semibold text-foreground">{setupStepLabel}</p>
+                <p className="text-xs font-medium text-primary/90">
+                  Stage {setupStepStage} of 6 · Build automation
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {setupStepDetail}
+                </p>
+              </>
+            )}
+            </div>
           </div>
         </div>
       )}
@@ -840,25 +964,52 @@ export default function ProjectOverviewPage() {
               </div>
             </li>
           </ol>
-        </CardContent>
-      </Card>
-
-      {/* Build phases — start chat with GRIP from here */}
-      <Card id="phases" className="border border-border scroll-mt-4">
-        <CardHeader className="pb-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <CardTitle className="text-xl font-bold">Build phases</CardTitle>
-              <CardDescription>
-                Current phase and steps. Progress updates automatically as GRIP saves files and runs the build in Develop—no need to return here to confirm. Start or continue chat to build.
-              </CardDescription>
-            </div>
-            {!project?.isSandbox && projectState?.phases?.length ? (
+          {!project?.isSandbox && hasPlan === true && (projectState?.phases?.length ?? 0) > 0 && (
+            <div className="pt-3 border-t border-border">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => {
+                onClick={() => setRerunTrigger((t) => t + 1)}
+                className="gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Rerun plan and build phase automation
+              </Button>
+              <p className="text-xs text-muted-foreground mt-2">
+                Run analysis, plan generation, file generation, and build again. Use when you want to regenerate the full scope (uses tokens).
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Build phases — start chat with GRIP from here (collapsible, default collapsed) */}
+      <Card id="phases" className="border border-border scroll-mt-4">
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setOpenBuildPhases((o) => !o)}
+              className="flex flex-wrap items-center justify-between gap-2 w-full text-left rounded-md hover:bg-muted/50 -mx-2 px-2 py-1"
+            >
+              <div className="flex items-center gap-2">
+                {openBuildPhases ? <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />}
+                <div>
+                  <CardTitle className="text-xl font-bold">Build phases</CardTitle>
+                  <CardDescription>
+                    Current phase and steps. Progress updates automatically as GRIP saves files and runs the build in Develop—no need to return here to confirm. Start or continue chat to build.
+                  </CardDescription>
+                </div>
+              </div>
+            </button>
+            {openBuildPhases && !project?.isSandbox && projectState?.phases?.length ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
                   refetchPhaseStatus()
                   sonnerToast.success('Progress reconciled', { description: 'Phases updated from saved files.' })
                 }}
@@ -870,6 +1021,7 @@ export default function ProjectOverviewPage() {
             ) : null}
           </div>
         </CardHeader>
+        {openBuildPhases && (
         <CardContent className="space-y-4">
           {projectState?.phases?.length ? (
             <>
@@ -901,12 +1053,20 @@ export default function ProjectOverviewPage() {
               <p className="text-xs text-text-muted border-l-2 border-primary/50 pl-3">
                 GRIP focuses on the current phase. Phases and steps sync automatically as you chat—when GRIP applies code and runs the build, progress updates here. You can check Overview anytime to see status; no need to return to &quot;confirm&quot; a phase.
               </p>
-              <Link href={`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}`} className="mt-5 block">
-                <Button className="w-full sm:w-auto" size="lg">
-                  <MessageSquare className="w-4 h-4 mr-2" />
-                  {allPreChatStepsComplete ? 'Start chat with GRIP' : 'Continue with GRIP'}
-                </Button>
-              </Link>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link href={`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}?implementCurrentPhase=1`} className="shrink-0">
+                  <Button className="w-full sm:w-auto" size="lg">
+                    <Zap className="w-4 h-4 mr-2" />
+                    Implement current phase in Develop
+                  </Button>
+                </Link>
+                <Link href={`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}`} className="shrink-0">
+                  <Button variant="outline" className="w-full sm:w-auto" size="lg">
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    {allPreChatStepsComplete ? 'Start chat with GRIP' : 'Continue with GRIP'}
+                  </Button>
+                </Link>
+              </div>
             </>
           ) : (
             <div className="text-sm text-text-secondary space-y-3">
@@ -932,6 +1092,7 @@ export default function ProjectOverviewPage() {
             </div>
           )}
         </CardContent>
+        )}
       </Card>
 
       {/* Project Summary Card */}
@@ -977,14 +1138,24 @@ export default function ProjectOverviewPage() {
         </CardContent>
       </Card>
       
-      {/* Project Ideation Summary */}
+      {/* Project Ideation Summary (collapsible, default collapsed) */}
       <Card className="border border-border">
         <CardHeader className="pb-4">
-          <CardTitle className="text-2xl font-bold">Project Ideation</CardTitle>
-          <CardDescription>
-            A summary of your project goals and requirements
-          </CardDescription>
+          <button
+            type="button"
+            onClick={() => setOpenIdeation((o) => !o)}
+            className="flex items-center gap-2 w-full text-left rounded-md hover:bg-muted/50 -mx-2 px-2 py-1"
+          >
+            {openIdeation ? <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />}
+            <div>
+              <CardTitle className="text-2xl font-bold">Project Ideation</CardTitle>
+              <CardDescription>
+                A summary of your project goals and requirements
+              </CardDescription>
+            </div>
+          </button>
         </CardHeader>
+        {openIdeation && (
         <CardContent className="space-y-6">
           {project?.ideation ? (
             <div className="grid grid-cols-1 gap-6">
@@ -1014,6 +1185,7 @@ export default function ProjectOverviewPage() {
             </div>
           )}
         </CardContent>
+        )}
       </Card>
       
       {/* Generated files (saved to DB from Plan → Generate or save-from-chat) */}

@@ -1,0 +1,92 @@
+/**
+ * POST /api/projects/[id]/run-build
+ * Runs the project build (npm install + npm run build) using GRIP project files.
+ * Used by the overview automation so the in-flight toast stays until build completes.
+ * Same logic as enhanced-chat runBuildAndPersistErrors → runMainProject.
+ */
+
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerAuthSession } from '@/lib/auth'
+import { ObjectId } from 'mongodb'
+import clientPromise from '@/lib/mongodb'
+import { runMainProject } from '@/lib/runMainProject'
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerAuthSession()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { id: projectId } = await params
+    if (!projectId || !ObjectId.isValid(projectId)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 })
+    }
+
+    const client = await clientPromise
+    const db = client.db(process.env.MONGODB_DB_NAME || 'test')
+    let project = await db.collection('projects').findOne(
+      { _id: new ObjectId(projectId) },
+      { projection: { _id: 1, userId: 1 } }
+    )
+    let isSandbox = false
+    if (!project) {
+      project = await db.collection('sandboxProjects').findOne(
+        { _id: new ObjectId(projectId) },
+        { projection: { _id: 1, userId: 1 } }
+      )
+      if (project) isSandbox = true
+    }
+
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+    }
+
+    const projectUserId = (project as { userId?: string }).userId
+    if (projectUserId && projectUserId !== session.user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const result = await runMainProject(projectId, isSandbox)
+
+    // Persist lastRunErrors on project so enhanced chat can show them later
+    const projectCollection = isSandbox ? 'sandboxProjects' : 'projects'
+    if (!result.success && result.errors.length > 0) {
+      await db.collection(projectCollection).updateOne(
+        { _id: new ObjectId(projectId) },
+        {
+          $set: {
+            lastRunErrors: {
+              source: 'terminal',
+              errors: result.errors,
+              raw: (result.output ?? result.errors.join('\n')).slice(0, 15000),
+              at: new Date(),
+            },
+            updatedAt: new Date(),
+          },
+        }
+      )
+    } else if (result.success) {
+      await db.collection(projectCollection).updateOne(
+        { _id: new ObjectId(projectId) },
+        { $unset: { lastRunErrors: '' }, $set: { updatedAt: new Date() } }
+      )
+    }
+
+    return NextResponse.json({
+      success: result.success,
+      errors: result.errors,
+      output: result.output ?? '',
+      buildCommand: result.buildCommand ?? 'npm run build',
+    })
+  } catch (error) {
+    console.error('Run-build API error:', error)
+    return NextResponse.json(
+      { error: 'Build run failed', success: false, errors: [String(error)] },
+      { status: 500 }
+    )
+  }
+}

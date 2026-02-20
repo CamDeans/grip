@@ -5,9 +5,9 @@ import { ObjectId } from 'mongodb'
 
 export async function POST(request: NextRequest) {
   try {
-    // Connect to database
+    // Connect to database (same db as GET /api/notifications and createNotification)
     const client = await clientPromise
-    const db = client.db()
+    const db = client.db(process.env.MONGODB_DB_NAME || 'test')
     
     // Get authenticated user
     const session = await getServerSession()

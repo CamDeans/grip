@@ -23,8 +23,11 @@ import {
   QuestionMarkCircleIcon,
   CheckCircleIcon,
   ChevronDownIcon,
-  ChevronUpIcon
+  ChevronUpIcon,
+  ChartBarIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline'
+import { Modal } from '@/components/ui/Modal'
 
 interface ProjectFormData {
   title: string
@@ -47,6 +50,13 @@ export default function NewProjectPage() {
   const [isFormValid, setIsFormValid] = useState(false)
   const [currentStep, setCurrentStep] = useState<'details' | 'context'>('details')
   const [githubExplanationOpen, setGithubExplanationOpen] = useState(false)
+  const [alignmentModalOpen, setAlignmentModalOpen] = useState(false)
+  const [alignmentLoading, setAlignmentLoading] = useState(false)
+  const [alignmentResult, setAlignmentResult] = useState<{
+    alignmentPercent: number
+    message: string
+    suggestedProceed: boolean
+  } | null>(null)
   const [formData, setFormData] = useState<ProjectFormData>({
     title: '',
     description: '',
@@ -97,6 +107,7 @@ export default function NewProjectPage() {
     setCurrentStep('details')
   }
 
+  /** Run alignment check, then show modal. On "Proceed" from modal we call doCreateProject. */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isFormValid) {
@@ -108,17 +119,70 @@ export default function NewProjectPage() {
       return
     }
 
+    setAlignmentLoading(true)
+    setAlignmentResult(null)
+    try {
+      const alignRes = await fetch('/api/projects/align-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+          ideation: {
+            goals: formData.ideation.goals.trim(),
+            targetAudience: formData.ideation.targetAudience.trim(),
+            keyFeatures: formData.ideation.keyFeatures.trim(),
+            technicalRequirements: formData.ideation.technicalRequirements.trim()
+          },
+          repository: formData.repository ? {
+            owner: formData.repository.owner.trim(),
+            name: formData.repository.name.trim()
+          } : null
+        }),
+        credentials: 'include'
+      })
+      const alignData = await alignRes.json().catch(() => ({}))
+      if (!alignRes.ok) {
+        // On error, still allow proceed with neutral result
+        setAlignmentResult({
+          alignmentPercent: 65,
+          message: alignData.error || 'Alignment check unavailable. You can proceed with the build.',
+          suggestedProceed: true
+        })
+      } else {
+        setAlignmentResult({
+          alignmentPercent: alignData.alignmentPercent ?? 65,
+          message: alignData.message ?? 'You can proceed with the build.',
+          suggestedProceed: alignData.suggestedProceed !== false
+        })
+      }
+      setAlignmentModalOpen(true)
+    } catch (error) {
+      setAlignmentResult({
+        alignmentPercent: 65,
+        message: 'Alignment check failed. You can still proceed with the build.',
+        suggestedProceed: true
+      })
+      setAlignmentModalOpen(true)
+    } finally {
+      setAlignmentLoading(false)
+    }
+  }
+
+  /** Actually create the project and redirect (called from alignment modal "Proceed with build"). */
+  const doCreateProject = async () => {
+    if (!isFormValid || !formData.repository) return
+    setAlignmentModalOpen(false)
     setIsLoading(true)
     try {
-      // Prepare the data with proper formatting
       const submissionData = {
         ...formData,
         title: formData.title.trim(),
         description: formData.description.trim(),
-        repository: formData.repository ? {
+        repository: {
           owner: formData.repository.owner.trim(),
           name: formData.repository.name.trim()
-        } : null,
+        },
         ideation: {
           goals: formData.ideation.goals.trim(),
           targetAudience: formData.ideation.targetAudience.trim(),
@@ -143,14 +207,12 @@ export default function NewProjectPage() {
       const { project } = responseData
       refreshTokenUsage()
 
-      // Show toast notification for successful project creation
       toast({
         title: "Project created successfully",
         description: `'${project.title}' has been created.`,
       })
 
       if (project && formData.repository) {
-        // Start repository analysis in the background
         toast({
           title: "Analysis started",
           description: "Repository analysis is running in the background.",
@@ -167,7 +229,6 @@ export default function NewProjectPage() {
         })
 
         if (!analysisResponse.ok) {
-          const analysisError = await analysisResponse.json()
           toast({
             title: "Analysis warning",
             description: "Repository analysis encountered some issues, but your project was created.",
@@ -216,7 +277,7 @@ export default function NewProjectPage() {
               <p className="text-sm text-text-secondary mt-1">Basic information and a GitHub repo so GRIP can analyze it and use its structure and patterns</p>
             </div>
             <div className="p-6 space-y-6">
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div>
                   <Label htmlFor="project-title">Project Title</Label>
                   <Input
@@ -224,7 +285,7 @@ export default function NewProjectPage() {
                     value={formData.title}
                     onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                     placeholder="e.g. My Recipe App"
-                    className="mt-1"
+                    className="mt-1.5"
                     required
                   />
                 </div>
@@ -235,7 +296,7 @@ export default function NewProjectPage() {
                     id="project-description"
                     value={formData.description}
                     onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    className="form-input mt-1 w-full"
+                    className="form-input mt-1.5 w-full"
                     rows={3}
                     placeholder="In a sentence or two: what is this project? e.g. A simple app where users can save and search their favorite recipes."
                     required
@@ -277,11 +338,15 @@ export default function NewProjectPage() {
                   <div className="mt-2 p-3 rounded-md bg-primary/10 border border-primary/20 text-sm text-text-primary">
                     <strong>Full automation:</strong> After you create the project, G.R.I.P. runs analysis, generates the plan, and writes code for each file in one run. All files are built with code automatically. In Develop, code you get from chat is applied to the project and the build runs automatically—no manual save or run steps. Progress (phases and steps) syncs on the Overview tab.
                   </div>
-                  <div className="mt-1">
+                  <div className="mt-5">
                     <RepoSelector
                       projectTitle={formData.title}
                       projectDescription={formData.description}
                       onSelect={(repo) => setFormData(prev => ({ ...prev, repository: repo }))}
+                      onConfirmAndContinue={(repo) => {
+                        setFormData((prev) => ({ ...prev, repository: repo }))
+                        setCurrentStep('context')
+                      }}
                       id="repo-selector"
                     />
                   </div>
@@ -335,7 +400,7 @@ export default function NewProjectPage() {
                       ...prev,
                       ideation: { ...prev.ideation, goals: e.target.value }
                     }))}
-                    className="form-input mt-1 w-full"
+                    className="form-input mt-1.5 w-full"
                     rows={4}
                     placeholder="e.g. Help users save recipes and search by ingredient. Keep it simple so anyone can use it."
                     required
@@ -358,7 +423,7 @@ export default function NewProjectPage() {
                       ...prev,
                       ideation: { ...prev.ideation, targetAudience: e.target.value }
                     }))}
-                    className="form-input mt-1 w-full"
+                    className="form-input mt-1.5 w-full"
                     rows={4}
                     placeholder="e.g. Home cooks who want to organize recipes. Non-technical users who need a simple interface."
                     required
@@ -381,7 +446,7 @@ export default function NewProjectPage() {
                       ...prev,
                       ideation: { ...prev.ideation, keyFeatures: e.target.value }
                     }))}
-                    className="form-input mt-1 w-full"
+                    className="form-input mt-1.5 w-full"
                     rows={4}
                     placeholder="e.g. Add and edit recipes. Search by name or ingredient. Save favorites. Print or share a recipe."
                     required
@@ -404,7 +469,7 @@ export default function NewProjectPage() {
                       ...prev,
                       ideation: { ...prev.ideation, technicalRequirements: e.target.value }
                     }))}
-                    className="form-input mt-1 w-full"
+                    className="form-input mt-1.5 w-full"
                     rows={4}
                     placeholder="e.g. Must work on phones. Fast loading. Simple design. Or leave blank if you're not sure."
                     required
@@ -431,10 +496,10 @@ export default function NewProjectPage() {
                   <Button
                     variant="default"
                     type="submit"
-                    disabled={isLoading || !isFormValid}
-                    icon={isLoading ? <ArrowPathIcon className="h-5 w-5 animate-spin" /> : <PlusIcon className="h-5 w-5" />}
+                    disabled={isLoading || alignmentLoading || !isFormValid}
+                    icon={(isLoading || alignmentLoading) ? <ArrowPathIcon className="h-5 w-5 animate-spin" /> : <PlusIcon className="h-5 w-5" />}
                   >
-                    {isLoading ? 'Creating...' : 'Create Project'}
+                    {alignmentLoading ? 'Checking alignment...' : isLoading ? 'Creating...' : 'Create Project'}
                   </Button>
                 </div>
               </div>
@@ -442,6 +507,69 @@ export default function NewProjectPage() {
           </Card>
         )}
       </form>
+
+      {/* Alignment check modal: show % and message, then Proceed or Choose different repo */}
+      <Modal
+        isOpen={alignmentModalOpen}
+        onClose={() => {
+          setAlignmentModalOpen(false)
+          setAlignmentResult(null)
+        }}
+        title="Project & repo alignment"
+        description={alignmentResult ? `Your project ideation and the selected repo align at ${alignmentResult.alignmentPercent}%.` : undefined}
+        size="md"
+        footer={
+          alignmentResult ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAlignmentModalOpen(false)
+                  setAlignmentResult(null)
+                  setCurrentStep('details')
+                }}
+                icon={<ArrowLeftIcon className="h-5 w-5" />}
+              >
+                Choose different repo
+              </Button>
+              <Button
+                variant="default"
+                onClick={doCreateProject}
+                disabled={isLoading}
+                icon={isLoading ? <ArrowPathIcon className="h-5 w-5 animate-spin" /> : <PlusIcon className="h-5 w-5" />}
+              >
+                {isLoading ? 'Creating...' : 'Proceed with build'}
+              </Button>
+            </>
+          ) : undefined
+        }
+      >
+        {alignmentLoading ? (
+          <div className="flex items-center gap-3 py-4">
+            <ArrowPathIcon className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-text-secondary">Comparing your project with the selected repo…</p>
+          </div>
+        ) : alignmentResult ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-4">
+              <ChartBarIcon className="h-10 w-10 shrink-0 text-primary" />
+              <div>
+                <p className="text-2xl font-semibold text-foreground">{alignmentResult.alignmentPercent}%</p>
+                <p className="text-sm text-text-secondary">{alignmentResult.message}</p>
+              </div>
+            </div>
+            {alignmentResult.suggestedProceed ? (
+              <p className="text-sm text-text-secondary">
+                Good to proceed. Click <strong>Proceed with build</strong> to create the project and start the automated build.
+              </p>
+            ) : (
+              <p className="text-sm text-amber-600 dark:text-amber-400">
+                Consider going back to <strong>Choose different repo</strong> to find a repo that better matches your project goals.
+              </p>
+            )}
+          </div>
+        ) : null}
+      </Modal>
 
       {/* FAQ — link to home page FAQ; only 2 short page-specific answers here */}
       <Card className="mt-8">

@@ -60,6 +60,9 @@ export default function SettingsPage() {
   const [githubToken, setGithubToken] = useState('')
   const [hasGithubToken, setHasGithubToken] = useState(false)
   const [githubTokenSaving, setGithubTokenSaving] = useState(false)
+  const [anthropicApiKey, setAnthropicApiKey] = useState('')
+  const [hasAnthropicApiKey, setHasAnthropicApiKey] = useState(false)
+  const [anthropicApiKeySaving, setAnthropicApiKeySaving] = useState(false)
   const [vercelToken, setVercelToken] = useState('')
   const [vercelTeamId, setVercelTeamId] = useState('')
   const [hasVercelConnection, setHasVercelConnection] = useState(false)
@@ -68,9 +71,6 @@ export default function SettingsPage() {
   const [hasMongodbConnection, setHasMongodbConnection] = useState(false)
   const [mongodbTestResult, setMongodbTestResult] = useState<{ ok: boolean; message?: string } | null>(null)
   const [mongodbSaving, setMongodbSaving] = useState(false)
-  const [newCollectionName, setNewCollectionName] = useState('')
-  const [newCollectionHint, setNewCollectionHint] = useState('')
-  const [createCollectionSubmitting, setCreateCollectionSubmitting] = useState(false)
   const router = useRouter()
   const [deleteDataOpen, setDeleteDataOpen] = useState(false)
   const [deleteDataStep, setDeleteDataStep] = useState(1)
@@ -121,6 +121,7 @@ export default function SettingsPage() {
           setHasGithubToken(!!data.hasGithubToken)
           setHasMongodbConnection(!!data.hasMongodbConnection)
           setHasVercelConnection(!!data.hasVercelConnection)
+          setHasAnthropicApiKey(!!data.hasAnthropicApiKey)
         }
       } catch {
         // ignore
@@ -178,6 +179,32 @@ export default function SettingsPage() {
       })
     } finally {
       setGithubTokenSaving(false)
+    }
+  }
+
+  const saveAnthropicApiKey = async () => {
+    setAnthropicApiKeySaving(true)
+    try {
+      const res = await fetch('/api/user/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ anthropicApiKey: anthropicApiKey.trim() }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
+      setHasAnthropicApiKey(true)
+      setAnthropicApiKey('')
+      toast({
+        title: 'AI API key saved',
+        description: 'Your Anthropic key is used for GRIP chat and code generation. Project .env creation will include it when you generate projects.',
+      })
+    } catch (error) {
+      toast({
+        title: 'Failed to save AI API key',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      })
+    } finally {
+      setAnthropicApiKeySaving(false)
     }
   }
 
@@ -799,6 +826,59 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
+          <GradientTitle as="h2">AI API Keys</GradientTitle>
+          <CardDescription>
+            API keys used by GRIP for chat and code generation. These are included when GRIP creates project .env files.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            <div>
+              <GradientTitle as="h4">Anthropic (Claude)</GradientTitle>
+              <p className="text-sm text-text-secondary mt-1 mb-2">
+                Used for GRIP chat and code generation. If not set here, GRIP uses the server default from .env.local. Create a key at{' '}
+                <a
+                  href="https://console.anthropic.com/settings/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  Anthropic Console → API Keys
+                </a>
+                .
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="flex-1 min-w-[200px] space-y-2">
+                  <Label htmlFor="anthropicApiKey">API Key</Label>
+                  <Input
+                    id="anthropicApiKey"
+                    type="password"
+                    placeholder={hasAnthropicApiKey ? '••••••••••••' : 'sk-ant-...'}
+                    value={anthropicApiKey}
+                    onChange={(e) => setAnthropicApiKey(e.target.value)}
+                    className="bg-black text-white border border-input hover:border-accent focus:border-ring focus:ring-ring focus:ring-offset-0 font-mono text-sm"
+                    autoComplete="off"
+                  />
+                  {hasAnthropicApiKey && (
+                    <p className="text-xs text-success">Key saved. Enter a new key above to replace.</p>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  onClick={saveAnthropicApiKey}
+                  disabled={anthropicApiKeySaving || !anthropicApiKey.trim()}
+                  className="shrink-0"
+                >
+                  {anthropicApiKeySaving ? 'Saving...' : 'Save key'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <GradientTitle as="h2">System Integration</GradientTitle>
           <CardDescription>
             Connected services and configurations
@@ -1069,62 +1149,9 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-            <div className="border-t border-border pt-6">
-              <GradientTitle as="h4">Create a collection</GradientTitle>
-              <p className="text-sm text-text-secondary mt-1 mb-2">
-                After saving a connection above, you can create collections here. GRIP will add them to your database—no code required.
-              </p>
-              <p className="text-sm text-text-secondary mb-3">
-                Enter a name (e.g. <strong>users</strong>, <strong>posts</strong>, <strong>tasks</strong>). Optionally describe what the collection stores; GRIP can use that when building your app in Develop.
-              </p>
-              <div className="flex flex-wrap gap-2 items-end">
-                <div className="space-y-2 min-w-[140px]">
-                  <Label>Collection name</Label>
-                  <Input
-                    placeholder="e.g. users"
-                    value={newCollectionName}
-                    onChange={(e) => setNewCollectionName(e.target.value.replace(/\s/g, '_'))}
-                    className="font-mono"
-                  />
-                </div>
-                <div className="flex-1 min-w-[180px] space-y-2">
-                  <Label>What it stores (optional)</Label>
-                  <Input
-                    placeholder="e.g. user profiles and preferences"
-                    value={newCollectionHint}
-                    onChange={(e) => setNewCollectionHint(e.target.value)}
-                  />
-                </div>
-                <Button
-                  disabled={!hasMongodbConnection || !newCollectionName.trim() || createCollectionSubmitting}
-                  onClick={async () => {
-                    setCreateCollectionSubmitting(true)
-                    try {
-                      const res = await fetch('/api/user/backend-connections/mongodb/collections', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ collectionName: newCollectionName.trim(), schemaHint: newCollectionHint.trim() || undefined }),
-                      })
-                      const data = await res.json()
-                      if (!res.ok) {
-                        toast({ title: 'Failed', description: data.error ?? 'Could not create collection', variant: 'destructive' })
-                        return
-                      }
-                      toast({ title: 'Collection created', description: data.message ?? `"${newCollectionName}" is ready.` })
-                      setNewCollectionName('')
-                      setNewCollectionHint('')
-                    } finally {
-                      setCreateCollectionSubmitting(false)
-                    }
-                  }}
-                >
-                  {createCollectionSubmitting ? 'Creating…' : 'Create collection'}
-                </Button>
-              </div>
-              {!hasMongodbConnection && (
-                <p className="text-xs text-text-secondary mt-2">Save a MongoDB connection above first, then you can create collections here.</p>
-              )}
-            </div>
+            <p className="text-sm text-text-secondary border-t border-border pt-4 mt-4">
+              <strong>Project-specific collections:</strong> Create and manage collections for each project in that project&apos;s <strong>Settings → Database</strong>.
+            </p>
           </div>
         </CardContent>
       </Card>

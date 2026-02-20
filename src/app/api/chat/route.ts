@@ -143,7 +143,7 @@ export async function POST(request: Request) {
     })
 
     // Format conversation context
-    const context = `You are G.R.I.P. (Guided Real-time Intelligence Partner), an AI assistant helping with project setup and development.
+    const context = `You are G.R.I.P. (GitHub Repo-Analysis Intellectual Partner), an AI assistant helping with project setup and development.
 Current phase: ${currentPhase || 'Development Environment Setup'}
 Project ID: ${projectId}
 

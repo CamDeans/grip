@@ -1,6 +1,6 @@
 # G.R.I.P. Test Suite
 
-This directory contains tests for the G.R.I.P. (Guided Real-time Intelligence Partner) application. The tests are organized by type and component to ensure comprehensive coverage of the application's functionality.
+This directory contains tests for the G.R.I.P. (GitHub Repo-Analysis Intellectual Partner) application. The tests are organized by type and component to ensure comprehensive coverage of the application's functionality.
 
 ## Test Structure
 

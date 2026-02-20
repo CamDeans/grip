@@ -1,6 +1,6 @@
 Always start with "Master Cameron!!!"
 
-# G.R.I.P. (Guided Real-time Intelligence Partner) Project Rules
+# G.R.I.P. (GitHub Repo-Analysis Intellectual Partner) Project Rules
 
 # Core Rules
 core_rules:
@@ -48,6 +48,20 @@ full_grip_build:
     - "When implementing any of the above: reuse existing APIs and services (repository, fileStorageService, export route, deploy route); extend them rather than duplicate."
     - "Remove or replace mock data and placeholder responses with real DB and real integrations so production readiness is maintained."
     - "Verify each capability: export creates a real repo with content; deploy returns a real Vercel URL; preview loads a URL or StackBlitz; Repo shows full tree; chat can save code to projectFiles."
+
+# Mandatory StackBlitz preview files (GRIP must always include so user can preview upon completion)
+stackblitz_preview_mandate:
+  description: "Every generated project MUST include high-level files required for StackBlitz (and local) preview so the user can run the app after build."
+  mandatory_files:
+    - "package.json — dependencies and scripts (npm/StackBlitz); always generated when missing."
+    - "tsconfig.json — TypeScript config for build and preview; always generated when missing."
+    - ".env.example — env placeholders so the user can copy from Dashboard → Settings and run preview; always generated when missing."
+    - "src/index.tsx (or project-appropriate entry) — entry point for app preview; always generated when missing."
+  rules:
+    - "G.R.I.P. MUST always include package.json, tsconfig.json, .env.example, and an entry point (e.g. src/index.tsx) in the file list for generation so the user can preview the app in StackBlitz upon completion."
+    - ".env.example MUST list placeholders for vars that come from GRIP Settings: MONGODB_URI (Backend connections), ANTHROPIC_API_KEY (AI API Keys), GITHUB_API_TOKEN and VERCEL_TOKEN (System Integration). Comments MUST point the user to Dashboard → Settings so they can copy values for run/preview."
+    - "Overview automation MUST treat these as mandatory: when they are missing, getFilesToGenerate merges them in so files/generate produces them and adds them to the project scope."
+    - "Do not consider a build complete for preview purposes until these high-level files exist; overview automation that finds missing files will add and generate them."
 
 # G.R.I.P. AI Assistant Enhancement Plan
 # The plan is divided into small, manageable phases with granular steps
@@ -804,7 +818,7 @@ enhanced_chat_continuity_and_automation:
   identity_and_rules:
     description: "Ensure the chat maintains GRIP identity and rules at all times; GRIP AI assistant must fully guide project ideation and build."
     rules:
-      - "Every system prompt for chat MUST state: You are G.R.I.P. (Guided Real-time Intelligence Partner). You are not Claude or an Anthropic AI. You are G.R.I.P., an AI assistant built for helping developers automate project creation."
+      - "Every system prompt for chat MUST state: You are G.R.I.P. (GitHub Repo-Analysis Intellectual Partner). You are not Claude or an Anthropic AI. You are G.R.I.P., an AI assistant built for helping developers automate project creation."
       - "Chat MUST never allow the app or user to believe the assistant is Claude or developed by Anthropic; all responses are from G.R.I.P., created by Master Cameron."
       - "All chat UI copy (placeholders, labels, errors) MUST refer to G.R.I.P. or 'GRIP AI' — never 'Claude' or 'Anthropic'."
       - "When rejecting non-development messages, the response MUST be in GRIP's voice and direct the user back to development assistance; use the existing developmentKeywords check and the same GRIP message text in enhanced-chat route."

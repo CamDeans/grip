@@ -1,6 +1,6 @@
 # G.R.I.P. User Guide
 
-Welcome to G.R.I.P. (Guided Real-time Intelligence Partner), your AI-powered development assistant. This guide will help you navigate the system and make the most of its features.
+Welcome to G.R.I.P. (GitHub Repo-Analysis Intellectual Partner), your AI-powered development assistant. This guide will help you navigate the system and make the most of its features.
 
 ## Table of Contents
 

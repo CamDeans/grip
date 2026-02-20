@@ -20,6 +20,50 @@ export const MANDATORY_GRIP_BUILD_QUALITY = `
 `.trim()
 
 /**
+ * Mandatory GRIP rules for project-specific scaffolding.
+ * Each project type (JS/TS web, Python, Go, Rust, iOS, Android, etc.) uses different manifest files and commands—apply the same principles for that stack.
+ */
+export const MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING = `
+## MANDATORY: Project-specific scaffolding (plan and build)
+
+**Each project is different.** Infer the project type from the linked repo (structure, frameworks, languages), ideation, and plan. The system may provide "Detected repo type" and stack guidance—use it. Apply the rules below **for this project's stack**. The principles (project-specific config, runnable, no generic placeholders) apply to all projects; the **manifest files and commands** depend on the stack.
+
+**For JS/TS web projects (Node/npm):**
+- **package.json MUST be project-specific and runnable:** Never output empty \`dependencies\` or \`devDependencies\` (e.g. \`"dependencies": {}, "devDependencies": {}\`). Every generated project MUST list every package the codebase actually uses (from every \`import\` / \`require\`). Scripts MUST match the **actual framework** of the codebase: if the app uses Next.js (App Router, next/head, API routes under app/api), use \`"dev": "next dev"\`, \`"build": "next build"\`, \`"start": "next start"\`—never Vite scripts. If the app uses Vite, use \`"dev": "vite"\`, \`"build": "tsc && vite build"\`, \`"start": "vite preview"\`. Wrong scripts cause "command not found". Infer framework from file structure.
+- **tsconfig.json MUST be project-specific:** \`include\` must cover actual source paths; \`compilerOptions\` must suit the stack (e.g. \`"jsx": "preserve"\` for Next.js, \`"jsx": "react-jsx"\` for Vite). Never output a generic tsconfig that does not align with the generated files.
+
+**For other stacks (Python, Go, Rust, iOS, Android, etc.):** Apply the same principles using that stack's manifest and run commands: Python → requirements.txt or pyproject.toml and pip/poetry install + run command; Go → go.mod and go build/go run; Rust → Cargo.toml and cargo run; iOS → Xcode project and Package.swift; Android → build.gradle and Gradle. Never empty or wrong-command manifests. The user must be able to install and run with the **appropriate** commands for that stack.
+
+**For every project (all stacks):**
+- **README.md MUST be project-specific:** Describe **this project** by name and purpose. Include: (1) project name and short description, (2) getting started using **this project's** install/run commands (npm/pip/go/cargo/etc.), (3) main features or usage relevant to this app, (4) tech stack used. NEVER a copy of .env.example, generic "GRIP" text, or a template with no project-specific content.
+- **Env/config MUST be project-specific:** List only variables **this app** actually uses (e.g. NextAuth → NEXTAUTH_SECRET, NEXTAUTH_URL; Prisma → DATABASE_URL; Python → API_KEY, DATABASE_URL). Do not paste GRIP Dashboard variables unless the generated app needs them. Document each variable briefly. For non-Node projects, use that stack's config (e.g. .env, config.yaml, environment in README).
+`.trim()
+
+/**
+ * Mandatory GRIP rules for production readiness in plan and build phases.
+ * Ensures real implementations, valid conventions per stack, no stubs or code-as-string.
+ * Each project type has different conventions—apply the ones that match this project's stack.
+ */
+export const MANDATORY_GRIP_PRODUCTION_READINESS = `
+## MANDATORY: Production readiness (plan and build phases)
+
+**Each project is different.** Infer the project type from the linked repo, ideation, and plan. The system may provide "Detected repo type"—use it. Apply the conventions **for this project's stack**. The principles (real implementations, no stubs, runnable locally) apply to all projects; the **concrete conventions** (file layout, entrypoints, config) depend on the stack.
+
+**For every project (all stacks):**
+- **Real implementations only—no stubs:** Every file you generate MUST be fully implemented. No comment-only or "add later" stubs. Lib/config/auth must export real code; API or server entrypoints must be real handlers. Config files must be valid, runnable configuration—not just comments.
+- **Outcome:** When you complete a phase or the build, the user must get a project that **runs locally** with the **appropriate commands for that stack** (e.g. npm run dev, pip install && python main.py, go run ., cargo run, Xcode run, Gradle run)—without "command not found," missing modules, or scaffolding errors. Aim for production readiness: runnable, deployable, maintainable.
+
+**When the project is JS/TS web (Next.js, Vite, etc.):**
+- **Next.js App Router:** If the project uses Next.js: (1) \`app/layout.tsx\` (or \`src/app/layout.tsx\`) must be a default-exported function that accepts \`{ children }\` and returns \`<html><body>{children}</body></html>\`; use \`metadata\` export—never \`next/head\` or raw object literals in JSX. (2) API routes under \`app/api/**/route.ts\` must export \`GET\`, \`POST\`, etc. returning \`NextResponse.json(...)\`—never a default React page component. (3) Pages and layouts must be default-exported functions with valid JSX; layouts must render \`children\`.
+- **Middleware:** If \`middleware.ts\` (or \`src/middleware.ts\`) exists, it MUST export a \`middleware\` function (or \`export default\`) returning \`NextResponse.next()\` or a redirect—never comment-only.
+- **Global CSS:** \`globals.css\` (or \`app/globals.css\`) must contain only CSS (e.g. Tailwind directives, \`:root\`/\`body\`). Never React/JSX inside a .css file.
+- **Components:** Valid exports and props (no empty \`interface Props { : ; }\`); logic in the component body—never implementation pasted as literal text inside a \`<div>\`. All referenced components must exist and export correctly.
+- **Entry point:** Vite → \`src/index.tsx\` must call \`createRoot\` and render the root component; do not import a non-existent \`./App\`. Next.js → do not add a Vite-style \`src/index.tsx\`; use \`app/layout.tsx\` and \`app/page.tsx\`.
+
+**When the project is another stack (Python, Go, Rust, iOS, Android, etc.):** Same principles (real implementations, no stubs, runnable locally). Use **that stack's** conventions: Python → real modules and entrypoints (e.g. \`if __name__ == "__main__"\`); Go → cmd/ or main package and go buildable; Rust → crate layout and cargo runnable; iOS → valid Xcode project and Swift entry; Android → valid Gradle and Kotlin/Java entry. The user must be able to run the project with the appropriate toolchain without fixing scaffolding by hand.
+`.trim()
+
+/**
  * Mandatory GRIP rules for package.json and runnable StackBlitz code.
  * Ensures users always get valid, complete package.json and dependencies so Run in StackBlitz works.
  */
@@ -47,6 +91,7 @@ export const MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP = `
 
 - **Build .env files for every project:** You MUST create and output \`.env.example\` (and, when appropriate, a \`.env.local\` or \`.env\` template) for the generated project. List every environment variable the app needs (e.g. \`MONGODB_URI\`, \`API_URL\`, \`NEXT_PUBLIC_*\`, \`VITE_*\`, API keys, secrets). Use placeholder names only in .env.example (e.g. \`MONGODB_URI=your_mongodb_uri_here\`); never put real secrets in code or in blocks you output.
 - **Use updated user settings from main GRIP settings:** When the app needs variables that the user already configured in GRIP (Dashboard → Settings), tell the user to use those values. For example: if the app uses MongoDB, tell them to copy \`MONGODB_URI\` from **Dashboard → Settings → Backend connections** (MongoDB). If they use Vercel or GitHub, point them to **Dashboard → Settings → System Integration** (Vercel token, GitHub token). In your response, say clearly which GRIP Settings section holds which variable so the user can copy it into their project .env.
+- **Include all GRIP Settings API keys in project .env creation:** When you create or update a project's \`.env.example\` or \`.env\` template, include placeholders for every key the user may have set in GRIP: **AI API Keys** (\`ANTHROPIC_API_KEY\`), **System Integration** (\`GITHUB_TOKEN\`, \`VERCEL_TOKEN\`), **Backend connections** (\`MONGODB_URI\`). Project Settings may add project-specific overrides; list those too so the generated project .env reflects both main and project settings.
 - **Steps for other .env variables:** In every response where you deliver a new or updated project (or phase), include a short **"How to set up for production"** section that: (1) Lists each required env variable and where to get it (GRIP Settings → Backend connections / System Integration, or "create an API key at [service] dashboard", or "get from your hosting provider"). (2) Tells the user to create \`.env.local\` (or \`.env\`) in the project root and paste the variables. (3) Reminds them not to commit \`.env.local\` or \`.env\` to git (they are in .gitignore); use \`.env.example\` as the template without real values. (4) For production (e.g. Vercel), tell them to add the same variables in the hosting dashboard (e.g. Vercel → Project → Settings → Environment Variables).
 - **Inform the user how to test for production:** When you complete a phase or the project, always add one or two sentences on how to run and test for production: e.g. "To test for production: set the env variables above in \`.env.local\`, then run \`npm run build\` and \`npm run start\` (or \`npm run dev\`). Use **Run in StackBlitz** for quick preview; for production-like testing, export to GitHub and deploy to Vercel, then add env vars in Vercel project settings."
 `.trim()

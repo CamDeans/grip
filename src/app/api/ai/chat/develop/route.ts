@@ -44,7 +44,7 @@ export async function POST(req: Request) {
         message.toLowerCase().includes('what are you') ||
         message.toLowerCase().includes('introduce yourself')) {
       return NextResponse.json({
-        message: `I am G.R.I.P. (Guided Real-time Intelligence Partner), your AI development assistant created by Master Cameron. I'm here to help you build and improve your projects with:
+        message: `I am G.R.I.P. (GitHub Repo-Analysis Intellectual Partner), your AI development assistant created by Master Cameron. I'm here to help you build and improve your projects with:
 
 • Intelligent code generation and analysis
 • Step-by-step project guidance
@@ -191,7 +191,7 @@ async function generateStepResponse(step: string, data: any) {
     case 'progress':
       const progress = analyzeProgress(history)
       return {
-        message: `I am G.R.I.P., your Guided Real-time Intelligence Partner. Let me check our current build progress...
+        message: `I am G.R.I.P., your GitHub Repo-Analysis Intellectual Partner. Let me check our current build progress...
 
 Current Phase: ${progress.currentPhase}
 Last Completed Step: ${progress.lastCompletedStep}
@@ -210,7 +210,7 @@ Would you like to continue with the next step?`
 
     case 'initial':
       return {
-        message: `I am G.R.I.P., your Guided Real-time Intelligence Partner. Let's start with the initial project setup:
+        message: `I am G.R.I.P., your GitHub Repo-Analysis Intellectual Partner. Let's start with the initial project setup:
 
 [1. Load Project Analysis]
   Status: Ready
@@ -233,7 +233,7 @@ Would you like to continue with the next step?`
 
     case 'development':
       return {
-        message: `I am G.R.I.P., your Guided Real-time Intelligence Partner. Now, let's set up your development environment:
+        message: `I am G.R.I.P., your GitHub Repo-Analysis Intellectual Partner. Now, let's set up your development environment:
 
 [4. Configure Build System]
   Status: Pending
@@ -256,7 +256,7 @@ Would you like to continue with the next step?`
 
     default:
       return {
-        message: 'I am G.R.I.P., your Guided Real-time Intelligence Partner. I understand your request. How would you like to proceed with the project setup?'
+        message: 'I am G.R.I.P., your GitHub Repo-Analysis Intellectual Partner. I understand your request. How would you like to proceed with the project setup?'
       }
   }
 }

@@ -100,7 +100,7 @@ After you recreate the cluster and set `MONGODB_URI` in `.env.local`:
 
 ## 3. Where We’re Heading (from PRD / .cursorrules)
 
-- **Product:** G.R.I.P. = Guided Real-time Intellectual Partner.  
+- **Product:** G.R.I.P. = GitHub Repo-Analysis Intellectual Partner.  
 - **Goal:** Non-technical users go from ideation → project setup → customization → deployment with AI (Claude) and minimal coding.  
 - **Phases in .cursorrules:** Phases 1–5+ for chat automation, planning, build integration, terminal integration, enhancements. Many steps still pending.  
 - **Positioning:** “AI-driven Git repo analysis” + “project ideation and build from start to finish” with GRIP as the guide (not “Anthropic” or “Claude” in user-facing copy).
@@ -126,7 +126,7 @@ After you recreate the cluster and set `MONGODB_URI` in `.env.local`:
 
 **Product (differentiation):**
 
-- **GRIP personality:** All user-facing AI text (system prompts, chat UI copy) should say “G.R.I.P.” and “Guided Real-time Intellectual Partner,” not “Anthropic” or “Claude.”
+- **GRIP personality:** All user-facing AI text (system prompts, chat UI copy) should say “G.R.I.P.” and “GitHub Repo-Analysis Intellectual Partner,” not “Anthropic” or “Claude.”
 - **End-to-end flow:** From “I want an app that does X” → project created → repo/structure → plan → build steps → clear success/failure. One clear path that works for at least one template/stack.
 - **Observability:** Dashboard or admin view for “how many projects, builds, chat sessions, errors” and basic trends.
 - **Docs:** README + “How to run” + “Environment variables” + “Deploy to Vercel” (or chosen platform). Link from repo.

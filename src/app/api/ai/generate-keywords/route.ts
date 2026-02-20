@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { title, description } = body
+    const { title, description, ideation } = body
 
     if (!title || !description) {
       return NextResponse.json(
@@ -44,7 +44,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { keywords, totalTokens } = await generateKeywordsServer(title, description)
+    const ideationSafe =
+      ideation && typeof ideation === 'object'
+        ? {
+            goals: typeof ideation.goals === 'string' ? ideation.goals.slice(0, 2000) : undefined,
+            targetAudience: typeof ideation.targetAudience === 'string' ? ideation.targetAudience.slice(0, 2000) : undefined,
+            keyFeatures: typeof ideation.keyFeatures === 'string' ? ideation.keyFeatures.slice(0, 2000) : undefined,
+            technicalRequirements: typeof ideation.technicalRequirements === 'string' ? ideation.technicalRequirements.slice(0, 2000) : undefined,
+          }
+        : undefined
+
+    const { keywords, totalTokens } = await generateKeywordsServer(title, description, ideationSafe)
 
     if (totalTokens > 0 && session.user?.id) {
       addTokenUsage(session.user.id, totalTokens).catch((err) =>

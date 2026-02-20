@@ -1,7 +1,7 @@
 import { ObjectId } from 'mongodb'
 import { clientPromise } from '../mongodb'
 import { getRepositoryFiles, getOrCloneRepository } from '../repository'
-import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/sandbox/treeSitterAnalysis'
+import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/treeSitter/treeSitterAnalysis'
 import { buildTechnicalAnalysisPromptFromIdeation } from '@/lib/sandbox/ideationToTechnicalPrompt'
 
 // Cache configuration
