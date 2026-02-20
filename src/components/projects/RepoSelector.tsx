@@ -127,39 +127,43 @@ export function RepoSelector({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center space-x-2">
+      <div className="flex flex-wrap gap-2">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), searchRepositories())}
           placeholder="Search by keyword, topic, or owner/repo (e.g. react todo)"
-          className="flex-1 form-input"
+          className="form-input min-w-0 w-full sm:flex-1 sm:w-auto"
           aria-label="Search GitHub repositories"
           id={id}
         />
-        <Button
-          onClick={searchRepositories}
-          isLoading={isLoading}
-          disabled={!search.trim()}
-          icon={<MagnifyingGlassIcon className="h-5 w-5" />}
-          aria-label="Search repositories"
-          title="Search repositories (or press Enter)"
-          variant="default"
-        >
-          Search
-        </Button>
-        <Button
-          onClick={handleGenerateKeywords}
-          isLoading={isGeneratingKeywords}
-          disabled={!isProjectDataFilled}
-          icon={<SparklesIcon className="h-5 w-5" />}
-          variant="default"
-          aria-label="Generate keywords"
-          title={!isProjectDataFilled ? "Fill in project title and description first" : "Generate keywords from your project details"}
-        >
-          Generate Keywords
-        </Button>
+        <div className="flex items-center gap-2 w-full sm:w-auto sm:flex-none">
+          <Button
+            onClick={searchRepositories}
+            isLoading={isLoading}
+            disabled={!search.trim()}
+            icon={<MagnifyingGlassIcon className="h-5 w-5" />}
+            aria-label="Search repositories"
+            title="Search repositories (or press Enter)"
+            variant="default"
+            className="flex-1 sm:flex-none"
+          >
+            Search
+          </Button>
+          <Button
+            onClick={handleGenerateKeywords}
+            isLoading={isGeneratingKeywords}
+            disabled={!isProjectDataFilled}
+            icon={<SparklesIcon className="h-5 w-5" />}
+            variant="default"
+            aria-label="Generate keywords"
+            title={!isProjectDataFilled ? "Fill in project title and description first" : "Generate keywords from your project details"}
+            className="flex-1 sm:flex-none"
+          >
+            Generate Keywords
+          </Button>
+        </div>
       </div>
       <p className="text-xs text-text-secondary">
         Use <strong>Generate Keywords</strong> to get search suggestions from your title and description, then pick one or click <strong>Use Keywords</strong> to search with all. Press Enter in the box to run Search.

@@ -13,6 +13,7 @@ import {
   CubeIcon,
   PuzzlePieceIcon,
   RocketLaunchIcon,
+  ShieldCheckIcon,
   UserIcon,
   WrenchScrewdriverIcon
 } from '@heroicons/react/24/outline'
@@ -99,43 +100,27 @@ export default function DocumentationPage() {
           title: 'Project Automation',
           description: 'Automate repetitive tasks in your development workflow',
           path: '/docs/features/automation',
+        },
+        {
+          id: 'ideation-and-build',
+          title: 'How Your Ideation Drives the Build',
+          description: 'How goals, audience, features, and technical requirements are used in analysis, planning, and code generation',
+          path: '/docs/features/ideation-and-build',
         }
       ]
     },
     {
       id: 'api',
       title: 'API Reference',
-      description: 'Complete API documentation for integrating with G.R.I.P.',
+      description: 'Full API reference for the G.R.I.P. dashboard and integrators.',
       icon: <CodeBracketIcon className="h-6 w-6" />,
       sections: [
         {
-          id: 'api-overview',
-          title: 'API Overview',
-          description: 'Introduction to the G.R.I.P. API and authentication',
+          id: 'api-reference',
+          title: 'API Reference',
+          description: 'All endpoints (Projects, AI, Files, Chat, Support, Analytics), request/response examples, and authentication',
           path: '/docs/api',
-          badge: {
-            text: 'Updated',
-            variant: 'secondary',
-          },
         },
-        {
-          id: 'projects-api',
-          title: 'Projects API',
-          description: 'Manage projects programmatically',
-          path: '/docs/api#projects',
-        },
-        {
-          id: 'files-api',
-          title: 'Files API',
-          description: 'Work with project files and code',
-          path: '/docs/api#files',
-        },
-        {
-          id: 'ai-api',
-          title: 'AI API',
-          description: 'Access G.R.I.P. AI capabilities',
-          path: '/docs/api#ai',
-        }
       ]
     },
     {
@@ -187,7 +172,21 @@ export default function DocumentationPage() {
           path: '/docs/advanced/templates',
         }
       ]
-    }
+    },
+    {
+      id: 'security',
+      title: 'Security',
+      description: 'Authentication, data, and API security in G.R.I.P.',
+      icon: <ShieldCheckIcon className="h-6 w-6" />,
+      sections: [
+        {
+          id: 'security-overview',
+          title: 'Security',
+          description: 'How G.R.I.P. handles authentication, tokens, data storage, and API security',
+          path: '/docs/security',
+        },
+      ]
+    },
   ];
 
   // Filter categories and sections based on search query

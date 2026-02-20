@@ -350,9 +350,14 @@ export default function ApiDocumentationPage() {
   return (
     <div className="container mx-auto py-8 space-y-8">
       <PageHeader 
-        title="API Documentation" 
-        description="Comprehensive documentation for all G.R.I.P. API endpoints"
+        title="API Reference" 
+        description="All G.R.I.P. API endpoints used by the dashboard and available to integrators"
       />
+
+      <div className="rounded-lg border border-border bg-background-secondary p-4 text-sm text-text-primary">
+        <p className="font-medium mb-2">What this page is for</p>
+        <p>The G.R.I.P. dashboard uses these APIs for projects, chat, files, AI (e.g. keyword generation), support tickets, and analytics. If you are integrating a custom client or another tool, use the same endpoints with session-based authentication (cookies). All requests require an authenticated session; unauthenticated requests receive 401. Rate limits apply to sensitive operations. See the Authentication section at the bottom for credentials and error formats.</p>
+      </div>
 
       <Tabs value={activeSection} onValueChange={setActiveSection} className="w-full">
         <TabsList className="w-full justify-start overflow-x-auto">
