@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { BackAndDashboardNav } from '@/components/layout/BackAndDashboardNav'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { GradientTitle } from '@/components/ui/GradientTitle'
@@ -152,13 +153,19 @@ export default function DocumentationPage() {
     {
       id: 'advanced',
       title: 'Advanced Guides',
-      description: 'In-depth guides for power users',
+      description: 'In-depth guides for production use',
       icon: <WrenchScrewdriverIcon className="h-6 w-6" />,
       sections: [
         {
+          id: 'advanced-overview',
+          title: 'Advanced Guides Overview',
+          description: 'Introduction to custom prompts, templates, and production checklist',
+          path: '/docs/advanced',
+        },
+        {
           id: 'custom-prompts',
           title: 'Custom Prompts',
-          description: 'Create and optimize prompts for better AI assistance',
+          description: 'GRIP memory and ideation updates for consistent AI behavior',
           path: '/docs/advanced/custom-prompts',
           badge: {
             text: 'Advanced',
@@ -168,8 +175,14 @@ export default function DocumentationPage() {
         {
           id: 'project-templates',
           title: 'Project Templates',
-          description: 'Create reusable project templates for faster development',
+          description: 'Use and create code templates for consistent output',
           path: '/docs/advanced/templates',
+        },
+        {
+          id: 'production-checklist',
+          title: 'Production Checklist',
+          description: 'Security, deployment, and best practices for going to production',
+          path: '/docs/advanced/production',
         }
       ]
     },
@@ -336,6 +349,8 @@ export default function DocumentationPage() {
           </CardContent>
         </Card>
       </div>
+
+      <BackAndDashboardNav backFallbackHref="/" backLabel="Back" />
     </div>
   );
 } 

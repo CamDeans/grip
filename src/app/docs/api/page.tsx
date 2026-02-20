@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { BackAndDashboardNav } from '@/components/layout/BackAndDashboardNav'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui'
@@ -573,6 +574,8 @@ export default function ApiDocumentationPage() {
           </div>
         </CardContent>
       </Card>
+
+      <BackAndDashboardNav backFallbackHref="/docs" backLabel="Back to Docs" />
     </div>
   );
 } 

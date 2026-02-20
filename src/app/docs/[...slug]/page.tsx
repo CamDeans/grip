@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { BackAndDashboardNav } from '@/components/layout/BackAndDashboardNav'
 
 const KNOWN_DOC_PATHS: Record<string, { title: string; description: string }> = {
   'getting-started': { title: 'Getting Started', description: 'Introduction to G.R.I.P.' },
@@ -15,8 +16,10 @@ const KNOWN_DOC_PATHS: Record<string, { title: string; description: string }> = 
   'integrations/github': { title: 'GitHub Integration', description: 'Connect GitHub to G.R.I.P.' },
   'integrations/mongodb': { title: 'MongoDB', description: 'Database setup and usage.' },
   'integrations/deploy-vercel': { title: 'Deploy to Vercel & FAQs', description: 'Flow, instructions, and FAQs for devs and non-devs.' },
-  'advanced/custom-prompts': { title: 'Custom Prompts', description: 'Customize AI prompts.' },
-  'advanced/templates': { title: 'Templates', description: 'Use and create templates.' },
+  'advanced': { title: 'Advanced Guides', description: 'In-depth guides for production use.' },
+  'advanced/custom-prompts': { title: 'Custom Prompts', description: 'Customize AI behavior with GRIP memory and ideation.' },
+  'advanced/templates': { title: 'Project Templates', description: 'Use and create code templates for consistent output.' },
+  'advanced/production': { title: 'Production Checklist', description: 'Checklist and operations for going to production.' },
   'best-practices': { title: 'Best Practices', description: 'Recommended practices for G.R.I.P.' },
   'security': { title: 'Security', description: 'How G.R.I.P. handles authentication, data, and API security.' },
 }
@@ -103,16 +106,112 @@ const DOC_CONTENT: Record<string, ReactNode> = {
       <p className="mt-4">The full guide with step-by-step instructions for devs and non-devs, and FAQs, is in the repository: <code className="text-sm bg-muted px-1 rounded">docs/DEPLOY-TO-VERCEL-AND-FAQS.md</code>. You can also use the <strong>Deploy to Vercel – FAQs &amp; instructions</strong> section on the project Preview page.</p>
     </>
   ),
+  'advanced': (
+    <>
+      <p>The Advanced Guides cover everything you need to use G.R.I.P. effectively in production: customizing AI behavior, using and creating templates, and a production checklist.</p>
+      <p className="mt-4 font-medium">Custom Prompts</p>
+      <p>G.R.I.P. does not use a separate &quot;system prompt&quot; field in Settings. Instead, you customize behavior in two ways: (1) <strong>GRIP memory</strong> — tell the AI to &quot;remember&quot; something in Develop chat (e.g. &quot;remember that I prefer TypeScript&quot;); the system saves it and injects it into context on every turn. (2) <strong>Ideation in chat</strong> — share goals, audience, or features in plain English; the AI can update the project&apos;s ideation so future code stays aligned. See <Link href="/docs/advanced/custom-prompts" className="text-primary hover:underline">Custom Prompts</Link> for full details and examples.</p>
+      <p className="mt-4 font-medium">Project Templates</p>
+      <p>Templates are reusable code starting points (React component, Next.js page, TypeScript utility, package.json, tsconfig, .env.example, etc.). Built-in templates are always available; custom templates can be stored per project and used by the file generator and Develop chat. See <Link href="/docs/advanced/templates" className="text-primary hover:underline">Project Templates</Link> for how they work, how to use them, and how to create custom templates.</p>
+      <p className="mt-4 font-medium">Production Checklist</p>
+      <p>Before going live: security (tokens, env vars), deployment (Export to GitHub, Deploy to Vercel), and best practices. See <Link href="/docs/advanced/production" className="text-primary hover:underline">Production Checklist</Link>.</p>
+      <p className="mt-6">
+        <Link href="/docs/advanced/custom-prompts" className="text-primary hover:underline">Custom Prompts</Link>
+        {' · '}
+        <Link href="/docs/advanced/templates" className="text-primary hover:underline">Project Templates</Link>
+        {' · '}
+        <Link href="/docs/advanced/production" className="text-primary hover:underline">Production Checklist</Link>
+        {' · '}
+        <Link href="/docs" className="text-primary hover:underline">Documentation index</Link>
+      </p>
+    </>
+  ),
   'advanced/custom-prompts': (
     <>
-      <p>Custom prompts let you tailor how the AI behaves for your project. You can set instructions or constraints that are included in the context for Enhanced Chat (Develop). Use project or account settings to define prompts that enforce style, conventions, or domain rules so generated code stays consistent with your preferences.</p>
-      <p className="mt-4">Combine with <Link href="/docs/advanced/templates" className="text-primary hover:underline">Templates</Link> for consistent structure across projects. API options for chat and completion are in the <Link href="/docs/api" className="text-primary hover:underline">API Reference</Link>.</p>
+      <p>You can tailor how the AI behaves for your project without editing a &quot;system prompt&quot; in Settings. G.R.I.P. uses two mechanisms: <strong>GRIP memory</strong> (saved instructions from chat) and <strong>ideation updates</strong> (goals, audience, features in plain English). Both are applied in every Develop chat turn so generated code stays consistent with your preferences.</p>
+
+      <p className="mt-4 font-medium">GRIP memory: &quot;Remember&quot; in chat</p>
+      <p>In the Develop tab, tell the AI to remember something for all future messages. The AI saves it and the system injects it into context on every turn. Examples:</p>
+      <ul className="list-disc pl-6 mt-2 space-y-1">
+        <li>&quot;Remember that I prefer TypeScript over JavaScript.&quot;</li>
+        <li>&quot;From now on always use Tailwind for styling.&quot;</li>
+        <li>&quot;Don&apos;t suggest npm install unless I ask.&quot;</li>
+        <li>&quot;No tests for this project unless I say otherwise.&quot;</li>
+      </ul>
+      <p className="mt-2">After you say this, the AI confirms (e.g. &quot;Got it, I&apos;ll do that from now on.&quot;) and the instruction is stored on the project. It applies to all subsequent messages in that project. You can add multiple instructions over time; they are listed in the context the AI sees. There is no separate Settings screen for these—they live in the project and are managed through chat.</p>
+
+      <p className="mt-4 font-medium">Updating ideation in chat</p>
+      <p>You can also refine goals, target audience, key features, or technical requirements in plain English during a chat. For example: &quot;Actually, the target audience is small teams, not solo users&quot; or &quot;Add: must work offline.&quot; When the AI detects lasting project details, it can output an internal update that saves to the project&apos;s ideation. Future code and plan generation then use the updated ideation. For bulk edits, use <strong>Project → Settings</strong> to edit goals, audience, features, and technical requirements directly.</p>
+
+      <p className="mt-4 font-medium">Best practices for production</p>
+      <ul className="list-disc pl-6 mt-2 space-y-1">
+        <li><strong>Be clear and lasting</strong> — Use &quot;remember&quot; for preferences that should apply to all future responses (style, stack, don&apos;t do X). One instruction per &quot;remember&quot; is easiest to manage; you can add more over time.</li>
+        <li><strong>Combine with ideation</strong> — Use Settings ideation for high-level goals and audience; use GRIP memory for implementation preferences (TypeScript, Tailwind, no tests). Together they keep the build aligned with your intent.</li>
+        <li><strong>Review what&apos;s saved</strong> — If the AI ever forgets or contradicts a preference, say &quot;remember that...&quot; again or update ideation in Settings. There is no UI today to delete a single memory; updating or re-stating in chat keeps context accurate.</li>
+      </ul>
+      <p className="mt-4">Related: <Link href="/docs/features/ideation-and-build" className="text-primary hover:underline">How Your Ideation Drives the Build</Link>, <Link href="/docs/features/enhanced-chat" className="text-primary hover:underline">Enhanced Chat</Link>, <Link href="/docs/advanced/templates" className="text-primary hover:underline">Project Templates</Link>. API options for chat are in the <Link href="/docs/api" className="text-primary hover:underline">API Reference</Link>.</p>
     </>
   ),
   'advanced/templates': (
     <>
-      <p>Templates are starting points for new projects or features. They define tech stack, file layout, and optional boilerplate. When you create a project from a template, G.R.I.P. initializes files and structure so you can start chatting and generating code immediately without starting from a blank slate.</p>
-      <p className="mt-4">Use templates to keep stacks and patterns consistent. For customizing AI behavior per project, see <Link href="/docs/advanced/custom-prompts" className="text-primary hover:underline">Custom Prompts</Link>.</p>
+      <p>Templates are reusable code starting points used when G.R.I.P. generates files. They define structure, variables (e.g. component name, props), and optional default values so output is consistent and project-specific.</p>
+
+      <p className="mt-4 font-medium">What templates exist</p>
+      <p><strong>Built-in templates</strong> are always available and include: React component (TypeScript), Next.js page, TypeScript utility file, package.json, tsconfig.json, entry point (e.g. index.tsx), and .env.example. They are used automatically by the file generator and by Develop chat when creating new files so the app stays runnable (e.g. correct scripts for Next.js vs Vite, proper tsconfig).</p>
+      <p className="mt-2"><strong>Custom templates</strong> can be stored per project in the database. They are loaded together with built-ins when generating code for that project. Use custom templates for team-specific patterns (e.g. a standard API route shape, a shared layout component) so every generated file follows the same structure.</p>
+
+      <p className="mt-4 font-medium">How templates are used</p>
+      <p>When you ask the AI in Develop to create a file (e.g. &quot;add a new page for the dashboard&quot;), the system picks an appropriate template (or generates from scratch when no template fits), fills in variables (e.g. page name, content), and writes the file. The API <code className="text-sm bg-muted px-1 rounded">GET /api/templates?projectId=...</code> returns all available templates (built-in + custom for that project). File generation and chat use this list so project-specific custom templates are included.</p>
+
+      <p className="mt-4 font-medium">Creating a custom template</p>
+      <p>Custom templates are stored in the <code className="text-sm bg-muted px-1 rounded">templates</code> collection in MongoDB with: <code className="text-sm bg-muted px-1 rounded">id</code>, <code className="text-sm bg-muted px-1 rounded">name</code>, <code className="text-sm bg-muted px-1 rounded">description</code>, <code className="text-sm bg-muted px-1 rounded">language</code>, <code className="text-sm bg-muted px-1 rounded">fileType</code>, <code className="text-sm bg-muted px-1 rounded">template</code> (string with placeholders), <code className="text-sm bg-muted px-1 rounded">variables</code> (array of variable names), <code className="text-sm bg-muted px-1 rounded">defaultValues</code> (optional), and <code className="text-sm bg-muted px-1 rounded">isBuiltIn: false</code>. Optionally set <code className="text-sm bg-muted px-1 rounded">projectId</code> so the template is only available for that project. Placeholders use double curly braces: <code className="text-sm bg-muted px-1 rounded">{'{{VariableName}}'}</code>. For repeated blocks use <code className="text-sm bg-muted px-1 rounded">{'{{#array}}...{{/array}}'}</code>. Today, custom templates are created programmatically (e.g. via a script or admin tool that calls the template service); a UI for creating them in the dashboard can be added later.</p>
+
+      <p className="mt-4 font-medium">Production use</p>
+      <ul className="list-disc pl-6 mt-2 space-y-1">
+        <li>Rely on built-in templates for consistency (package.json, tsconfig, entry point) so the app always runs and previews correctly.</li>
+        <li>Add custom templates for shared patterns (e.g. API route, layout, form component) so every new file matches your team&apos;s conventions.</li>
+        <li>When integrating with the API, pass <code className="text-sm bg-muted px-1 rounded">projectId</code> when fetching templates so project-specific custom templates are included in code generation.</li>
+      </ul>
+      <p className="mt-4">Related: <Link href="/docs/advanced/custom-prompts" className="text-primary hover:underline">Custom Prompts</Link>, <Link href="/docs/features/code-generation" className="text-primary hover:underline">Code Generation</Link>, <Link href="/docs/api" className="text-primary hover:underline">API Reference</Link> (Projects, Files, AI).</p>
+    </>
+  ),
+  'advanced/production': (
+    <>
+      <p>Use this checklist before taking your app or your G.R.I.P. usage to production.</p>
+
+      <p className="mt-4 font-medium">Security</p>
+      <ul className="list-disc pl-6 mt-2 space-y-1">
+        <li><strong>GitHub token</strong> — Set in Dashboard → Settings. Use minimal scope (e.g. repo). Rotate periodically. See <Link href="/docs/security" className="text-primary hover:underline">Security</Link>.</li>
+        <li><strong>Environment variables</strong> — Never commit API keys or secrets. Use .env.local (or host env vars) for Anthropic, Resend, MongoDB, etc. See <Link href="/docs/security" className="text-primary hover:underline">Security</Link> and <Link href="/docs/integrations/deploy-vercel" className="text-primary hover:underline">Deploy to Vercel</Link>.</li>
+        <li><strong>MongoDB</strong> — Use a dedicated database for production. Restrict network access and use strong credentials. See <Link href="/docs/integrations/mongodb" className="text-primary hover:underline">MongoDB</Link>.</li>
+      </ul>
+
+      <p className="mt-4 font-medium">Deployment</p>
+      <ul className="list-disc pl-6 mt-2 space-y-1">
+        <li><strong>Export to GitHub</strong> — Get your project on GitHub (one token in Settings). Then connect the repo in Vercel or your CI/CD.</li>
+        <li><strong>Deploy to Vercel</strong> — Use the project&apos;s Deploy to Vercel flow or the full guide in <code className="text-sm bg-muted px-1 rounded">docs/DEPLOY-TO-VERCEL-AND-FAQS.md</code>. Set env vars in Vercel (e.g. MONGODB_URI, NEXTAUTH_SECRET). See <Link href="/docs/integrations/deploy-vercel" className="text-primary hover:underline">Deploy to Vercel</Link>.</li>
+        <li><strong>Same data locally and in production</strong> — Use the same MONGODB_URI locally and on Vercel if you want projects created in one place to appear in the other. See <Link href="/docs/integrations/mongodb" className="text-primary hover:underline">MongoDB</Link>.</li>
+      </ul>
+
+      <p className="mt-4 font-medium">Best practices</p>
+      <ul className="list-disc pl-6 mt-2 space-y-1">
+        <li><strong>Ideation and GRIP memory</strong> — Fill in goals, audience, features, and technical requirements; use &quot;remember&quot; in Develop for preferences. This keeps the build aligned with your intent. See <Link href="/docs/advanced/custom-prompts" className="text-primary hover:underline">Custom Prompts</Link> and <Link href="/docs/features/ideation-and-build" className="text-primary hover:underline">How Your Ideation Drives the Build</Link>.</li>
+        <li><strong>Review generated files</strong> — Check the generated-files list and Overview before exporting or deploying. Fix any lint or build errors in chat.</li>
+        <li><strong>Templates</strong> — Use built-in templates for consistency; add custom templates for team patterns. See <Link href="/docs/advanced/templates" className="text-primary hover:underline">Project Templates</Link>.</li>
+      </ul>
+
+      <p className="mt-4 font-medium">API and integrations</p>
+      <p>If you integrate with the G.R.I.P. API, use session-based auth (credentials: include), respect rate limits, and handle errors. See <Link href="/docs/api" className="text-primary hover:underline">API Reference</Link> and <Link href="/docs/security" className="text-primary hover:underline">Security</Link>.</p>
+
+      <p className="mt-6">
+        <Link href="/docs/advanced" className="text-primary hover:underline">Advanced Guides</Link>
+        {' · '}
+        <Link href="/docs/security" className="text-primary hover:underline">Security</Link>
+        {' · '}
+        <Link href="/docs/integrations/deploy-vercel" className="text-primary hover:underline">Deploy to Vercel</Link>
+        {' · '}
+        <Link href="/docs" className="text-primary hover:underline">Documentation index</Link>
+      </p>
     </>
   ),
   'best-practices': (
@@ -217,9 +316,10 @@ export default async function DocSlugPage({ params }: DocSlugPageProps) {
           )}
         </div>
         <div className="mt-8">
-          <Link href="/docs" className="text-primary hover:text-primary-hover">
-            ← Back to Docs
-          </Link>
+          <BackAndDashboardNav
+            backFallbackHref="/docs"
+            backLabel="Back to Docs"
+          />
         </div>
       </main>
     </div>
