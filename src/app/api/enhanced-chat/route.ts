@@ -15,7 +15,7 @@ import { getProjectState, updateProjectState, recordFileSaveAndAdvanceStep } fro
 import { createProjectFolder, saveProjectFile } from '@/lib/services/gripProjectActions'
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 import { runMainProject } from '@/lib/runMainProject'
-import { MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
 import { STYLING_REQUIREMENTS_FOR_GRIP } from '@/lib/constants/stylingReferenceRepos'
 import { detectRepoType, getMandatoryRepoTypeRules } from '@/lib/repoTypeDetection'
 import { getReferenceReposGuidanceLine } from '@/lib/constants/referenceRepos'
@@ -233,6 +233,8 @@ ${userUploadsSummary}
     }
   }
 
+  // Mandatory: never mix GRIP app functionality with user Settings / user project env vars
+  prompt += `\n${MANDATORY_GRIP_APP_VS_USER_SETTINGS}\n\n`
   // Mandatory build quality so GRIP follows same bar (latest libs, modern UX/UI, token efficiency)
   prompt += `\n${MANDATORY_GRIP_BUILD_QUALITY}\n\n`
   // Mandatory project-specific scaffolding: package.json/tsconfig/README project-specific; scripts match stack
@@ -1728,7 +1730,7 @@ export async function POST(request: NextRequest) {
     if (!apiKey) {
       return NextResponse.json(
         {
-          error: 'G.R.I.P. AI is not configured. Add your Anthropic API key in Dashboard → Settings → AI API Keys, or set ANTHROPIC_API_KEY in your deployment environment (e.g. Vercel).',
+          error: 'The GRIP app\'s AI provider is not configured. This is set in the deployment environment (e.g. ANTHROPIC_API_KEY in the server or Vercel environment variables), not in project Settings. Contact your administrator or deployment owner.',
           code: 'AI_NOT_CONFIGURED'
         },
         { status: 503 }
@@ -1744,7 +1746,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: isKeyOrAuth
-            ? 'G.R.I.P. AI could not connect. Check your Anthropic API key in Dashboard → Settings → AI API Keys (or ANTHROPIC_API_KEY in Vercel). The key may be invalid or revoked.'
+            ? 'The GRIP app\'s AI could not connect. The deployment API key may be invalid or revoked. This is configured in the deployment environment (e.g. ANTHROPIC_API_KEY), not in project Settings. Contact your administrator.'
             : 'G.R.I.P. AI is temporarily unavailable. Please try again later.',
           code: isKeyOrAuth ? 'AI_KEY_INVALID' : 'AI_INIT_FAILED'
         },

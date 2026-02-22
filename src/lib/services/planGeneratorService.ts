@@ -4,7 +4,7 @@ import { Anthropic } from '@anthropic-ai/sdk'
 import { getOrCreateProjectStructure } from './structureGeneratorService'
 import { IProjectStructureData } from '@/lib/models/ProjectStructure'
 import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
-import { MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
 import { buildPlanContextFromAnalysis, type PlanContextFromAnalysis } from './planContextFromAnalysisService'
 
 /**
@@ -321,6 +321,8 @@ ${layerBlock}
 ${stackBlock}
 ${repoTypeBlock}
 ${uploadsBlock}
+
+${MANDATORY_GRIP_APP_VS_USER_SETTINGS}
 
 ${MANDATORY_GRIP_BUILD_QUALITY}
 

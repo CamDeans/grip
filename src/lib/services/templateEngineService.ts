@@ -294,21 +294,18 @@ if (root) createRoot(root).render(<App />)
       isBuiltIn: true
     })
 
-    // .env.example — mandatory so user can run preview; placeholders map to GRIP Dashboard → Settings
+    // .env.example — mandatory so user can run preview; placeholders map to user Settings (Backend, System Integration) only — never GRIP app config
     templates.push({
       id: 'env-example',
       name: '.env.example',
-      description: 'Environment template for StackBlitz and local run; copy from GRIP Settings',
+      description: 'Environment template for StackBlitz and local run; copy from GRIP Settings (Backend connections, System Integration)',
       language: 'plaintext',
       fileType: 'example',
       template: `# Copy this to .env.local or .env and fill in values.
-# Many values can be copied from GRIP: Dashboard → Settings (Backend connections, AI API Keys, System Integration).
+# User-setting vars (copy from Dashboard → Settings → Backend connections / System Integration). GRIP app AI config is deployment-only, not here.
 
 # Backend (copy from Dashboard → Settings → Backend connections)
 MONGODB_URI="your_mongodb_uri_here"
-
-# AI / chat (copy from Dashboard → Settings → AI API Keys)
-ANTHROPIC_API_KEY="your-anthropic-api-key"
 
 # System integration (copy from Dashboard → Settings → System Integration)
 GITHUB_API_TOKEN="your-github-api-token"

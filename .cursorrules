@@ -29,6 +29,7 @@ core_rules:
   - always keep the enhanced chat maintaining G.R.I.P. identity and rules (see enhanced_chat_continuity_and_automation.identity_and_rules and .context_panel_and_project_flow in this file)
   - always keep G.R.I.P. fully connected to Anthropic via src/lib/services/anthropicService.ts so the enhanced chat never stops working (see enhanced_chat_continuity_and_automation.anthropic_connection_continuity)
   - reuse all files and code in the codebase unless they are not readily available; do not duplicate chat, task, build, or file-generation logic (see enhanced_chat_continuity_and_automation.codebase_alignment_detail and .code_and_file_reuse)
+  - never mix G.R.I.P. app functionality with user Settings or user project env vars: G.R.I.P. app (enhanced chat, plan, analysis, G.R.I.P. backend API keys) is deployment environment only; user setting vars (Dashboard → Settings → Backend connections, System Integration) are for the user's project build only. Errors and copy must never direct users to "Settings → AI API Keys" for G.R.I.P. app failures—direct them to deployment environment / administrator.
 
 # Full GRIP Build — 100% Functioning App (No Future Deferrals)
 # Master Cameron has directed that GRIP be a complete, shipping product that creates and deploys full projects. Implement and verify; do not defer to "future" builds.
@@ -59,7 +60,7 @@ stackblitz_preview_mandate:
     - "src/index.tsx (or project-appropriate entry) — entry point for app preview; always generated when missing."
   rules:
     - "G.R.I.P. MUST always include package.json, tsconfig.json, .env.example, and an entry point (e.g. src/index.tsx) in the file list for generation so the user can preview the app in StackBlitz upon completion."
-    - ".env.example MUST list placeholders for vars that come from GRIP Settings: MONGODB_URI (Backend connections), ANTHROPIC_API_KEY (AI API Keys), GITHUB_API_TOKEN and VERCEL_TOKEN (System Integration). Comments MUST point the user to Dashboard → Settings so they can copy values for run/preview."
+    - ".env.example MUST list placeholders only for user-setting vars that the project needs: MONGODB_URI (Backend connections), GITHUB_API_TOKEN and VERCEL_TOKEN (System Integration). Never mix GRIP app config (e.g. the app's AI provider key) with user project env—GRIP app AI is deployment environment only. Comments MUST point the user to Dashboard → Settings (Backend connections, System Integration) so they can copy values for run/preview."
     - "Overview automation MUST treat these as mandatory: when they are missing, getFilesToGenerate merges them in so files/generate produces them and adds them to the project scope."
     - "Do not consider a build complete for preview purposes until these high-level files exist; overview automation that finds missing files will add and generate them."
 
