@@ -20,6 +20,8 @@ import { cn } from '@/lib/client-utils'
 export interface RepoPreviewModalProps {
   isOpen: boolean
   onClose: () => void
+  /** Called when user clicks "Select another repo" before closing; use to clear search/repos in parent */
+  onSelectAnother?: () => void
   owner: string
   repo: string
   repoFullName: string
@@ -29,6 +31,7 @@ export interface RepoPreviewModalProps {
 export function RepoPreviewModal({
   isOpen,
   onClose,
+  onSelectAnother,
   owner,
   repo,
   repoFullName,
@@ -227,7 +230,14 @@ export function RepoPreviewModal({
 
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
                   <div className="flex gap-2">
-                    <Button type="button" variant="outline" onClick={onClose}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        onSelectAnother?.()
+                        onClose()
+                      }}
+                    >
                       Select another repo
                     </Button>
                     {!confirmed && (

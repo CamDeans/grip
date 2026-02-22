@@ -89,6 +89,14 @@ export function RepoSelector({
     onConfirmAndContinue?.(repo)
   }
 
+  /** Reset search and repo list when user closes preview to select another repo. */
+  const handleSelectAnotherRepo = () => {
+    setPreviewRepo(null)
+    setRepos([])
+    setSearch('')
+    setSelectedRepo(null)
+  }
+
   const handleGenerateKeywords = async () => {
     if (!isProjectDataFilled) {
       alert('Please fill in both the project title and description before generating keywords')
@@ -297,12 +305,8 @@ export function RepoSelector({
 
       <RepoPreviewModal
         isOpen={!!previewRepo}
-        onClose={() => {
-          setPreviewRepo(null)
-          setRepos([])
-          setSearch('')
-          setSelectedRepo(null)
-        }}
+        onClose={handleSelectAnotherRepo}
+        onSelectAnother={handleSelectAnotherRepo}
         owner={previewRepo?.owner.login ?? ''}
         repo={previewRepo?.name ?? ''}
         repoFullName={previewRepo ? `${previewRepo.owner.login}/${previewRepo.name}` : ''}
