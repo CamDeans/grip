@@ -64,8 +64,14 @@ class AnthropicService extends EventEmitter {
     })
   }
 
-  // Initialize service (GRIP uses only env: .env in dev, Vercel vars in production)
-  async initialize(): Promise<void> {
+  // Initialize service (GRIP uses only env: .env in dev, Vercel vars in production).
+  // Pass key from route so we use the same env the route read (same as plan/build which create client at request time).
+  async initialize(apiKeyFromRoute?: string): Promise<void> {
+    const key = (apiKeyFromRoute && apiKeyFromRoute.trim()) || getAnthropicApiKey() || ''
+    if (key) {
+      this.config = { ...this.config, apiKey: key }
+      this.client = new Anthropic({ apiKey: key })
+    }
     if (this.isInitialized) return
 
     try {

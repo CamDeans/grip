@@ -1724,7 +1724,7 @@ export async function POST(request: NextRequest) {
     const userHasMongoDB = !!(userDoc?.mongodbUri && String(userDoc.mongodbUri).trim())
     const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, stackGuidanceFromPlan, tokenBudgetHint, userHasMongoDB, sectionBudgets)
 
-    // GRIP uses only env: .env in dev, Vercel vars in production. Settings vars are for the user's app build, not GRIP's AI.
+    // Same env as plan/build: read key in this request and pass to service (plan creates client at request time; we pass key so service uses it)
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
     const apiKey = getAnthropicApiKey()
     if (!apiKey) {
@@ -1738,7 +1738,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      await anthropicService.initialize()
+      await anthropicService.initialize(apiKey)
     } catch (initErr) {
       const msg = initErr instanceof Error ? initErr.message : String(initErr)
       console.error('G.R.I.P. AI initialization failed:', msg, initErr)
