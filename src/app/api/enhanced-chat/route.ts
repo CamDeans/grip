@@ -7,7 +7,8 @@ import { requireAppAccess, requireTokenBalance, getAppAccess } from '@/lib/acces
 import { buildTokenBudgetPromptFragment, getChatResponseMaxTokens } from '@/lib/constants/tokenBudgetPlan'
 import { getChatSectionBudgets } from '@/lib/constants/tokenLimitsByTier'
 import { addTokenUsage } from '@/lib/tokenUsage'
-import { anthropicService } from '@/lib/services/anthropicService'
+import { Anthropic } from '@anthropic-ai/sdk'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
 import { getOrBuildRepoContextDocument } from '@/lib/services/repoContextService'
 import { listProjectFiles } from '@/lib/services/fileStorageService'
 import { getProjectPlan } from '@/lib/services/projectPlanningService'
@@ -1724,8 +1725,7 @@ export async function POST(request: NextRequest) {
     const userHasMongoDB = !!(userDoc?.mongodbUri && String(userDoc.mongodbUri).trim())
     const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, stackGuidanceFromPlan, tokenBudgetHint, userHasMongoDB, sectionBudgets)
 
-    // Same env as plan/build: read key in this request and pass to service (plan creates client at request time; we pass key so service uses it)
-    const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
+    // Same as plan/build: single source from .env / Vercel — request-scoped client (no singleton)
     const apiKey = getAnthropicApiKey()
     if (!apiKey) {
       return NextResponse.json(
@@ -1737,46 +1737,53 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    try {
-      await anthropicService.initialize(apiKey)
-    } catch (initErr) {
-      const msg = initErr instanceof Error ? initErr.message : String(initErr)
-      console.error('G.R.I.P. AI initialization failed:', msg, initErr)
-      const isKeyOrAuth = /invalid|401|authentication|api key|unauthorized/i.test(msg)
-      return NextResponse.json(
-        {
-          error: isKeyOrAuth
-            ? 'G.R.I.P. AI could not connect. Check ANTHROPIC_API_KEY in your deployment environment (e.g. Vercel) or .env.local. The key may be invalid or revoked.'
-            : 'G.R.I.P. AI is temporarily unavailable. Please try again later.',
-          code: isKeyOrAuth ? 'AI_KEY_INVALID' : 'AI_INIT_FAILED'
-        },
-        { status: 503 }
-      )
-    }
-
+    const anthropic = new Anthropic({ apiKey })
     const responseMaxTokens = getChatResponseMaxTokens(remainingTokens)
-    let response
+    let response: { content: string; usage: { promptTokens: number; completionTokens: number; totalTokens: number }; stopReason: string }
     try {
-      response = await anthropicService.createMessage(
-        history.map(m => ({ role: m.role, content: m.content })),
-        { system: systemPrompt, maxTokens: responseMaxTokens }
-      )
+      const raw = await anthropic.messages.create({
+        model: ANTHROPIC_MODEL_CHAT,
+        max_tokens: responseMaxTokens,
+        temperature: 0.7,
+        system: systemPrompt,
+        messages: history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      })
+      const content = (raw.content ?? [])
+        .filter((b: { type?: string }) => b?.type === 'text')
+        .map((b: { text?: string }) => b?.text ?? '')
+        .join('')
+        .trim()
+      if (content.toLowerCase().includes('claude') || content.toLowerCase().includes('anthropic')) {
+        throw new Error('Response contains unauthorized identity references')
+      }
+      response = {
+        content,
+        usage: {
+          promptTokens: raw.usage?.input_tokens ?? 0,
+          completionTokens: raw.usage?.output_tokens ?? 0,
+          totalTokens: (raw.usage?.input_tokens ?? 0) + (raw.usage?.output_tokens ?? 0),
+        },
+        stopReason: raw.stop_reason ?? 'unknown',
+      }
     } catch (apiErr) {
       console.error('G.R.I.P. AI request failed:', apiErr)
       const msg = apiErr instanceof Error ? apiErr.message : String(apiErr)
+      const isKeyOrAuth = /invalid|401|authentication|api key|unauthorized/i.test(msg)
       const isRateOrQuota = /rate|quota|overloaded|429|503/i.test(msg)
       return NextResponse.json(
         {
-          error: isRateOrQuota
-            ? 'G.R.I.P. AI is rate limited or overloaded. Please try again in a minute.'
-            : 'G.R.I.P. AI is temporarily unavailable. Please try again in a moment.',
-          code: 'AI_REQUEST_FAILED'
+          error: isKeyOrAuth
+            ? 'G.R.I.P. AI could not connect. Check ANTHROPIC_API_KEY in your deployment (e.g. Vercel) or .env.local. The key may be invalid or revoked.'
+            : isRateOrQuota
+              ? 'G.R.I.P. AI is rate limited or overloaded. Please try again in a minute.'
+              : 'G.R.I.P. AI is temporarily unavailable. Please try again in a moment.',
+          code: isKeyOrAuth ? 'AI_KEY_INVALID' : isRateOrQuota ? 'AI_REQUEST_FAILED' : 'AI_INIT_FAILED',
         },
         { status: 503 }
       )
     }
 
-    const totalTokens = response.usage?.totalTokens ?? (response.usage?.promptTokens ?? 0) + (response.usage?.completionTokens ?? 0)
+    const totalTokens = response.usage.totalTokens
     if (totalTokens > 0 && session.user?.id) {
       addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('Enhanced chat: failed to record token usage', err)
@@ -1985,7 +1992,27 @@ export async function POST(request: NextRequest) {
           ]
           const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, stackGuidanceFromPlan, tokenBudgetHint, userHasMongoDB, sectionBudgets)
 
-          const responseRetry = await anthropicService.createMessage(historyForRetry, { system: systemPromptRetry })
+          const rawRetry = await anthropic.messages.create({
+            model: ANTHROPIC_MODEL_CHAT,
+            max_tokens: responseMaxTokens,
+            temperature: 0.7,
+            system: systemPromptRetry,
+            messages: historyForRetry.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+          })
+          const contentRetry = (rawRetry.content ?? [])
+            .filter((b: { type?: string }) => b?.type === 'text')
+            .map((b: { text?: string }) => b?.text ?? '')
+            .join('')
+            .trim()
+          const responseRetry = {
+            content: contentRetry,
+            usage: {
+              promptTokens: rawRetry.usage?.input_tokens ?? 0,
+              completionTokens: rawRetry.usage?.output_tokens ?? 0,
+              totalTokens: (rawRetry.usage?.input_tokens ?? 0) + (rawRetry.usage?.output_tokens ?? 0),
+            },
+            stopReason: rawRetry.stop_reason ?? 'unknown',
+          }
           const tokensRetry = responseRetry.usage?.totalTokens ?? (responseRetry.usage?.promptTokens ?? 0) + (responseRetry.usage?.completionTokens ?? 0)
           if (tokensRetry > 0 && session.user?.id) {
             addTokenUsage(session.user.id, tokensRetry).catch(() => {})
