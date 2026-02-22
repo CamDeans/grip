@@ -1,5 +1,4 @@
-import { UserSettings } from '@/lib/models/UserSettings'
-import { dbConnect } from '@/lib/db'
+import clientPromise from '@/lib/db'
 
 export interface UserSettings {
   userId: string
@@ -109,16 +108,22 @@ export const defaultSettings: UserSettings = {
   }
 }
 
+const COLLECTION = 'usersettings'
+
+function getDb() {
+  return clientPromise.then((client) => client.db(process.env.MONGODB_DB_NAME || 'test'))
+}
+
 export const settingsService = {
   async getUserSettings(userId: string): Promise<UserSettings | null> {
-    await dbConnect()
-    const settings = await UserSettings.findOne({ userId })
-    if (!settings) return null
-    return settings.toObject() as UserSettings
+    const db = await getDb()
+    const doc = await db.collection(COLLECTION).findOne({ userId })
+    if (!doc) return null
+    const { _id, ...rest } = doc as { _id?: unknown; [k: string]: unknown }
+    return rest as UserSettings
   },
 
   async updateUserSettings(userId: string, updates: UserSettingsUpdate): Promise<UserSettings> {
-    await dbConnect()
     const currentSettings = await this.getUserSettings(userId) || {
       ...defaultSettings,
       userId,
@@ -133,58 +138,57 @@ export const settingsService = {
       ...updates,
       profile: {
         ...currentSettings.profile,
-        ...updates.profile,
-        email: updates.profile?.email || currentSettings.profile.email
+        ...(updates.profile || {}),
+        email: updates.profile?.email ?? currentSettings.profile.email
       },
       preferences: {
         ...currentSettings.preferences,
-        ...updates.preferences,
-        theme: updates.preferences?.theme || currentSettings.preferences.theme,
-        language: updates.preferences?.language || currentSettings.preferences.language,
-        timezone: updates.preferences?.timezone || currentSettings.preferences.timezone,
-        dateFormat: updates.preferences?.dateFormat || currentSettings.preferences.dateFormat
+        ...(updates.preferences || {}),
+        theme: updates.preferences?.theme ?? currentSettings.preferences.theme,
+        language: updates.preferences?.language ?? currentSettings.preferences.language,
+        timezone: updates.preferences?.timezone ?? currentSettings.preferences.timezone,
+        dateFormat: updates.preferences?.dateFormat ?? currentSettings.preferences.dateFormat
       },
       notifications: {
         ...currentSettings.notifications,
-        ...updates.notifications,
+        ...(updates.notifications || {}),
         projectStatus: updates.notifications?.projectStatus ?? currentSettings.notifications.projectStatus,
         timeTracking: updates.notifications?.timeTracking ?? currentSettings.notifications.timeTracking,
         reminders: updates.notifications?.reminders ?? currentSettings.notifications.reminders,
         emailNotifications: updates.notifications?.emailNotifications ?? currentSettings.notifications.emailNotifications,
         pushNotifications: updates.notifications?.pushNotifications ?? currentSettings.notifications.pushNotifications,
-        notificationFrequency: updates.notifications?.notificationFrequency || currentSettings.notifications.notificationFrequency,
+        notificationFrequency: updates.notifications?.notificationFrequency ?? currentSettings.notifications.notificationFrequency,
         quietHours: {
           ...currentSettings.notifications.quietHours,
-          ...updates.notifications?.quietHours,
+          ...(updates.notifications?.quietHours || {}),
           enabled: updates.notifications?.quietHours?.enabled ?? currentSettings.notifications.quietHours.enabled,
-          start: updates.notifications?.quietHours?.start || currentSettings.notifications.quietHours.start,
-          end: updates.notifications?.quietHours?.end || currentSettings.notifications.quietHours.end
+          start: updates.notifications?.quietHours?.start ?? currentSettings.notifications.quietHours.start,
+          end: updates.notifications?.quietHours?.end ?? currentSettings.notifications.quietHours.end
         }
       },
       timeTracking: {
         ...currentSettings.timeTracking,
-        ...updates.timeTracking,
+        ...(updates.timeTracking || {}),
         autoStart: updates.timeTracking?.autoStart ?? currentSettings.timeTracking.autoStart,
         reminders: {
           ...currentSettings.timeTracking.reminders,
-          ...updates.timeTracking?.reminders,
+          ...(updates.timeTracking?.reminders || {}),
           enabled: updates.timeTracking?.reminders?.enabled ?? currentSettings.timeTracking.reminders.enabled,
-          interval: updates.timeTracking?.reminders?.interval || currentSettings.timeTracking.reminders.interval
+          interval: updates.timeTracking?.reminders?.interval ?? currentSettings.timeTracking.reminders.interval
         }
       }
     }
 
-    const result = await UserSettings.findOneAndUpdate(
+    const db = await getDb()
+    await db.collection(COLLECTION).updateOne(
       { userId },
-      mergedSettings,
-      { new: true, upsert: true }
+      { $set: { ...mergedSettings, updatedAt: new Date() } },
+      { upsert: true }
     )
 
-    if (!result) {
-      throw new Error('Failed to update settings')
-    }
-
-    return result.toObject() as UserSettings
+    const updated = await this.getUserSettings(userId)
+    if (!updated) throw new Error('Failed to update settings')
+    return updated
   },
 
   async updateProfile(userId: string, profile: Partial<UserSettings['profile']>): Promise<UserSettings> {

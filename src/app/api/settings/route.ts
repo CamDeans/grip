@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
+import { getServerAuthSession } from '@/lib/auth'
 import { settingsService, defaultSettings, type UserSettingsUpdate } from '@/lib/services/settingsService'
 
 // Get user settings
 export async function GET() {
   try {
-    const session = await getServerSession()
-    
+    const session = await getServerAuthSession()
+
     if (!session || !session.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    
+
     const userId = session.user.email
     let settings = await settingsService.getUserSettings(userId)
     
@@ -40,12 +40,12 @@ export async function GET() {
 // Update user settings
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession()
-    
+    const session = await getServerAuthSession()
+
     if (!session || !session.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    
+
     const userId = session.user.email
     const updates: UserSettingsUpdate = await request.json()
     
