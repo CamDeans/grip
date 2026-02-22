@@ -64,7 +64,8 @@ export default function DashboardPage() {
   }, [searchParams, router])
 
   const refetchAccess = useCallback(() => {
-    fetch('/api/me/access')
+    // Cache-bust so refetch after token usage gets fresh data (Plan & token usage card stays in sync)
+    fetch(`/api/me/access?t=${Date.now()}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setAccess(d))
       .catch(() => {})

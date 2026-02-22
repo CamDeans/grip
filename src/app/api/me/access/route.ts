@@ -9,8 +9,16 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const access = await getAppAccess(session)
-  return NextResponse.json({
-    ...access,
-    subscriptionPeriodEnd: access.subscriptionPeriodEnd?.toISOString() ?? null,
-  })
+  return NextResponse.json(
+    {
+      ...access,
+      subscriptionPeriodEnd: access.subscriptionPeriodEnd?.toISOString() ?? null,
+    },
+    {
+      headers: {
+        'Cache-Control': 'private, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
+    }
+  )
 }

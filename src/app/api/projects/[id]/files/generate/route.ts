@@ -116,6 +116,14 @@ export async function POST(
                   DevScript: highLevelContext.devScript,
                   BuildScript: highLevelContext.buildScript,
                   StartScript: highLevelContext.startScript,
+                  LintScript: highLevelContext.framework === 'next' ? 'next lint' : highLevelContext.framework === 'vite' ? 'eslint .' : 'next lint',
+                  NextVersion: '^14.0.0',
+                  ReactVersion: '^18.2.0',
+                  ReactDomVersion: '^18.2.0',
+                  TypescriptVersion: '^5.0.0',
+                  TypesNodeVersion: '^20.0.0',
+                  TypesReactVersion: '^18.2.0',
+                  TypesReactDomVersion: '^18.2.0',
                 }
               }
 

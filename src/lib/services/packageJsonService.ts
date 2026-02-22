@@ -82,14 +82,29 @@ export async function getPackageJsonForProject(projectId: string): Promise<{
     }
   }
 
-  // 3. Create minimal package.json and save to projectFiles
+  // 3. Create runnable package.json and save to projectFiles (so StackBlitz and local run work; user can add deps in Develop)
   const data: PackageJsonData = {
     name: 'grip-project',
     version: '0.1.0',
     private: true,
-    dependencies: {},
-    devDependencies: {},
-    scripts: { dev: 'echo "Run after export"', build: 'echo "Run after export"' },
+    type: 'module',
+    scripts: {
+      dev: 'next dev',
+      build: 'next build',
+      start: 'next start',
+      lint: 'next lint',
+    },
+    dependencies: {
+      next: '^14.0.0',
+      react: '^18.2.0',
+      'react-dom': '^18.2.0',
+    },
+    devDependencies: {
+      typescript: '^5.0.0',
+      '@types/node': '^20.0.0',
+      '@types/react': '^18.2.0',
+      '@types/react-dom': '^18.2.0',
+    },
   }
   const content = JSON.stringify(data, null, 2)
   await upsertProjectFile(projectId, '', 'package.json', content)

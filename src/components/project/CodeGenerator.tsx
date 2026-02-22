@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileText, Code, Check, RefreshCw } from 'lucide-react'
+import { refreshTokenUsage } from '@/lib/tokenRefresh'
 
 interface CodeGeneratorProps {
   projectId: string
@@ -104,6 +105,7 @@ export function CodeGenerator({ projectId }: CodeGeneratorProps) {
           return exists ? prev.map(file => file.fileId === data.fileId ? data : file) : [...prev, data]
         })
         
+        refreshTokenUsage()
         alert('File generated successfully')
         
         // Reset form

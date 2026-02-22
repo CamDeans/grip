@@ -60,6 +60,23 @@ export interface FileGenerationResult {
 }
 
 /**
+ * GRIP mandatory rule: no blank or placeholder files so StackBlitz preview runs.
+ * Returns true if content is empty, only whitespace, only comments, or a bare empty export.
+ */
+function isPlaceholderOrEmpty(content: string, filename: string): boolean {
+  const trimmed = (content || '').trim()
+  if (trimmed.length < 10) return true
+  if (/^export\s*\{\}\s*;?\s*$/m.test(trimmed)) return true
+  if (/^\/\*\*?[\s\S]*\*\/\s*$/m.test(trimmed)) return true
+  if (/^\/\/\s*TODO[\s\S]*$/m.test(trimmed)) return true
+  const ext = filename.split('.').pop()?.toLowerCase()
+  if (ext === 'tsx' || ext === 'jsx' || ext === 'ts' || ext === 'js') {
+    if (/^import\s+.*\s+from\s+['"][^'"]+['"]\s*;?\s*$/m.test(trimmed)) return true
+  }
+  return false
+}
+
+/**
  * Generate a code file using a template
  * @param request File generation request
  * @returns File generation result
@@ -136,10 +153,25 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
     
     // Generate filename if not provided
     const filename = request.filename || generateFileName(template, variables)
-    
-    // Render template with variables
+
+    // GRIP mandatory: do not save blank or placeholder files (StackBlitz must get runnable code)
     const content = renderTemplate(template, variables)
-    
+    if (isPlaceholderOrEmpty(content, filename)) {
+      const msg = `Generated content for ${request.filePath || filename} is empty or placeholder. GRIP requires every file to have real code so the app runs in StackBlitz.`
+      console.warn(msg)
+      return {
+        fileId: '',
+        projectId: request.projectId,
+        path: request.filePath,
+        filename,
+        content: '',
+        size: 0,
+        language: template.language,
+        success: false,
+        error: msg,
+      }
+    }
+
     // Create file in database
     await connectToDatabase()
     

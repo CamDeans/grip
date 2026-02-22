@@ -28,7 +28,8 @@ export function TokenUsage() {
   const adminExhaustedToastShown = useRef(false)
 
   const refetch = useCallback(() => {
-    fetch('/api/me/access')
+    // Cache-bust so refetch after token usage always gets fresh data (sidebar/dashboard cards stay in sync)
+    fetch(`/api/me/access?t=${Date.now()}`)
       .then((r) => r.ok ? r.json() : null)
       .then((d) => setData(d || null))
       .catch(() => {})
@@ -36,7 +37,7 @@ export function TokenUsage() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/me/access')
+    fetch(`/api/me/access?t=${Date.now()}`)
       .then((r) => r.ok ? r.json() : null)
       .then((d) => {
         if (!cancelled) setData(d || null)

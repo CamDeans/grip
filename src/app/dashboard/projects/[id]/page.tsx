@@ -412,6 +412,7 @@ export default function ProjectOverviewPage() {
           const filesData = await filesRes.json().catch(() => ({}))
           fileCount = filesData.skipped ? (filesData.fileCount ?? 0) : (filesData.successCount ?? filesData.generatedFiles?.filter((f: { success?: boolean }) => f.success).length ?? 0)
         }
+        refreshTokenUsage()
         const state = await fetch(`/api/projects/${projectId}/state`).then((r) => (r.ok ? r.json() : null)).catch(() => null)
         setProjectState(state && (state.phases?.length || state.currentPhase) ? state : null)
         setHasPlan(true)

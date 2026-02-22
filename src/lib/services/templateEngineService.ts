@@ -216,7 +216,7 @@ export function {{name}}({{#params}}{{name}}: {{type}}{{^last}}, {{/last}}{{/par
       isBuiltIn: true
     })
     
-    // package.json — mandatory for StackBlitz preview (GRIP must always include)
+    // package.json — mandatory for StackBlitz preview (GRIP must always include; never empty deps so Run in StackBlitz works)
     templates.push({
       id: 'package-json',
       name: 'package.json',
@@ -231,17 +231,35 @@ export function {{name}}({{#params}}{{name}}: {{type}}{{^last}}, {{/last}}{{/par
   "scripts": {
     "dev": "{{DevScript}}",
     "build": "{{BuildScript}}",
-    "start": "{{StartScript}}"
+    "start": "{{StartScript}}",
+    "lint": "{{LintScript}}"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "next": "{{NextVersion}}",
+    "react": "{{ReactVersion}}",
+    "react-dom": "{{ReactDomVersion}}"
+  },
+  "devDependencies": {
+    "typescript": "{{TypescriptVersion}}",
+    "@types/node": "{{TypesNodeVersion}}",
+    "@types/react": "{{TypesReactVersion}}",
+    "@types/react-dom": "{{TypesReactDomVersion}}"
+  }
 }`,
-      variables: ['ProjectName', 'DevScript', 'BuildScript', 'StartScript'],
+      variables: ['ProjectName', 'DevScript', 'BuildScript', 'StartScript', 'LintScript', 'NextVersion', 'ReactVersion', 'ReactDomVersion', 'TypescriptVersion', 'TypesNodeVersion', 'TypesReactVersion', 'TypesReactDomVersion'],
       defaultValues: {
         ProjectName: 'my-app',
-        DevScript: 'vite',
-        BuildScript: 'tsc && vite build',
-        StartScript: 'vite preview'
+        DevScript: 'next dev',
+        BuildScript: 'next build',
+        StartScript: 'next start',
+        LintScript: 'next lint',
+        NextVersion: '^14.0.0',
+        ReactVersion: '^18.2.0',
+        ReactDomVersion: '^18.2.0',
+        TypescriptVersion: '^5.0.0',
+        TypesNodeVersion: '^20.0.0',
+        TypesReactVersion: '^18.2.0',
+        TypesReactDomVersion: '^18.2.0'
       },
       isBuiltIn: true
     })

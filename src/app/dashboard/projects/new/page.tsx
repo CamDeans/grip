@@ -161,6 +161,7 @@ export default function NewProjectPage() {
           message: alignData.message ?? 'You can proceed with the build.',
           suggestedProceed: alignData.suggestedProceed !== false
         })
+        refreshTokenUsage()
       }
       setAlignmentModalOpen(true)
     } catch (error) {

@@ -95,6 +95,40 @@ function normalizePackageJsonForExport(content: string, filePaths?: string[]): s
 }
 
 /**
+ * Merge repo and projectFiles package.json so StackBlitz gets the full dependency set.
+ * Repo often has the full package.json; projectFiles may have a minimal one (e.g. created before repo link or by terminal).
+ * Use repo as base, overlay projectFiles (name, version, scripts, any user edits), and union dependencies/devDependencies
+ * so we never send a smaller package.json to StackBlitz than what the user sees on the Repos page.
+ */
+function mergePackageJsonForExport(repoContent: string, projectContent: string): string {
+  let repoPkg: PackageJsonShape
+  let projectPkg: PackageJsonShape
+  try {
+    repoPkg = JSON.parse(repoContent) as PackageJsonShape
+  } catch {
+    return projectContent
+  }
+  try {
+    projectPkg = JSON.parse(projectContent) as PackageJsonShape
+  } catch {
+    return repoContent
+  }
+  const merged: PackageJsonShape = {
+    ...repoPkg,
+    name: projectPkg.name ?? repoPkg.name,
+    version: projectPkg.version ?? repoPkg.version,
+    private: projectPkg.private ?? repoPkg.private,
+    scripts: { ...(repoPkg.scripts ?? {}), ...(projectPkg.scripts ?? {}) },
+    dependencies: { ...(repoPkg.dependencies ?? {}), ...(projectPkg.dependencies ?? {}) },
+    devDependencies: { ...(repoPkg.devDependencies ?? {}), ...(projectPkg.devDependencies ?? {}) },
+  }
+  if (repoPkg.stackblitz || projectPkg.stackblitz) {
+    merged.stackblitz = { ...(repoPkg.stackblitz ?? {}), ...(projectPkg.stackblitz ?? {}) }
+  }
+  return JSON.stringify(merged, null, 2)
+}
+
+/**
  * Apply package.json normalization to the export file set so ZIP/GitHub/StackBlitz all have runnable scripts.
  * Uses deep analysis (deps + file paths) to set scripts when file list is available.
  */
@@ -136,6 +170,8 @@ export async function getProjectFilesForExport(
   const fileMap = new Map<string, string>()
   const gripOnly = options?.gripOnly === true
 
+  const repoPackageJsonKey = 'package.json'
+  let repoHadPackageJson = false
   if (!gripOnly && project.repository?.owner && project.repository?.name) {
     const repoFiles = await getOrCloneRepository(
       project.repository.owner,
@@ -143,11 +179,14 @@ export async function getProjectFilesForExport(
       projectId
     )
     for (const f of repoFiles ?? []) {
-      fileMap.set(f.path, f.content ?? '')
+      const key = (f.path || '').replace(/^\.\//, '').replace(/^\/+/, '').trim() || f.filename || f.path
+      fileMap.set(key, f.content ?? '')
+      if (key === repoPackageJsonKey) repoHadPackageJson = true
     }
   }
 
-  // Read projectFiles; sort by updatedAt ascending so latest write wins when same path exists (e.g. chat-applied package.json)
+  // Read projectFiles; sort by updatedAt ascending so latest write wins when same path exists (e.g. chat-applied package.json).
+  // For package.json only: when both repo and projectFiles have it, merge (union deps) so StackBlitz gets the full set (Repos page shows repo; export must not send a smaller package.json).
   const projectFiles = await db
     .collection('projectFiles')
     .find({ projectId: new ObjectId(projectId) })
@@ -155,7 +194,16 @@ export async function getProjectFilesForExport(
     .toArray() as { path: string; filename: string; content?: string; updatedAt?: Date }[]
   for (const f of projectFiles) {
     const fullPath = f.path ? `${f.path}/${f.filename}` : f.filename
-    fileMap.set(fullPath, f.content ?? '')
+    const key = fullPath.replace(/^\.\//, '').replace(/^\/+/, '').trim() || fullPath
+    const content = f.content ?? ''
+    if (key === repoPackageJsonKey && repoHadPackageJson && content) {
+      const repoContent = fileMap.get(key) ?? ''
+      if (repoContent) {
+        fileMap.set(key, mergePackageJsonForExport(repoContent, content))
+        continue
+      }
+    }
+    fileMap.set(key, content)
   }
 
   const files = Array.from(fileMap.entries()).map(([path, content]) => ({ path, content }))
