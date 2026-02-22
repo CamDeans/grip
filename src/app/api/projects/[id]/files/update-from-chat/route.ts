@@ -6,7 +6,8 @@ import { addTokenUsage } from '@/lib/tokenUsage'
 import clientPromise from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import crypto from 'crypto'
-import { anthropicService } from '@/lib/services/anthropicService'
+import { Anthropic } from '@anthropic-ai/sdk'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
 import { recordFileSaveAndAdvanceStep } from '@/lib/services/projectStateService'
 
 /**
@@ -99,21 +100,11 @@ export async function POST(
 
     const currentContent = typeof existing.content === 'string' ? existing.content : ''
 
-    // Merge via AI: GRIP uses only env (.env in dev, Vercel vars in production)
-    const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
-    if (!getAnthropicApiKey()) {
+    // Same as enhanced-chat: request-scoped client from .env / Vercel (no singleton)
+    const apiKey = getAnthropicApiKey()
+    if (!apiKey) {
       return NextResponse.json(
         { error: 'AI is not configured. Set ANTHROPIC_API_KEY in your deployment (e.g. Vercel env vars or .env.local in dev).' },
-        { status: 503 }
-      )
-    }
-    try {
-      await anthropicService.initialize()
-    } catch (initErr) {
-      const msg = initErr instanceof Error ? initErr.message : String(initErr)
-      console.error('Anthropic init failed in update-from-chat:', msg)
-      return NextResponse.json(
-        { error: 'AI is temporarily unavailable. Try "Save to project" to overwrite the file.' },
         { status: 503 }
       )
     }
@@ -130,12 +121,21 @@ Output ONLY the complete merged file content. No explanation, no markdown code f
 
     let mergedContent: string
     try {
-      const response = await anthropicService.createMessage(
-        [{ role: 'user', content: userMessage }],
-        { system: systemPrompt }
-      )
-      mergedContent = (response.content || '').trim()
-      const totalTokens = response.usage?.totalTokens ?? (response.usage?.promptTokens ?? 0) + (response.usage?.completionTokens ?? 0)
+      const anthropic = new Anthropic({ apiKey })
+      const raw = await anthropic.messages.create({
+        model: ANTHROPIC_MODEL_CHAT,
+        max_tokens: 8192,
+        temperature: 0.3,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      })
+      const content = (raw.content ?? [])
+        .filter((b: { type?: string }) => b?.type === 'text')
+        .map((b: { text?: string }) => b?.text ?? '')
+        .join('')
+        .trim()
+      mergedContent = content
+      const totalTokens = (raw.usage?.input_tokens ?? 0) + (raw.usage?.output_tokens ?? 0)
       if (totalTokens > 0 && session.user?.id) {
         addTokenUsage(session.user.id, totalTokens).catch((err) =>
           console.warn('Update-from-chat: failed to record token usage', err)
