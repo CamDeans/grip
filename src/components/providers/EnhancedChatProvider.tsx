@@ -138,9 +138,10 @@ export const useEnhancedChat = () => useContext(EnhancedChatContext)
 interface EnhancedChatProviderProps {
   children: ReactNode
   projectId: string
+  welcomeMessage?: string
 }
 
-export function EnhancedChatProvider({ children, projectId: initialProjectId }: EnhancedChatProviderProps) {
+export function EnhancedChatProvider({ children, projectId: initialProjectId, welcomeMessage }: EnhancedChatProviderProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [contextEnabled, setContextEnabled] = useState(true)
@@ -208,7 +209,14 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
       if (response.ok) {
         const data = await response.json()
         if (data.messages && Array.isArray(data.messages) && data.messages.length > 0) {
-          setMessages(data.messages)
+          const loaded = data.messages as ChatMessage[]
+          // Keep GRIP's original welcome message at the top when loading history so it doesn't disappear on refresh
+          const first = loaded[0]
+          const firstIsWelcome = first?.id === 'welcome-message' || (first?.role === 'assistant' && welcomeMessage && (first.content === welcomeMessage || (first.content?.trim() || '').slice(0, 200) === (welcomeMessage?.trim() || '').slice(0, 200)))
+          const merged = welcomeMessage && !firstIsWelcome
+            ? [{ id: 'welcome-message', role: 'assistant' as const, content: welcomeMessage, timestamp: new Date() }, ...loaded]
+            : loaded
+          setMessages(merged)
         }
         // If no messages, keep current state (e.g. welcome message) instead of clearing
       } else {

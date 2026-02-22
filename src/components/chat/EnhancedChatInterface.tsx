@@ -563,7 +563,7 @@ export function EnhancedChat({ projectId, className, welcomeMessage }: EnhancedC
   }, [showContext]);
 
   return (
-    <EnhancedChatProvider projectId={projectId}>
+    <EnhancedChatProvider projectId={projectId} welcomeMessage={welcomeMessage}>
       <div className={cn("flex flex-col h-full w-full max-w-full min-w-0 overflow-hidden", className)}>
         <div className="flex-shrink-0 border-b border-border">
           <div className="flex items-center justify-between px-3 py-1">
