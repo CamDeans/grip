@@ -69,14 +69,18 @@ class AnthropicService extends EventEmitter {
     if (this.isInitialized) return
 
     try {
-      // Validate API key
+      // Validate API key (required for chat)
       await this.validateApiKey()
       
       // Start health check
       this.startHealthCheck()
       
-      // Initialize MongoDB connection
-      await mongoService.connect()
+      // MongoDB is optional for chat; token recording may fail if DB is unreachable
+      try {
+        await mongoService.connect()
+      } catch (mongoErr) {
+        console.warn('AnthropicService: MongoDB connect failed (chat will still work; token recording may fail):', mongoErr instanceof Error ? mongoErr.message : mongoErr)
+      }
       
       this.isInitialized = true
       this.emit('initialized')

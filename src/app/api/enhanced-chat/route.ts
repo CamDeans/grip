@@ -1724,9 +1724,13 @@ export async function POST(request: NextRequest) {
 
     // Production readiness: fail gracefully when AI is not configured
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
-    if (!getAnthropicApiKey()) {
+    const apiKey = getAnthropicApiKey()
+    if (!apiKey) {
       return NextResponse.json(
-        { error: 'G.R.I.P. AI is not configured. Set ANTHROPIC_API_KEY in .env.local or environment.' },
+        {
+          error: 'G.R.I.P. AI is not configured. Add your Anthropic API key in Dashboard → Settings → AI API Keys, or set ANTHROPIC_API_KEY in your deployment environment (e.g. Vercel).',
+          code: 'AI_NOT_CONFIGURED'
+        },
         { status: 503 }
       )
     }
@@ -1736,8 +1740,14 @@ export async function POST(request: NextRequest) {
     } catch (initErr) {
       const msg = initErr instanceof Error ? initErr.message : String(initErr)
       console.error('G.R.I.P. AI initialization failed:', msg, initErr)
+      const isKeyOrAuth = /invalid|401|authentication|api key|unauthorized/i.test(msg)
       return NextResponse.json(
-        { error: 'G.R.I.P. AI is temporarily unavailable. Please try again later.' },
+        {
+          error: isKeyOrAuth
+            ? 'G.R.I.P. AI could not connect. Check your Anthropic API key in Dashboard → Settings → AI API Keys (or ANTHROPIC_API_KEY in Vercel). The key may be invalid or revoked.'
+            : 'G.R.I.P. AI is temporarily unavailable. Please try again later.',
+          code: isKeyOrAuth ? 'AI_KEY_INVALID' : 'AI_INIT_FAILED'
+        },
         { status: 503 }
       )
     }
@@ -1751,8 +1761,15 @@ export async function POST(request: NextRequest) {
       )
     } catch (apiErr) {
       console.error('G.R.I.P. AI request failed:', apiErr)
+      const msg = apiErr instanceof Error ? apiErr.message : String(apiErr)
+      const isRateOrQuota = /rate|quota|overloaded|429|503/i.test(msg)
       return NextResponse.json(
-        { error: 'G.R.I.P. AI is temporarily unavailable. Please try again in a moment.' },
+        {
+          error: isRateOrQuota
+            ? 'G.R.I.P. AI is rate limited or overloaded. Please try again in a minute.'
+            : 'G.R.I.P. AI is temporarily unavailable. Please try again in a moment.',
+          code: 'AI_REQUEST_FAILED'
+        },
         { status: 503 }
       )
     }

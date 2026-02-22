@@ -1024,9 +1024,13 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
       console.error('Error sending message:', err);
       const status = err?.status;
       const msg = err?.message;
+      const code = err?.code;
+      const isConfigError = code === 'AI_NOT_CONFIGURED' || code === 'AI_KEY_INVALID';
+      const fallback = status === 503 ? 'G.R.I.P. AI is temporarily unavailable. Please try again later.' : 'Failed to send message. Please try again.';
+      const message = (msg || fallback) + (isConfigError ? ' Go to Dashboard → Settings → AI API Keys to add or fix your Anthropic API key.' : '');
       setError({
         id: Math.random().toString(),
-        message: status === 503 ? (msg || 'G.R.I.P. AI is temporarily unavailable. Please try again later.') : (msg || 'Failed to send message. Please try again.'),
+        message,
         timestamp: new Date()
       });
     }

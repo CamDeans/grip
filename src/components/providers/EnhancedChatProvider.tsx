@@ -590,8 +590,9 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId }: 
           window.location.href = '/plans?out=1'
           return
         }
-        const err = new Error(errorMessage) as Error & { status?: number }
+        const err = new Error(errorMessage) as Error & { status?: number; code?: string }
         err.status = response.status
+        if (typeof errorData?.code === 'string') err.code = errorData.code
         throw err
       }
 
