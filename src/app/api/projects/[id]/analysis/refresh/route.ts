@@ -75,7 +75,7 @@ export async function POST(
       const { totalTokens: treeTokens, ...analysis } = treeResult
       const sandboxTokens = (ideationTokens ?? 0) + (treeTokens ?? 0)
       if (sandboxTokens > 0 && session.user?.id) {
-        addTokenUsage(session.user.id, sandboxTokens).catch((err) =>
+        await addTokenUsage(session.user.id, sandboxTokens).catch((err) =>
           console.warn('Analysis refresh (sandbox): failed to record token usage', err)
         )
       }
@@ -111,7 +111,7 @@ export async function POST(
       })
       const mainPathTokens = (analysisResult as { totalTokens?: number })?.totalTokens ?? 0
       if (mainPathTokens > 0 && session.user?.id) {
-        addTokenUsage(session.user.id, mainPathTokens).catch((err) =>
+        await addTokenUsage(session.user.id, mainPathTokens).catch((err) =>
           console.warn('Analysis refresh (main): failed to record token usage', err)
         )
       }

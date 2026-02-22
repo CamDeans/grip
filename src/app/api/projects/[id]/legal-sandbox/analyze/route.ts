@@ -78,7 +78,7 @@ export async function POST(
     const totalTokens = ideationTokens + (treeTokens ?? 0)
 
     if (totalTokens > 0 && session.user?.id) {
-      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+      await addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('Sandbox analyze: failed to record token usage', err)
       )
     }

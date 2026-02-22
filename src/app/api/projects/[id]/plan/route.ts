@@ -103,7 +103,7 @@ export async function POST(
     const result = await generateProjectPlan(id, { tokenBudgetHint, tier: access.tier ?? 'starter' })
     const totalTokens = (result as { totalTokens?: number }).totalTokens ?? 0
     if (totalTokens > 0 && session.user?.id) {
-      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+      await addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('Project plan: failed to record token usage', err)
       )
     }

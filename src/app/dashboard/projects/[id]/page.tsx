@@ -424,6 +424,7 @@ export default function ProjectOverviewPage() {
         setSetupStep('done')
         refetchPhaseStatus()
         refreshGeneratedFiles()
+        refreshTokenUsage()
         sonnerToast.success(
           'Automation complete',
           {

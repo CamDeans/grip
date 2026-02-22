@@ -1310,7 +1310,7 @@ export async function POST(request: NextRequest) {
         const { enhanceIdeationForBuild } = await import('@/lib/services/ideationEnhancementService')
         const enhancedResult = await enhanceIdeationForBuild(project.ideation)
         if (enhancedResult?.totalTokens && enhancedResult.totalTokens > 0 && session?.user?.id) {
-          addTokenUsage(session.user.id, enhancedResult.totalTokens).catch((err) =>
+          await addTokenUsage(session.user.id, enhancedResult.totalTokens).catch((err) =>
             console.warn('Enhanced chat: failed to record ideation-enhancement token usage', err)
           )
         }

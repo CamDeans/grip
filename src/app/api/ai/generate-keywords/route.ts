@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const { keywords, totalTokens } = await generateKeywordsServer(title, description, ideationSafe)
 
     if (totalTokens > 0 && session.user?.id) {
-      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+      await addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('Generate keywords: failed to record token usage', err)
       )
     }

@@ -77,7 +77,7 @@ export async function POST(req: Request) {
           const analysisResult = await analyzeProject(savedProject._id, projectToCreate.repository)
           const totalTokens = analysisResult?.totalTokens ?? 0
           if (totalTokens > 0 && session.user?.id) {
-            addTokenUsage(session.user.id, totalTokens).catch((err) =>
+            await addTokenUsage(session.user.id, totalTokens).catch((err) =>
               console.warn('Project create (analyze): failed to record token usage', err)
             )
           }

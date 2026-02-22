@@ -1,8 +1,9 @@
 /**
  * Dispatches a client-side event so TokenUsage (and any other subscribers) refetches
  * token/access data. Call after any successful API response that records token usage.
+ * API routes now await addTokenUsage before responding so refetch sees updated usage.
  *
- * Token-consuming API routes (each calls addTokenUsage; client must call refreshTokenUsage after success):
+ * Token-consuming API routes (each awaits addTokenUsage; client should call refreshTokenUsage after success):
  * - POST /api/projects/align-check (deduction only; no balance check)
  * - POST /api/projects/[id]/analysis/refresh
  * - POST /api/projects/[id]/files/generate, POST /api/files/generate

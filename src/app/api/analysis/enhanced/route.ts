@@ -26,7 +26,7 @@ export async function POST(req: Request) {
 
     const totalTokens = analysisTokens + suggestionsTokens
     if (totalTokens > 0 && session.user?.id) {
-      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+      await addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('Enhanced analysis: failed to record token usage', err)
       )
     }

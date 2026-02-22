@@ -343,7 +343,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     if (tokenUsageTotal > 0 && session.user?.id) {
-      addTokenUsage(session.user.id, tokenUsageTotal).catch((err) =>
+      await addTokenUsage(session.user.id, tokenUsageTotal).catch((err) =>
         console.warn('Legal-sandbox chat: failed to record token usage', err)
       )
     }

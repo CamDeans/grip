@@ -253,7 +253,7 @@ If the repo has both frontend and backend (e.g. separate api/ or server/ dirs, o
 
     const totalTokens = response?.usage?.totalTokens ?? (response?.usage?.promptTokens ?? 0) + (response?.usage?.completionTokens ?? 0)
     if (totalTokens > 0 && session.user?.id) {
-      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+      await addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('Legal-sandbox plan: failed to record token usage', err)
       )
     }

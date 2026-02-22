@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
 
     const totalTokens = response.usage?.totalTokens ?? (response.usage?.promptTokens ?? 0) + (response.usage?.completionTokens ?? 0)
     if (totalTokens > 0 && session.user?.id) {
-      addTokenUsage(session.user.id as string, totalTokens).catch((err) =>
+      await addTokenUsage(session.user.id as string, totalTokens).catch((err) =>
         console.warn('Align-check: failed to record token usage', err)
       )
     }

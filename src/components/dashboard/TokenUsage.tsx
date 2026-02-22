@@ -53,6 +53,15 @@ export function TokenUsage() {
     return () => window.removeEventListener('grip-token-update', handler)
   }, [refetch])
 
+  // Refetch when tab becomes visible so sidebar shows latest after switching back (e.g. from another tab)
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === 'visible') refetch()
+    }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [refetch])
+
   useEffect(() => {
     if (!data?.hasAccess || !data?.isAdmin) return
     const used = data.tokensUsedThisPeriod ?? 0

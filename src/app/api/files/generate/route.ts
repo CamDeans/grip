@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     // Generate file
     const result = await generateFile(fileRequest)
     if (result.success && (result.totalTokens ?? 0) > 0 && session?.user?.id) {
-      addTokenUsage(session.user.id, result.totalTokens!).catch((err) =>
+      await addTokenUsage(session.user.id, result.totalTokens!).catch((err) =>
         console.warn('Files generate: failed to record token usage', err)
       )
     }

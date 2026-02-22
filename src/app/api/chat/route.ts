@@ -171,7 +171,7 @@ Always maintain a professional but friendly tone, and provide specific, actionab
       const totalTokens = (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0)
       if (totalTokens > 0 && session.user?.id) {
         const { addTokenUsage } = await import('@/lib/tokenUsage')
-        addTokenUsage(session.user.id, totalTokens).catch((err) =>
+        await addTokenUsage(session.user.id, totalTokens).catch((err) =>
           console.warn('Chat: failed to record token usage', err)
         )
       }

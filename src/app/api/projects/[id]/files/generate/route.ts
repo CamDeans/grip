@@ -155,7 +155,7 @@ export async function POST(
             }
 
             if (streamTotalTokens > 0 && session.user?.id) {
-              addTokenUsage(session.user.id, streamTotalTokens).catch((err) =>
+              await addTokenUsage(session.user.id, streamTotalTokens).catch((err) =>
                 console.warn('Projects files generate (stream): failed to record token usage', err)
               )
             }
@@ -228,7 +228,7 @@ export async function POST(
     }
 
     if (totalTokens > 0 && session.user?.id) {
-      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+      await addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('Projects files generate: failed to record token usage', err)
       )
     }

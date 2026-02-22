@@ -137,7 +137,7 @@ Output ONLY the complete merged file content. No explanation, no markdown code f
       mergedContent = content
       const totalTokens = (raw.usage?.input_tokens ?? 0) + (raw.usage?.output_tokens ?? 0)
       if (totalTokens > 0 && session.user?.id) {
-        addTokenUsage(session.user.id, totalTokens).catch((err) =>
+        await addTokenUsage(session.user.id, totalTokens).catch((err) =>
           console.warn('Update-from-chat: failed to record token usage', err)
         )
       }
