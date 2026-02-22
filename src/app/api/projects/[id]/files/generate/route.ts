@@ -6,9 +6,23 @@ import { getProjectState } from '@/lib/services/projectStateService'
 import { getProjectContextForHighLevelFiles } from '@/lib/services/highLevelFileContextService'
 import { ObjectId } from 'mongodb'
 
+const STREAM_HEADER = 'x-stream-progress'
+
+/** Emit parent folder paths for a file path (e.g. "src/app/page.tsx" -> ["src", "src/app"]) */
+function parentFoldersForPath(fullPath: string): string[] {
+  const parts = fullPath.replace(/\\/g, '/').split('/').filter(Boolean)
+  if (parts.length <= 1) return []
+  const out: string[] = []
+  for (let i = 1; i < parts.length; i++) {
+    out.push(parts.slice(0, i).join('/'))
+  }
+  return out
+}
+
 /**
  * POST /api/projects/[id]/files/generate
  * Generate files based on project plan. Writes to projectFiles so files appear in Repo and Generated files.
+ * If header X-Stream-Progress: true, returns NDJSON stream of { type, ... } events for live preview.
  */
 export async function POST(
   request: NextRequest,
@@ -22,16 +36,14 @@ export async function POST(
 
     const { id } = await params
 
-    // Validate ID
     if (!id || !ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 })
     }
 
-    // Get request body
+    const streamProgress = request.headers.get(STREAM_HEADER) === 'true'
     const body = await request.json().catch(() => ({}))
-    const { planId, forceRegenerate } = body as { planId?: string; forceRegenerate?: boolean }
+    const { forceRegenerate } = body as { planId?: string; forceRegenerate?: boolean }
 
-    // Get target file list first (from plan suggestedFiles or derived from plan; else structure-based)
     const filesToGenerate = await getFilesToGenerate(id)
 
     if (!filesToGenerate || filesToGenerate.length === 0) {
@@ -42,7 +54,6 @@ export async function POST(
       })
     }
 
-    // Skip only when we already have at least as many files as the plan wants (avoids duplicate token use unless we need to top up)
     const existingFiles = await getGeneratedFiles(id)
     if (!forceRegenerate && existingFiles.length >= filesToGenerate.length) {
       return NextResponse.json({
@@ -55,7 +66,6 @@ export async function POST(
       })
     }
 
-    // Load project state so generated content aligns with current build phase and steps
     const projectState = await getProjectState(id)
     const currentPhase = projectState?.currentPhase || projectState?.phases?.[0]?.name
     const currentPhaseData = projectState?.phases?.find((p: { name: string }) => p.name === currentPhase)
@@ -66,7 +76,6 @@ export async function POST(
         }
       : undefined
 
-    // Project-specific context for high-level files (package.json name + scripts, entry path)
     let highLevelContext: Awaited<ReturnType<typeof getProjectContextForHighLevelFiles>> | null = null
     try {
       highLevelContext = await getProjectContextForHighLevelFiles(id)
@@ -74,9 +83,85 @@ export async function POST(
       console.warn('Could not load project context for high-level files, using defaults:', e)
     }
 
-    // Generate files
-    const generatedFiles = []
-    
+    if (streamProgress) {
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        async start(controller) {
+          const emit = (obj: object) => controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'))
+          try {
+            emit({ type: 'start', total: filesToGenerate.length })
+            const emittedFolders = new Set<string>()
+            const generatedFiles: Array<{ id?: string; name?: string; path?: string; success: boolean; error?: string }> = []
+
+            for (const file of filesToGenerate) {
+              const meta = file.generationMetadata || {}
+              const filePath = file.path || ''
+              const fileName = file.name || filePath.split('/').pop() || 'file.txt'
+              const fullPath = filePath && !filePath.endsWith(fileName) ? `${filePath.replace(/\/$/, '')}/${fileName}` : (filePath || fileName)
+
+              for (const folder of parentFoldersForPath(fullPath)) {
+                if (!emittedFolders.has(folder)) {
+                  emittedFolders.add(folder)
+                  emit({ type: 'folder', path: folder })
+                }
+              }
+
+              const templateId = meta.template || 'ts-utility'
+              let variables = meta.variables || {}
+              if (templateId === 'package-json' && highLevelContext) {
+                variables = {
+                  ProjectName: highLevelContext.projectName,
+                  DevScript: highLevelContext.devScript,
+                  BuildScript: highLevelContext.buildScript,
+                  StartScript: highLevelContext.startScript,
+                }
+              }
+
+              const genRequest: FileGenerationRequest = {
+                projectId: id,
+                filePath: fullPath,
+                filename: fileName,
+                templateId,
+                variables,
+                description: meta.description || 'Generated from plan',
+                phaseContext
+              }
+
+              try {
+                const result = await generateFile(genRequest)
+                if (result.success) {
+                  generatedFiles.push({ id: result.fileId, name: file.name, path: file.path, success: true })
+                  emit({ type: 'file', path: fullPath, name: fileName, success: true })
+                } else {
+                  throw new Error(result.error || 'Unknown error generating file')
+                }
+              } catch (error) {
+                const errMsg = error instanceof Error ? error.message : 'Unknown error'
+                console.error(`Error generating file ${file.path}/${file.name}:`, error)
+                generatedFiles.push({ name: file.name, path: file.path, success: false, error: errMsg })
+                emit({ type: 'file', path: fullPath, name: fileName, success: false, error: errMsg })
+              }
+            }
+
+            emit({
+              type: 'done',
+              successCount: generatedFiles.filter((f) => f.success).length,
+              errorCount: generatedFiles.filter((f) => !f.success).length,
+              generatedFiles
+            })
+          } catch (err) {
+            emit({ type: 'error', error: err instanceof Error ? err.message : 'Stream error' })
+          } finally {
+            controller.close()
+          }
+        }
+      })
+      return new Response(stream, {
+        headers: { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store' }
+      })
+    }
+
+    const generatedFiles: Array<{ id?: string; name?: string; path?: string; success: boolean; error?: string }> = []
     for (const file of filesToGenerate) {
       try {
         const meta = file.generationMetadata || {}
@@ -85,7 +170,6 @@ export async function POST(
         const fullPath = filePath && !filePath.endsWith(fileName) ? `${filePath.replace(/\/$/, '')}/${fileName}` : (filePath || fileName)
         const templateId = meta.template || 'ts-utility'
 
-        // Inject project-specific variables for package.json so name and scripts match the project
         let variables = meta.variables || {}
         if (templateId === 'package-json' && highLevelContext) {
           variables = {
@@ -105,16 +189,10 @@ export async function POST(
           description: meta.description || 'Generated from plan',
           phaseContext
         }
-        
+
         const result = await generateFile(genRequest)
-        
         if (result.success) {
-          generatedFiles.push({
-            id: result.fileId,
-            name: file.name,
-            path: file.path,
-            success: true
-          })
+          generatedFiles.push({ id: result.fileId, name: file.name, path: file.path, success: true })
         } else {
           throw new Error(result.error || 'Unknown error generating file')
         }
@@ -128,7 +206,7 @@ export async function POST(
         })
       }
     }
-    
+
     return NextResponse.json({
       message: `Generated ${generatedFiles.filter(f => f.success).length} of ${filesToGenerate.length} files`,
       fileCount: filesToGenerate.length,

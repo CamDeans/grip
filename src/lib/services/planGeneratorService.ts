@@ -160,11 +160,27 @@ export async function generateDevelopmentPlan(projectId: string, options?: Gener
       planContext = buildPlanContextFromAnalysis({ hasRepo: !!(project.repository?.owner && project.repository?.name) })
     }
 
+    // User uploads (images, reference docs) so the plan includes tasks that use them
+    let userUploadsSummary = ''
+    try {
+      const uploads = await db.collection('projectFiles').find({
+        projectId: new ObjectId(projectId),
+        'metadata.generatedBy': 'user_upload'
+      }).project({ path: 1, filename: 1, metadata: 1 }).toArray() as Array<{ path?: string; filename?: string; metadata?: { purpose?: string } }>
+      const images = uploads.filter((u) => u.metadata?.purpose === 'image').map((u) => (u.path ? `${u.path}/${u.filename}` : u.filename).trim()).filter(Boolean)
+      const docs = uploads.filter((u) => u.metadata?.purpose === 'reference_doc').map((u) => (u.path ? `${u.path}/${u.filename}` : u.filename).trim()).filter(Boolean)
+      if (images.length) userUploadsSummary += `Images (use in UI: logo, hero, favicon): ${images.join(', ')}. `
+      if (docs.length) userUploadsSummary += `Reference docs (use for requirements or copy): ${docs.join(', ')}.`
+      userUploadsSummary = userUploadsSummary.trim()
+    } catch {
+      // ignore
+    }
+
     // Get project structure
     const structure = await getOrCreateProjectStructure(projectId)
 
-    // Generate initial plan (with plan context: checklist, layer prompts, stack guidance; token budget so plan fits user's allowance)
-    const { plan, totalTokens } = await createInitialPlan(projectId, project, structure, planContext, options?.tokenBudgetHint)
+    // Generate initial plan (with plan context: checklist, layer prompts, stack guidance; token budget so plan fits user's allowance; user uploads so tasks use them)
+    const { plan, totalTokens } = await createInitialPlan(projectId, project, structure, planContext, options?.tokenBudgetHint, userUploadsSummary)
 
     // Add resource requirements
     await addResourceRequirements(plan)
@@ -205,7 +221,8 @@ async function createInitialPlan(
   project: any,
   structure: IProjectStructureData,
   planContext: PlanContextFromAnalysis,
-  tokenBudgetHint?: string
+  tokenBudgetHint?: string,
+  userUploadsSummary?: string
 ): Promise<{ plan: DevelopmentPlan; totalTokens: number }> {
   const phases: Phase[] = [
     createPhase('1', 'Setup', 'Project setup and configuration', 0),
@@ -215,7 +232,7 @@ async function createInitialPlan(
     createPhase('5', 'Deployment', 'Deployment preparation and launch', 4)
   ]
 
-  const { totalTokens, suggestedFiles } = await addTasksToPhases(phases, project, structure, planContext, tokenBudgetHint)
+  const { totalTokens, suggestedFiles } = await addTasksToPhases(phases, project, structure, planContext, tokenBudgetHint, userUploadsSummary)
 
   const plan: DevelopmentPlan = {
     projectId: new ObjectId(projectId),
@@ -255,7 +272,8 @@ async function addTasksToPhases(
   project: any,
   structure: IProjectStructureData,
   planContext: PlanContextFromAnalysis,
-  tokenBudgetHint?: string
+  tokenBudgetHint?: string,
+  userUploadsSummary?: string
 ): Promise<{ totalTokens: number; suggestedFiles?: SuggestedPlanFile[] }> {
   try {
     // Prefer enhanced build requirements (from ideation enhancement step) so AI gets best input
@@ -275,11 +293,20 @@ async function addTasksToPhases(
     if (lp.website) layerBlocks.push(`\n## Website layer\n${lp.website}`)
     if (lp.webApp) layerBlocks.push(`\n## Web app layer\n${lp.webApp}`)
     if (lp.data) layerBlocks.push(`\n## Data layer\n${lp.data}`)
+    if (lp.media) layerBlocks.push(`\n## Media / rendering layer\n${lp.media}`)
     const layerBlock = layerBlocks.length ? '\n' + layerBlocks.join('\n') + '\n' : ''
 
     const stackBlock = planContext.stackGuidance?.trim()
       ? `\n## Stack and reference guidance\n${planContext.stackGuidance}\n`
       : ''
+    const repoTypeBlock =
+      planContext.repoTypeSummary?.trim()
+        ? `\nDetected repo type (scope all phases and tasks to this stack):\n${planContext.repoTypeSummary}\n`
+        : ''
+    const uploadsBlock =
+      userUploadsSummary?.trim()
+        ? `\n## User uploads (use in implementation)\nThe user has uploaded images and/or reference docs. Include tasks that use them: ${userUploadsSummary}\n- Use image paths in the app (e.g. logo in header, hero image, favicon). Use reference docs for requirements or copy where relevant.\n`
+        : ''
 
     // Build prompt for AI
     const prompt = `
@@ -292,6 +319,8 @@ ${buildReqsText ? `\nBuild requirements (use these for task scope and quality):\
 ${checklistBlock}
 ${layerBlock}
 ${stackBlock}
+${repoTypeBlock}
+${uploadsBlock}
 
 ${MANDATORY_GRIP_BUILD_QUALITY}
 

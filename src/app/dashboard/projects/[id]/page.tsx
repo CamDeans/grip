@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui'
-import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, ChevronDown, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle, Plus, RefreshCw, Trash2, Rocket } from 'lucide-react'
+import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, ChevronDown, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle, Plus, RefreshCw, Trash2, Rocket, Folder } from 'lucide-react'
 import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { toast as sonnerToast } from 'sonner'
 import Link from 'next/link'
@@ -79,6 +79,9 @@ export default function ProjectOverviewPage() {
   const [loadingSandboxes, setLoadingSandboxes] = useState(false)
   const [creatingSandbox, setCreatingSandbox] = useState(false)
   const [setupStep, setSetupStep] = useState<null | 'preparing' | 'analysis' | 'plan' | 'files' | 'build' | 'done'>(null)
+  /** Live preview: folders and files as they are generated (streaming from files/generate) */
+  const [buildPreviewItems, setBuildPreviewItems] = useState<Array<{ type: 'folder' | 'file'; path: string; name?: string; success?: boolean; error?: string }>>([])
+  const [buildPreviewTotal, setBuildPreviewTotal] = useState(0)
   const [uploads, setUploads] = useState<Array<{ path: string; filename: string; size: number; purpose: string }>>([])
   const [loadingUploads, setLoadingUploads] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -361,9 +364,54 @@ export default function ProjectOverviewPage() {
         }
 
         setSetupStep('files')
-        const filesRes = await fetch(`/api/projects/${projectId}/files/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
-        const filesData = filesRes.ok ? await filesRes.json().catch(() => ({})) : {}
-        const fileCount = filesData.skipped ? (filesData.fileCount ?? 0) : (filesData.successCount ?? filesData.generatedFiles?.filter((f: { success?: boolean }) => f.success).length ?? 0)
+        setBuildPreviewItems([])
+        setBuildPreviewTotal(0)
+        const filesRes = await fetch(`/api/projects/${projectId}/files/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Stream-Progress': 'true' },
+          body: JSON.stringify({})
+        })
+        let fileCount = 0
+        if (filesRes.ok && filesRes.body) {
+          const reader = filesRes.body.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
+          try {
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+              buffer += decoder.decode(value, { stream: true })
+              const lines = buffer.split('\n')
+              buffer = lines.pop() ?? ''
+              for (const line of lines) {
+                const trimmed = line.trim()
+                if (!trimmed) continue
+                try {
+                  const event = JSON.parse(trimmed) as { type: string; total?: number; path?: string; name?: string; success?: boolean; error?: string; successCount?: number; errorCount?: number; generatedFiles?: Array<{ success?: boolean }> }
+                  if (event.type === 'start' && typeof event.total === 'number') {
+                    setBuildPreviewTotal(event.total)
+                  } else if (event.type === 'folder' && event.path) {
+                    setBuildPreviewItems((prev) => [...prev, { type: 'folder', path: event.path! }])
+                  } else if (event.type === 'file' && event.path) {
+                    setBuildPreviewItems((prev) => [...prev, { type: 'file', path: event.path!, name: event.name, success: event.success, error: event.error }])
+                  } else if (event.type === 'done') {
+                    fileCount = event.successCount ?? event.generatedFiles?.filter((f) => f.success).length ?? 0
+                  } else if (event.type === 'error') {
+                    throw new Error((event as { error?: string }).error ?? 'File generation failed')
+                  }
+                } catch (parseErr) {
+                  if (parseErr instanceof Error && parseErr.message.includes('File generation')) throw parseErr
+                  // ignore JSON parse or other line errors
+                }
+              }
+            }
+          } finally {
+            reader.releaseLock()
+          }
+        } else {
+          const filesData = await filesRes.json().catch(() => ({}))
+          fileCount = filesData.skipped ? (filesData.fileCount ?? 0) : (filesData.successCount ?? filesData.generatedFiles?.filter((f: { success?: boolean }) => f.success).length ?? 0)
+        }
         const state = await fetch(`/api/projects/${projectId}/state`).then((r) => (r.ok ? r.json() : null)).catch(() => null)
         setProjectState(state && (state.phases?.length || state.currentPhase) ? state : null)
         setHasPlan(true)
@@ -390,6 +438,14 @@ export default function ProjectOverviewPage() {
     }
     run()
   }, [projectId, project?.repository?.owner, project?.repository?.name, hasAnalysis, rerunTrigger])
+
+  // Clear build preview when modal is dismissed so next run shows fresh list
+  useEffect(() => {
+    if (setupStep === null) {
+      setBuildPreviewItems([])
+      setBuildPreviewTotal(0)
+    }
+  }, [setupStep])
 
   // Keep in-flight toast in view: allow scroll inside overlay, bring card into view when toast appears
   useEffect(() => {
@@ -568,6 +624,43 @@ export default function ProjectOverviewPage() {
                 <p className="text-sm text-muted-foreground">
                   {setupStepDetail}
                 </p>
+                {/* Build preview: view the build through GRIP's eyes (folders + files as they're generated) */}
+                {(setupStep === 'files' || setupStep === 'build' || setupStep === 'done' || buildPreviewItems.length > 0) && (
+                  <div className="w-full text-left border border-border rounded-lg bg-muted/30 overflow-hidden">
+                    <p className="text-xs font-semibold text-muted-foreground px-3 py-2 border-b border-border">
+                      Build preview
+                    </p>
+                    <ScrollArea className="h-[min(12rem,40vh)] w-full">
+                      <ul className="p-2 space-y-0.5 font-mono text-xs">
+                        {buildPreviewItems.length === 0 && setupStep === 'files' && (
+                          <li className="text-muted-foreground py-1">Preparing file list…</li>
+                        )}
+                        {buildPreviewItems.map((item, i) => (
+                          <li key={`${item.type}-${item.path}-${i}`} className="flex items-center gap-2 py-0.5 truncate">
+                            {item.type === 'folder' ? (
+                              <>
+                                <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+                                <span className="text-muted-foreground truncate">{item.path}</span>
+                              </>
+                            ) : (
+                              <>
+                                <FileCode className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+                                <span className="truncate">{item.path}</span>
+                                {item.success === true && <span className="shrink-0 text-success" aria-label="Success">✓</span>}
+                                {item.success === false && <span className="shrink-0 text-destructive" title={item.error} aria-label="Error">✗</span>}
+                              </>
+                            )}
+                          </li>
+                        ))}
+                        {buildPreviewTotal > 0 && buildPreviewItems.filter((x) => x.type === 'file').length > 0 && setupStep === 'files' && (
+                          <li className="text-muted-foreground py-1">
+                            {buildPreviewItems.filter((x) => x.type === 'file').length} of {buildPreviewTotal} files…
+                          </li>
+                        )}
+                      </ul>
+                    </ScrollArea>
+                  </div>
+                )}
               </>
             )}
             </div>
@@ -1249,7 +1342,7 @@ export default function ProjectOverviewPage() {
         </CardContent>
       </Card>
 
-      {/* Your uploads: images and reference docs for GRIP to use in the build */}
+      {/* Your uploads: images and reference docs for GRIP to use in the plan, build, and chat */}
       <Card id="your-uploads" className="border border-primary/20 bg-primary/5 scroll-mt-4">
         <CardHeader className="pb-2">
           <CardTitle className="text-xl font-bold flex items-center gap-2">
@@ -1257,7 +1350,7 @@ export default function ProjectOverviewPage() {
             Your uploads
           </CardTitle>
           <CardDescription>
-            Upload images (hero, logo, favicon) or reference docs (specs, copy, PDFs) for GRIP to use in the build. GRIP sees these in Develop chat and will use image paths in code and reference docs for requirements.
+            Add logos, branding, hero images, favicons, or reference docs (specs, copy, PDFs). GRIP uses them in the plan, file generation, and Develop chat—image paths in code, docs for requirements or copy. You can add uploads during project creation (Step 2) or here. All uploads are included in GRIP context.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1290,7 +1383,7 @@ export default function ProjectOverviewPage() {
             <p className="text-sm text-text-secondary">Loading uploads...</p>
           ) : uploads.length === 0 ? (
             <p className="text-sm text-text-secondary">
-              No uploads yet. Add images or reference docs above; they will be available to GRIP in Develop.
+              No uploads yet. Add logos, branding, or reference docs above; GRIP will use them in the plan, build, and Develop chat.
             </p>
           ) : (
             <ul className="space-y-2">

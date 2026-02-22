@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -25,7 +25,10 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   ChartBarIcon,
-  XMarkIcon
+  XMarkIcon,
+  ArrowUpTrayIcon,
+  PhotoIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline'
 import { Modal } from '@/components/ui/Modal'
 
@@ -68,6 +71,9 @@ export default function NewProjectPage() {
       technicalRequirements: ''
     }
   })
+  /** Files selected on Step 2 (uploads); sent to project after create */
+  const [pendingUploadFiles, setPendingUploadFiles] = useState<File[]>([])
+  const uploadInputRef = useRef<HTMLInputElement>(null)
 
   // Validate form whenever data changes (repo required)
   useEffect(() => {
@@ -236,6 +242,31 @@ export default function NewProjectPage() {
           })
         } else {
           refreshTokenUsage()
+        }
+      }
+
+      if (pendingUploadFiles.length > 0) {
+        const formDataUpload = new FormData()
+        pendingUploadFiles.forEach((file) => formDataUpload.append('files', file))
+        try {
+          const uploadRes = await fetch(`/api/projects/${project._id}/uploads`, {
+            method: 'POST',
+            body: formDataUpload,
+            credentials: 'include'
+          })
+          if (uploadRes.ok) {
+            toast({
+              title: 'Uploads added',
+              description: `${pendingUploadFiles.length} file(s) will be used by GRIP in the plan and build.`,
+            })
+          }
+          setPendingUploadFiles([])
+        } catch {
+          toast({
+            title: 'Uploads could not be added',
+            description: 'You can add logos and docs later on the project Overview.',
+            variant: 'destructive'
+          })
         }
       }
 
@@ -475,6 +506,72 @@ export default function NewProjectPage() {
                     required
                   />
                 </div>
+              </div>
+
+              {/* Uploads (optional): logos, branding, reference docs — GRIP uses in plan and build */}
+              <div className="border-t border-border pt-6 space-y-3">
+                <Label className="flex items-center gap-2">
+                  <ArrowUpTrayIcon className="h-4 w-4 text-primary" />
+                  Uploads (optional)
+                </Label>
+                <p className="text-xs text-text-secondary">
+                  Add logos, branding images, or reference docs. GRIP will use them in the plan and build—e.g. logo in the header, hero image, favicon, or copy from your docs. Images go to <code className="text-xs bg-muted px-1 rounded">public/</code>; docs to <code className="text-xs bg-muted px-1 rounded">docs/</code>. You can add more later on the project Overview.
+                </p>
+                <p className="text-xs text-text-muted">
+                  Allowed: PNG, JPEG, GIF, WebP, ICO, BMP (images); PDF, TXT, MD (reference docs). Max 4MB per file.
+                </p>
+                <input
+                  ref={uploadInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp,image/x-icon,image/bmp,.png,.jpg,.jpeg,.gif,.webp,.ico,.bmp,application/pdf,text/plain,text/markdown,.pdf,.txt,.md"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = e.target.files
+                    if (!files?.length) return
+                    const allowed = Array.from(files).filter((f) => {
+                      const n = f.name.toLowerCase()
+                      const ok = /\.(png|jpe?g|gif|webp|ico|bmp|pdf|txt|md|markdown)$/i.test(n)
+                      if (!ok) return false
+                      return f.size <= 4 * 1024 * 1024
+                    })
+                    setPendingUploadFiles((prev) => [...prev, ...allowed])
+                    e.target.value = ''
+                  }}
+                  aria-label="Choose images or reference documents"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => uploadInputRef.current?.click()}
+                    icon={<ArrowUpTrayIcon className="h-4 w-4" />}
+                  >
+                    Choose images or docs
+                  </Button>
+                </div>
+                {pendingUploadFiles.length > 0 && (
+                  <ul className="space-y-1.5 text-sm">
+                    {pendingUploadFiles.map((f, i) => (
+                      <li key={`${f.name}-${i}`} className="flex items-center justify-between gap-2 py-1.5 px-2 rounded bg-muted/50 border border-border">
+                        <span className="truncate min-w-0 flex items-center gap-2">
+                          {/\.(png|jpe?g|gif|webp|ico|bmp)$/i.test(f.name) ? <PhotoIcon className="h-4 w-4 shrink-0 text-primary" /> : <DocumentTextIcon className="h-4 w-4 shrink-0 text-primary" />}
+                          {f.name}
+                        </span>
+                        <span className="text-xs text-text-muted shrink-0">{(f.size / 1024).toFixed(1)} KB</span>
+                        <button
+                          type="button"
+                          onClick={() => setPendingUploadFiles((prev) => prev.filter((_, j) => j !== i))}
+                          className="shrink-0 p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
+                          aria-label={`Remove ${f.name}`}
+                        >
+                          <XMarkIcon className="h-4 w-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               <div className="flex justify-between pt-4">

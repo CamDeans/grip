@@ -432,7 +432,7 @@ AST/repo summary:
 ${rawSummary}
 
 JSON schema (fill all fields; use empty strings/arrays where information is not available; do not add extra top-level keys).
-For identity.project_type use exactly one of: web_app, full_stack, ai_ml_llm, ios_app, android_app, python_app, go_app, rust_app, cli_tool, generic (choose the best fit for the repo).
+For identity.project_type use exactly one of: web_app, full_stack, ai_ml_llm, ios_app, android_app, python_app, go_app, rust_app, cli_tool, game, interactive_3d, generic (choose the best fit for the repo).
 {
   "analysis_metadata": {
     "analysis_version": "1.1",

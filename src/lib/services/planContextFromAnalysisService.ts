@@ -8,18 +8,27 @@
 
 import { getPlanContextLimits } from '@/lib/constants/tokenLimitsByTier'
 import { STYLING_REFERENCE_REPOS } from '@/lib/constants/stylingReferenceRepos'
+import {
+  DATA_REFERENCE_REPOS,
+  getReferenceReposGuidanceLine,
+} from '@/lib/constants/referenceRepos'
+import { detectRepoType, getRepoTypeSummary, type RepoTypeCategory } from '@/lib/repoTypeDetection'
 
 export type LayerPrompts = {
   website?: string
   webApp?: string
   data?: string
+  /** High-quality images, 2D/3D models, games, animations — same pattern as website/webApp/data. */
+  media?: string
 }
 
 export type PlanContextFromAnalysis = {
   checklistSummary: string
   layerPrompts: LayerPrompts
   stackGuidance: string
-  activeLayers: { website: boolean; webApp: boolean; data: boolean }
+  /** Short line for plan phase: "Detected repo type: X. Expected commands: Y." */
+  repoTypeSummary: string
+  activeLayers: { website: boolean; webApp: boolean; data: boolean; media: boolean }
 }
 
 type IdeationInput = {
@@ -39,6 +48,7 @@ const WEB_APP_TYPES = new Set(['web_app', 'full_stack'])
 const DATA_HEAVY_KEYWORDS = /admin|dashboard|crud|data\s*table|api\s*route|backend|database|auth|storage|resource/i
 const WEBSITE_KEYWORDS = /landing|marketing|content|seo|blog|static\s*site|brochure/i
 const WEB_APP_KEYWORDS = /multi-?page|app\s*shell|navigation|layout|route|spa|dashboard|auth\s*flow/i
+const GAMES_MEDIA_KEYWORDS = /game|2d|3d|model|animation|sprite|texture|canvas|webgl|three|unity|babylon|rendering|asset|scene|glb|gltf|interactive\s*media/i
 
 /**
  * Build checklist summary from tree-sitter structured analysis (routes, entrypoints, missing capabilities).
@@ -62,35 +72,48 @@ function buildChecklistSummaryFromStructuredAnalysis(sa: any): string {
 }
 
 /**
- * Derive which layers (website, web app, data) are relevant from ideation text and project_type.
+ * Derive which layers (website, web app, data, media) are relevant from ideation text and project_type.
  */
 function deriveActiveLayers(
   ideationText: string,
   projectType: string
-): { website: boolean; webApp: boolean; data: boolean } {
+): { website: boolean; webApp: boolean; data: boolean; media: boolean } {
   const text = (ideationText || '').toLowerCase()
-  const isWebAppType = WEB_APP_TYPES.has((projectType || '').toLowerCase())
+  const pt = (projectType || '').toLowerCase()
+  const isWebAppType = WEB_APP_TYPES.has(pt)
   const hasDataHeavy = DATA_HEAVY_KEYWORDS.test(text)
   const hasWebsite = WEBSITE_KEYWORDS.test(text)
   const hasWebApp = WEB_APP_KEYWORDS.test(text) || isWebAppType
+  const hasMedia =
+    GAMES_MEDIA_KEYWORDS.test(text) || pt === 'game' || pt === 'interactive_3d'
 
   return {
-    website: hasWebsite || (!hasWebApp && !hasDataHeavy),
+    website: hasWebsite || (!hasWebApp && !hasDataHeavy && !hasMedia),
     webApp: hasWebApp || isWebAppType,
     data: hasDataHeavy || isWebAppType,
+    media: hasMedia,
   }
 }
 
 /**
  * Build layer-specific prompt fragments from structured analysis and active layers.
  */
-function buildLayerPrompts(sa: any, activeLayers: { website: boolean; webApp: boolean; data: boolean }): LayerPrompts {
+function buildLayerPrompts(
+  sa: any,
+  activeLayers: { website: boolean; webApp: boolean; data: boolean; media: boolean }
+): LayerPrompts {
   const out: LayerPrompts = {}
   const routes = Array.isArray(sa?.route_map) ? sa.route_map : []
   const entrypoints = Array.isArray(sa?.entrypoints) ? sa.entrypoints : []
   const dep = sa?.dependency_summary
   const dataPatterns = Array.isArray(dep?.data_storage_patterns) ? dep.data_storage_patterns : []
   const authPatterns = Array.isArray(dep?.auth_patterns) ? dep.auth_patterns : []
+  const fileManifest = Array.isArray(sa?.file_manifest) ? sa.file_manifest : []
+  const assetPaths = fileManifest
+    .filter((f: any) => /\.(glb|gltf|fbx|obj|png|jpg|jpeg|webp|gif|svg)$/i.test(f.path || '') || /(models|textures|scenes|assets)\//.test((f.path || '')))
+    .slice(0, 12)
+    .map((f: any) => f.path)
+  const assetList = assetPaths.length ? assetPaths.join(', ') : 'align with repo'
 
   if (activeLayers.website) {
     out.website = `Website layer: Focus on marketing/landing/content pages, hero, CTAs, and SEO. Use semantic HTML and layout components. Align with any content or page structure from the repo analysis.`
@@ -108,16 +131,23 @@ function buildLayerPrompts(sa: any, activeLayers: { website: boolean; webApp: bo
     out.data = `Data layer: Focus on API routes, data shapes, and storage. API/routes to implement: ${apiList}. Data patterns: ${dataPatterns.length ? dataPatterns.join(', ') : 'align with repo'}. Auth patterns: ${authPatterns.length ? authPatterns.join(', ') : 'align with repo'}. Implement in new code only.`
   }
 
+  if (activeLayers.media) {
+    out.media = `Media/rendering layer: Focus on high-quality images, 2D/3D models, animations, and scene structure. Asset paths to align with: ${assetList}. Use the repo's rendering pipeline (e.g. Three.js/R3F, Babylon, Canvas 2D) and reference repos for patterns only; implement in new code. Preserve glTF/WebGL and asset loading conventions.`
+  }
+
   return out
 }
 
 /**
  * Build stack guidance (Shadcn, Refine, GitHub) based on active layers and whether a repo is linked.
  * For web/UI layers, inject styling requirements from shadcn-ui/ui and tailwindlabs/headlessui.
+ * When structuredAnalysis or detected is provided, appends type-specific reference-repo guidance.
  */
 function buildStackGuidance(
-  activeLayers: { website: boolean; webApp: boolean; data: boolean },
-  hasRepo: boolean
+  activeLayers: { website: boolean; webApp: boolean; data: boolean; media: boolean },
+  hasRepo: boolean,
+  structuredAnalysis?: any,
+  detected?: { category: RepoTypeCategory; label: string }
 ): string {
   const parts: string[] = []
 
@@ -125,6 +155,12 @@ function buildStackGuidance(
     const repoRefs = STYLING_REFERENCE_REPOS.map((r) => `${r.owner}/${r.name}`).join(', ')
     parts.push(
       `UI stack: Styling reference repos ${repoRefs}. Use Shadcn-style components (Radix primitives, Tailwind, composition) and Headless UI for accessible unstyled behavior. Prefer accessibility (keyboard, focus, ARIA) and a consistent design system for app and marketing pages.`
+    )
+  }
+
+  if (activeLayers.media) {
+    parts.push(
+      'For 2D/3D and games: use Three.js / React Three Fiber (or Babylon.js) for structure and patterns; align with the repo\'s asset pipeline and scene format (e.g. glTF). High-quality images and animations: follow existing asset paths and rendering conventions.'
     )
   }
 
@@ -138,6 +174,12 @@ function buildStackGuidance(
     parts.push(
       'Repository reference: The linked GitHub repo analysis (routes, entrypoints, capabilities) describes what to implement. Use it for patterns and APIs only; implement everything in new, clean-room code. Do not copy or paraphrase repo source.'
     )
+  }
+
+  const typeDetected = detected ?? (structuredAnalysis ? detectRepoType(structuredAnalysis) : null)
+  if (typeDetected) {
+    const refLine = getReferenceReposGuidanceLine(typeDetected.category, typeDetected.label)
+    if (refLine) parts.push(refLine)
   }
 
   return parts.length ? parts.join(' ') : ''
@@ -174,13 +216,16 @@ export function buildPlanContextFromAnalysis(input: {
   let checklistSummary = buildChecklistSummaryFromStructuredAnalysis(sa)
   const activeLayers = deriveActiveLayers(ideationText, projectType)
   let layerPrompts = buildLayerPrompts(sa, activeLayers)
-  let stackGuidance = buildStackGuidance(activeLayers, hasRepo)
+  const detected = sa ? detectRepoType(sa) : null
+  let stackGuidance = buildStackGuidance(activeLayers, hasRepo, sa, detected ?? undefined)
+  const repoTypeSummary = detected ? getRepoTypeSummary(detected.category, detected.label) : ''
 
   checklistSummary = checklistSummary.slice(0, limits.checklistSummary)
   layerPrompts = {
     website: layerPrompts.website?.slice(0, limits.layerPrompt),
     webApp: layerPrompts.webApp?.slice(0, limits.layerPrompt),
     data: layerPrompts.data?.slice(0, limits.layerPrompt),
+    media: layerPrompts.media?.slice(0, limits.layerPrompt),
   }
   stackGuidance = stackGuidance.slice(0, limits.stackGuidance)
 
@@ -188,6 +233,7 @@ export function buildPlanContextFromAnalysis(input: {
     checklistSummary,
     layerPrompts,
     stackGuidance,
+    repoTypeSummary,
     activeLayers,
   }
 }

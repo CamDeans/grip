@@ -37,6 +37,7 @@ interface RepoSelectorProps {
 
 export function RepoSelector({
   onSelect,
+  onConfirmAndContinue,
   projectTitle = '',
   projectDescription = '',
   ideation,

@@ -10,6 +10,7 @@ export type RepoTypeCategory =
   | 'android_kotlin'
   | 'full_stack_js'
   | 'web_js'
+  | 'game_web'
   | 'python_general'
   | 'go_backend'
   | 'rust'
@@ -23,8 +24,12 @@ export interface RepoTypeInput {
   primary_languages?: string[]
   detected_frameworks?: string[]
   project_type?: string
+  /** When passing raw structured analysis (sa), identity is used for project_type and languages */
+  identity?: { project_type?: string; primary_languages?: string[]; detected_frameworks?: string[] }
   /** File paths from repo or file_manifest (e.g. Package.swift, build.gradle) */
   filePaths?: string[]
+  /** From structured analysis file_manifest; used when passing raw sa and filePaths not set */
+  file_manifest?: Array<{ path?: string; language?: string }>
   /** Extension counts from analysis (e.g. { py: 10, ts: 5 }) */
   mainLanguages?: Record<string, number>
 }
@@ -57,21 +62,28 @@ export function detectRepoType(input: RepoTypeInput): {
   label: string
   hints: string[]
 } {
+  const id = input.identity
   const {
     primary_languages = [],
     detected_frameworks = [],
     project_type = '',
     filePaths = [],
+    file_manifest,
     mainLanguages = {},
   } = input
 
-  const pathsLower = filePaths.map((p) => p.replace(/\\/g, '/').toLowerCase())
+  const pt = LOWER(project_type || id?.project_type || '')
+  const pl = primary_languages?.length ? primary_languages : id?.primary_languages ?? []
+  const df = detected_frameworks?.length ? detected_frameworks : id?.detected_frameworks ?? []
+
+  const resolvedPaths =
+    filePaths.length > 0 ? filePaths : (file_manifest?.map((f) => f.path).filter(Boolean) as string[]) ?? []
+  const pathsLower = resolvedPaths.map((p) => p.replace(/\\/g, '/').toLowerCase())
   const pathSet = new Set(pathsLower)
   const hasPath = (name: string) => pathSet.has(name) || pathsLower.some((p) => p.includes(name))
   const topLangs = topExtensions(mainLanguages)
-  const langs = [...new Set([...primary_languages.map(LOWER), ...topLangs])]
-  const frameworks = [...new Set([...detected_frameworks.map(LOWER), ...primary_languages.map(LOWER)])]
-  const pt = LOWER(project_type)
+  const langs = [...new Set([...pl.map(LOWER), ...topLangs])]
+  const frameworks = [...new Set([...df.map(LOWER), ...pl.map(LOWER)])]
 
   const hints: string[] = []
 
@@ -269,6 +281,7 @@ const PREVIEW_RUN_GUIDANCE: Record<RepoTypeCategory, string> = {
   php: 'Preview/run: Direct the user to Export or run locally (composer install && php -S ...). Do not suggest Run in StackBlitz as the primary way to run.',
   dotnet: 'Preview/run: StackBlitz cannot run .NET. Direct the user to Export to GitHub or run locally (dotnet run). Do not suggest Run in StackBlitz.',
   cli_tool: 'Preview/run: CLI projects run locally or in CI. Direct the user to Export to GitHub or run locally. Do not suggest Run in StackBlitz for CLI-only projects.',
+  game_web: 'Preview/run: Use Run in StackBlitz when the build succeeds (web-based 2D/3D). For heavy 3D or native engines, suggest Export or local run.',
   generic: 'Preview/run: If the stack is web (JS/TS), suggest Run in StackBlitz after build succeeds. Otherwise suggest Export or local run.',
 }
 
@@ -286,6 +299,7 @@ const EXPECTED_COMMANDS: Record<RepoTypeCategory, string> = {
   php: 'Expected commands: composer install, php -S ... or the repo\'s server command. Do not suggest npm install unless the repo has Node.',
   dotnet: 'Expected commands: dotnet restore, dotnet build, dotnet run. Do not suggest npm install.',
   cli_tool: 'Expected commands: per repo (e.g. go run ., cargo run, python -m cli). Do not suggest npm install unless the CLI is Node-based.',
+  game_web: 'Expected commands: npm install (or pnpm/yarn), npm run dev, npm run build. Preserve WebGL/Canvas and asset loading (e.g. glTF, textures).',
   generic: 'Expected commands: follow the repo\'s package manager and scripts (npm/pip/go/cargo/bundle/composer/dotnet). Do not assume npm for non-Node repos.',
 }
 
@@ -326,6 +340,8 @@ export function getMandatoryRepoTypeRules(category: RepoTypeCategory, label: str
 - Use .NET SDK and solution/project structure (.csproj, .sln). Preserve target framework and packages. Do NOT suggest npm install.`,
     cli_tool: `${base}
 - Preserve CLI entrypoints, flags, and subcommands. Do NOT turn the project into a web app unless the user asks. Do not suggest Run in StackBlitz for CLI-only projects.`,
+    game_web: `${base}
+- Preserve the project's rendering stack (Three.js, React Three Fiber, Babylon.js, Canvas 2D, etc.). Keep asset paths, scene structure, animations, and high-quality image/2D/3D model usage. Use reference repos for patterns and structure only; implement in new code.`,
     generic: `${base}
 - Follow primary languages and frameworks. Support all common GitHub repo types (web, full-stack, mobile, AI/ML, CLI). Use the appropriate toolchain and conventions. Do not assume npm for non-Node repos.`,
   }
@@ -334,4 +350,13 @@ export function getMandatoryRepoTypeRules(category: RepoTypeCategory, label: str
   const preview = PREVIEW_RUN_GUIDANCE[category]
   const commands = EXPECTED_COMMANDS[category]
   return `${rules}\n${bulletHints}\n- **Preview/run:** ${preview}\n- **Commands:** ${commands}`
+}
+
+/**
+ * Short one-line summary for plan generation so phases and tasks are scoped to the detected stack.
+ * Used in plan context so the plan generator sees "Detected repo type: X. Expected commands: Y."
+ */
+export function getRepoTypeSummary(category: RepoTypeCategory, label: string): string {
+  const commands = EXPECTED_COMMANDS[category]
+  return `Detected repo type: ${label}. ${commands}`
 }

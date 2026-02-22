@@ -18,6 +18,8 @@ import { runMainProject } from '@/lib/runMainProject'
 import { MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
 import { STYLING_REQUIREMENTS_FOR_GRIP } from '@/lib/constants/stylingReferenceRepos'
 import { detectRepoType, getMandatoryRepoTypeRules } from '@/lib/repoTypeDetection'
+import { getReferenceReposGuidanceLine } from '@/lib/constants/referenceRepos'
+import { buildPlanContextFromAnalysis } from '@/lib/services/planContextFromAnalysisService'
 
 // Phase 2, Step 2: Create Project Data Fetcher for enhanced chat
 //
@@ -59,6 +61,7 @@ const buildSystemPrompt = (
   lastAttemptSummary?: string,
   userUploadsSummary?: string,
   repoTypeRules?: string,
+  stackGuidanceFromPlan?: string,
   tokenBudgetHint?: string,
   userHasMongoDB?: boolean,
   sectionBudgets?: { projectAnalysis: number; structuredSummary: number; repoReference: number; buildErrorsRaw: number }
@@ -77,6 +80,7 @@ ${isSandboxContext ? '\n## Context: sandbox experiment\nThis conversation is for
 ## Mandatory: Repo type and stack (handle ALL GitHub repo types)
 You MUST handle every kind of repository—not just one-off web apps. This includes: AI/ML/LLM (Python, PyTorch, LangChain, etc.), full-stack (frontend + backend), iOS (Swift/SwiftUI), Android (Kotlin/Gradle), Python, Go, Rust, Ruby, PHP, .NET, CLI tools, and generic web (JS/TS). Use the detected repo type and the rules below; follow the appropriate toolchain, build system, and conventions for that stack. Never assume "just a web app" unless the repo clearly is.
 ${repoTypeRules && repoTypeRules.trim() ? `\n${repoTypeRules}\n` : ''}
+${stackGuidanceFromPlan && stackGuidanceFromPlan.trim() ? `\n## Stack and reference guidance\n${stackGuidanceFromPlan}\n` : ''}
 
 ## CRITICAL: README.md = ONE code block only (never multiple)
 When you provide a README (at project completion OR when the user asks for a README), you MUST output the **entire** README in **exactly one** markdown code block. Never output multiple code blocks for one README (e.g. one block for intro, another for file tree, another for bash). Multiple blocks = the user cannot save one README.md file. All README content (features, install, bash commands, file structure, env examples) goes inside that single \`\`\`markdown ... \`\`\` block. One block = one "Save to project" = one file.
@@ -222,8 +226,9 @@ This project has sandbox experiments (isolated builds for testing). The user can
 ## User uploads (use in the build)
 The user has uploaded images and/or reference docs for this project. You MUST use them in your code and implementation.
 ${userUploadsSummary}
-- **Images:** Use the paths above in \`<img src="...">\`, CSS \`url()\`, or asset imports so the user's images appear in the app (e.g. hero, logo, favicon).
+- **Images (logos, branding, hero, favicon):** Use the paths above in \`<img src="...">\`, CSS \`url()\`, or asset imports so the user's assets appear in the app. Prefer user-provided logos and branding over placeholders.
 - **Reference docs:** Use them for requirements, copy, or specs; incorporate or reference their content when implementing features.
+- GRIP receives all uploads in context; use each according to its type (image vs reference doc) and path.
 `
     }
   }
@@ -1480,6 +1485,8 @@ export async function POST(request: NextRequest) {
         }
         const detected = detectRepoType(repoTypeInput)
         repoTypeRules = getMandatoryRepoTypeRules(detected.category, detected.label, detected.hints)
+        const refLine = getReferenceReposGuidanceLine(detected.category, detected.label)
+        if (refLine) repoTypeRules += '\n' + refLine
       }
     } catch {
       // optional
@@ -1509,6 +1516,8 @@ export async function POST(request: NextRequest) {
       })
       const fallbackDetected = detectRepoType({ filePaths: filePathsFromSaved, mainLanguages: mainLanguagesFromSaved })
       repoTypeRules = getMandatoryRepoTypeRules(fallbackDetected.category, fallbackDetected.label, fallbackDetected.hints)
+      const refLine = getReferenceReposGuidanceLine(fallbackDetected.category, fallbackDetected.label)
+      if (refLine) repoTypeRules += '\n' + refLine
     }
 
     // Implemented checklist progress (persisted so we don't show already-implemented as remaining)
@@ -1692,10 +1701,26 @@ export async function POST(request: NextRequest) {
       console.warn('Enhanced chat: could not load user uploads for context', uploadErr)
     }
 
+    // Same stack and reference guidance the plan phase used (UI refs, data refs, linked repo, type-specific refs)
+    let stackGuidanceFromPlan = ''
+    try {
+      const ra = analysis?.repositoryAnalysis as { structuredAnalysis?: any } | undefined
+      const planContextFromAnalysis = buildPlanContextFromAnalysis({
+        structuredAnalysis: ra?.structuredAnalysis,
+        ideation: project?.ideation,
+        enhancedBuildRequirements: project?.enhancedBuildRequirements,
+        hasRepo: !!(project?.repository?.owner && project?.repository?.name),
+        tier: (project as { tier?: string })?.tier,
+      })
+      stackGuidanceFromPlan = planContextFromAnalysis?.stackGuidance?.trim() ?? ''
+    } catch (stackErr) {
+      console.warn('Enhanced chat: could not build stack guidance for prompt', stackErr)
+    }
+
     // Build system prompt with context
     const userDoc = session?.user?.id ? await db.collection('users').findOne({ _id: new ObjectId(session.user.id) }, { projection: { mongodbUri: 1 } }) as { mongodbUri?: string } | null : null
     const userHasMongoDB = !!(userDoc?.mongodbUri && String(userDoc.mongodbUri).trim())
-    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, tokenBudgetHint, userHasMongoDB, sectionBudgets)
+    const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, stackGuidanceFromPlan, tokenBudgetHint, userHasMongoDB, sectionBudgets)
 
     // Production readiness: fail gracefully when AI is not configured
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
@@ -1939,7 +1964,7 @@ export async function POST(request: NextRequest) {
             { role: 'assistant' as const, content: aiMessage },
             { role: 'user' as const, content: buildFailedUserMessage },
           ]
-          const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, tokenBudgetHint, userHasMongoDB, sectionBudgets)
+          const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, stackGuidanceFromPlan, tokenBudgetHint, userHasMongoDB, sectionBudgets)
 
           const responseRetry = await anthropicService.createMessage(historyForRetry, { system: systemPromptRetry })
           const tokensRetry = responseRetry.usage?.totalTokens ?? (responseRetry.usage?.promptTokens ?? 0) + (responseRetry.usage?.completionTokens ?? 0)
