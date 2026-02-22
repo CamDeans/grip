@@ -25,7 +25,10 @@ let clientPromise: Promise<MongoClient>
 // Defer throw until clientPromise is awaited (avoids crashing client bundle or SSR when env is missing)
 const mongoUri = process.env.MONGODB_URI
 if (!mongoUri) {
-  clientPromise = Promise.reject(new Error('Please add your Mongo URI to .env.local'))
+  const hint = process.env.NODE_ENV === 'production'
+    ? 'Add MONGODB_URI in Vercel → Project → Settings → Environment Variables.'
+    : 'Add MONGODB_URI to .env.local in the project root.'
+  clientPromise = Promise.reject(new Error(`MongoDB connection missing. ${hint}`))
 } else if (process.env.NODE_ENV === 'development') {
   // In development mode, use a global variable so that the value
   // is preserved across module reloads caused by HMR (Hot Module Replacement).
