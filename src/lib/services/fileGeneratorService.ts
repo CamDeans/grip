@@ -55,6 +55,8 @@ export interface FileGenerationResult {
   language: string;
   success: boolean;
   error?: string;
+  /** Tokens used by AI (e.g. generateTemplateVariables) for this file */
+  totalTokens?: number;
 }
 
 /**
@@ -113,12 +115,13 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
     
     // Generate variables if not provided
     let variables = request.variables || {}
+    let templateTokens = 0
     if (Object.keys(variables).length === 0) {
       // Use template defaultValues for mandatory StackBlitz files (no AI call)
       if (template.defaultValues && Object.keys(template.defaultValues).length > 0 && (request.templateId === 'package-json' || request.templateId === 'tsconfig-json' || request.templateId === 'env-example')) {
         variables = { ...template.defaultValues } as ITemplateVariables
       } else {
-        variables = await generateTemplateVariables(template, {
+        const tvResult = await generateTemplateVariables(template, {
           projectId: request.projectId,
           filePath: request.filePath,
           fileNode,
@@ -126,6 +129,8 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
           description: request.description,
           phaseContext: request.phaseContext
         })
+        variables = tvResult.variables
+        templateTokens = tvResult.totalTokens ?? 0
       }
     }
     
@@ -212,6 +217,7 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
       filename: file.filename,
       content: file.content,
       size: file.size,
+      totalTokens: templateTokens,
       language: file.language,
       success: true
     }

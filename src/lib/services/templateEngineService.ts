@@ -640,7 +640,7 @@ export async function generateTemplateVariables(
     description?: string;
     phaseContext?: { currentPhase: string; stepTitles: string[] };
   }
-): Promise<ITemplateVariables> {
+): Promise<{ variables: ITemplateVariables; totalTokens: number }> {
   try {
     // Extract needed variables from template
     const missingVariables = template.variables.filter(v => {
@@ -650,7 +650,7 @@ export async function generateTemplateVariables(
     
     if (missingVariables.length === 0) {
       // No variables to generate
-      return {}
+      return { variables: {}, totalTokens: 0 }
     }
     
     const phaseBlock = projectContext.phaseContext?.stepTitles?.length
@@ -700,8 +700,8 @@ Return ONLY a single JSON object. Use double quotes for keys and string values. 
     if (template.variables.includes('functions') && !Object.keys(generatedVariables).includes('functions')) {
       (generatedVariables as any).functions = []
     }
-    
-    return generatedVariables as ITemplateVariables
+    const totalTokens = (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0)
+    return { variables: generatedVariables as ITemplateVariables, totalTokens }
   } catch (error) {
     console.error('Error generating template variables:', error)
     // Fallback so the file still generates
@@ -709,7 +709,7 @@ Return ONLY a single JSON object. Use double quotes for keys and string values. 
     if (template.variables?.includes('ComponentName')) {
       fallback.ComponentName = componentNameFromPath(projectContext.filePath)
     }
-    return fallback as ITemplateVariables
+    return { variables: fallback as ITemplateVariables, totalTokens: 0 }
   }
 }
 

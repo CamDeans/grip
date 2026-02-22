@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerAuthSession } from '@/lib/auth'
+import { addTokenUsage } from '@/lib/tokenUsage'
 import { generateFile, FileGenerationRequest } from '@/lib/services/fileGeneratorService'
 
 /**
@@ -7,6 +9,7 @@ import { generateFile, FileGenerationRequest } from '@/lib/services/fileGenerato
  */
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerAuthSession()
     const body = await request.json()
     
     // Validate required fields
@@ -32,7 +35,11 @@ export async function POST(request: NextRequest) {
     
     // Generate file
     const result = await generateFile(fileRequest)
-    
+    if (result.success && (result.totalTokens ?? 0) > 0 && session?.user?.id) {
+      addTokenUsage(session.user.id, result.totalTokens!).catch((err) =>
+        console.warn('Files generate: failed to record token usage', err)
+      )
+    }
     if (result.success) {
       return NextResponse.json({
         success: true,

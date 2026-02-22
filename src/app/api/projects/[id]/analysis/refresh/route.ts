@@ -105,10 +105,16 @@ export async function POST(
         )
       }
 
-      await analyzeProject(projectId, {
+      const analysisResult = await analyzeProject(projectId, {
         owner: projectDoc.repository.owner,
         name: projectDoc.repository.name,
       })
+      const mainPathTokens = (analysisResult as { totalTokens?: number })?.totalTokens ?? 0
+      if (mainPathTokens > 0 && session.user?.id) {
+        addTokenUsage(session.user.id, mainPathTokens).catch((err) =>
+          console.warn('Analysis refresh (main): failed to record token usage', err)
+        )
+      }
 
       await db.collection('analyses').updateOne(
         { projectId: new ObjectId(projectId) },

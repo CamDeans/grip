@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { getProjectFilesForExport } from '@/lib/services/exportService'
+import { validatePackageJsonForStackBlitz } from '@/lib/services/packageJsonRequirementsService'
 
 /**
  * GET /api/projects/[id]/preflight?target=stackblitz|export|deploy&record=1
@@ -64,7 +65,6 @@ export async function GET(
     const suggestions: string[] = []
 
     if (target === 'stackblitz') {
-      // Use appropriate export function based on project type
       const filesArray = isSandbox
         ? await (await import('@/lib/services/legalSandboxService')).getLegalSandboxFilesForExport(projectId)
         : await getProjectFilesForExport(projectId, { gripOnly: true })
@@ -72,35 +72,10 @@ export async function GET(
         errors.push('No files to run. Add generated files in Develop (chat) or link a repo.')
         suggestions.push('Use GRIP in Develop to generate code and save files to the project, or connect a GitHub repo.')
       } else {
-        const normalizePath = (p: string) => p.replace(/^\.\//, '').replace(/^\/+/, '').trim()
-        const filesMap: Record<string, string> = {}
-        for (const { path, content } of filesArray) {
-          filesMap[normalizePath(path) || path] = content
-        }
-        const pkgRaw = filesMap['package.json']
-        if (!pkgRaw) {
-          errors.push('package.json is required to run in StackBlitz.')
-          suggestions.push('Add a package.json (e.g. via GRIP in Develop) so the project can install dependencies and run.')
-        } else {
-          try {
-            JSON.parse(pkgRaw)
-          } catch {
-            errors.push('package.json has invalid JSON (e.g. missing comma). Fix syntax so the project can run.')
-            suggestions.push('In Develop, ask GRIP to fix or regenerate package.json.')
-          }
-          if (errors.length === 0) {
-            try {
-              const pkg = JSON.parse(pkgRaw) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
-              const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }
-              if (deps.expo || deps['react-native']) {
-                if (!deps['react-native-web'] || !deps['react-dom']) {
-                  suggestions.push('Expo/React Native: web deps (react-native-web, react-dom) will be added automatically for StackBlitz.')
-                }
-              }
-            } catch {
-              // already caught above
-            }
-          }
+        const validation = validatePackageJsonForStackBlitz(filesArray)
+        if (!validation.ok) {
+          errors.push(...validation.errors)
+          suggestions.push(...validation.suggestions)
         }
       }
     }

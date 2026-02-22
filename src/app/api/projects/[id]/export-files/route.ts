@@ -5,6 +5,7 @@ import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { getProjectFilesForExport } from '@/lib/services/exportService'
 import { getProjectPlan } from '@/lib/services/projectPlanningService'
+import { normalizePackageJsonScriptsForStack } from '@/lib/services/packageJsonRequirementsService'
 import { isImagePath, validateImageContent, PLACEHOLDER_IMAGE_BASE64 } from '@/lib/imageValidation'
 import { embedImagesAndRemoveImageFiles } from '@/lib/stackblitzImageEmbed'
 
@@ -123,6 +124,17 @@ export async function GET(
       } else {
         files[key] = PLACEHOLDER_IMAGE_BASE64
       }
+    }
+
+    // Deep analysis: ensure package.json scripts match dependencies + file paths (fixes Vite scripts when deps are Next/Expo, etc.)
+    try {
+      const pkgRaw = files['package.json']
+      if (pkgRaw) {
+        const filePaths = Object.keys(files)
+        files['package.json'] = normalizePackageJsonScriptsForStack(pkgRaw, filePaths)
+      }
+    } catch {
+      // keep existing package.json
     }
 
     // For Expo: add web deps and dev script so "expo start --web" works in StackBlitz (avoids CommandError: web support requires react-native-web, react-dom, @expo/webpack-config)

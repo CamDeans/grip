@@ -1,12 +1,30 @@
 /**
  * Central Anthropic API config for G.R.I.P.
- * GRIP uses only env: .env / .env.local in dev, Vercel (or deployment) vars in production.
- * User Settings vars are for the user's app build (injected into project .env), not for GRIP's AI.
+ * GRIP prefers env (ANTHROPIC_API_KEY); when unset, falls back to user's stored key from Dashboard → Settings.
  */
+
+import clientPromise, { DB_NAME } from '@/lib/db'
+import { ObjectId } from 'mongodb'
 
 export function getAnthropicApiKey(): string | undefined {
   const key = process.env.ANTHROPIC_API_KEY
   return key && typeof key === 'string' ? key.trim() : undefined
+}
+
+/** When env key is not set, use the key stored in user settings (Dashboard → Settings). */
+export async function getAnthropicApiKeyForUser(userId: string): Promise<string | undefined> {
+  try {
+    const client = await clientPromise
+    const db = client.db(DB_NAME)
+    const user = await db.collection('users').findOne(
+      { _id: new ObjectId(userId) },
+      { projection: { anthropicApiKey: 1 } }
+    ) as { anthropicApiKey?: string } | null
+    const key = user?.anthropicApiKey
+    return key && typeof key === 'string' ? key.trim() : undefined
+  } catch {
+    return undefined
+  }
 }
 
 export function requireAnthropicApiKey(): string {

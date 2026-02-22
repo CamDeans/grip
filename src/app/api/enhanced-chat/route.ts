@@ -8,7 +8,7 @@ import { buildTokenBudgetPromptFragment, getChatResponseMaxTokens } from '@/lib/
 import { getChatSectionBudgets } from '@/lib/constants/tokenLimitsByTier'
 import { addTokenUsage } from '@/lib/tokenUsage'
 import { Anthropic } from '@anthropic-ai/sdk'
-import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
+import { getAnthropicApiKey, getAnthropicApiKeyForUser, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
 import { getOrBuildRepoContextDocument } from '@/lib/services/repoContextService'
 import { listProjectFiles } from '@/lib/services/fileStorageService'
 import { getProjectPlan } from '@/lib/services/projectPlanningService'
@@ -1734,12 +1734,15 @@ export async function POST(request: NextRequest) {
     const userHasMongoDB = !!(userDoc?.mongodbUri && String(userDoc.mongodbUri).trim())
     const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, stackGuidanceFromPlan, tokenBudgetHint, userHasMongoDB, sectionBudgets)
 
-    // Same as plan/build: single source from .env / Vercel — request-scoped client (no singleton)
-    const apiKey = getAnthropicApiKey()
+    // Prefer env ANTHROPIC_API_KEY; fall back to user's stored key (Dashboard → Settings)
+    let apiKey = getAnthropicApiKey()
+    if (!apiKey && session?.user?.id) {
+      apiKey = (await getAnthropicApiKeyForUser(session.user.id)) ?? undefined
+    }
     if (!apiKey) {
       return NextResponse.json(
         {
-          error: 'G.R.I.P. AI is not configured. Set ANTHROPIC_API_KEY in your deployment environment (e.g. Vercel env vars or .env.local in dev).',
+          error: 'G.R.I.P. AI is not configured. Set ANTHROPIC_API_KEY in your deployment environment (e.g. Vercel env vars or .env.local in dev), or add your API key in Dashboard → Settings.',
           code: 'AI_NOT_CONFIGURED'
         },
         { status: 503 }
@@ -1794,7 +1797,7 @@ export async function POST(request: NextRequest) {
 
     const totalTokens = response.usage.totalTokens
     if (totalTokens > 0 && session.user?.id) {
-      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+      await addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('Enhanced chat: failed to record token usage', err)
       )
     }
@@ -2024,7 +2027,7 @@ export async function POST(request: NextRequest) {
           }
           const tokensRetry = responseRetry.usage?.totalTokens ?? (responseRetry.usage?.promptTokens ?? 0) + (responseRetry.usage?.completionTokens ?? 0)
           if (tokensRetry > 0 && session.user?.id) {
-            addTokenUsage(session.user.id, tokensRetry).catch(() => {})
+            await addTokenUsage(session.user.id, tokensRetry).catch(() => {})
           }
 
           let nextMessage = (responseRetry.content && String(responseRetry.content).trim()) || ''

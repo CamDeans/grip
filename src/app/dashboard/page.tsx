@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ProjectGrid } from '@/components/projects/ProjectGrid'
 import { GradientTitle } from '@/components/ui/GradientTitle'
@@ -63,12 +63,23 @@ export default function DashboardPage() {
     }
   }, [searchParams, router])
 
-  useEffect(() => {
+  const refetchAccess = useCallback(() => {
     fetch('/api/me/access')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setAccess(d))
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    refetchAccess()
+  }, [refetchAccess])
+
+  // Refetch when token usage is updated elsewhere (e.g. enhanced chat, plan, analyze) so card stays current
+  useEffect(() => {
+    const handler = () => refetchAccess()
+    window.addEventListener('grip-token-update', handler)
+    return () => window.removeEventListener('grip-token-update', handler)
+  }, [refetchAccess])
 
   useEffect(() => {
     const fetchDashboardData = async () => {

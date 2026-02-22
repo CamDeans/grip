@@ -8,10 +8,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import clientPromise from '@/lib/mongodb'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { anthropicService } from '@/lib/services/anthropicService'
-import { getAnthropicApiKey } from '@/lib/anthropicConfig'
+import { getAnthropicApiKey, getAnthropicApiKeyForUser } from '@/lib/anthropicConfig'
 import { addTokenUsage } from '@/lib/tokenUsage'
 
 const GITHUB_API = 'https://api.github.com'
@@ -52,11 +52,14 @@ export async function POST(request: NextRequest) {
     let repoDescription = ''
     let repoLanguage = ''
     const client = await clientPromise
-    const db = client.db(process.env.MONGODB_DB_NAME || 'test')
-    const user = await db.collection('users').findOne(
-      { _id: session.user?.id ? new ObjectId(session.user.id as string) : undefined },
-      { projection: { githubToken: 1 } }
-    ) as { githubToken?: string } | null
+    const db = client.db(DB_NAME)
+    const userId = typeof session.user?.id === 'string' && session.user.id.trim() ? session.user.id : null
+    const user = userId
+      ? await db.collection('users').findOne(
+          { _id: new ObjectId(userId) },
+          { projection: { githubToken: 1, anthropicApiKey: 1 } }
+        ) as { githubToken?: string; anthropicApiKey?: string } | null
+      : null
     const token = user?.githubToken || process.env.GITHUB_TOKEN || process.env.GITHUB_ACCESS_TOKEN
 
     if (token) {
@@ -99,7 +102,10 @@ export async function POST(request: NextRequest) {
       .filter(Boolean)
       .join('\n')
 
-    const apiKey = getAnthropicApiKey()
+    let apiKey = getAnthropicApiKey()
+    if (!apiKey && userId) {
+      apiKey = (await getAnthropicApiKeyForUser(userId)) ?? undefined
+    }
     if (!apiKey) {
       // No AI: return a neutral alignment so user can still proceed
       return NextResponse.json({
@@ -109,7 +115,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    await anthropicService.initialize()
+    await anthropicService.initialize(apiKey)
     const response = await anthropicService.createMessage(
       [
         {

@@ -26,6 +26,7 @@ export * from './structureGeneratorService';
 export * from './planGeneratorService';
 export * from './dependencyResolverService';
 export * from './planStorageService';
+export * from './packageJsonRequirementsService';
 
 // Phase 4 G.R.I.P. AI Assistant Enhancement Plan services
 export * from './templateEngineService';

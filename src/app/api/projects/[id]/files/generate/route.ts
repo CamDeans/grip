@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
+import { addTokenUsage } from '@/lib/tokenUsage'
 import { getFilesToGenerate } from '@/lib/services/projectPlanningService'
 import { generateFile, getGeneratedFiles, FileGenerationRequest } from '@/lib/services/fileGeneratorService'
 import { getProjectState } from '@/lib/services/projectStateService'
@@ -92,6 +93,7 @@ export async function POST(
             emit({ type: 'start', total: filesToGenerate.length })
             const emittedFolders = new Set<string>()
             const generatedFiles: Array<{ id?: string; name?: string; path?: string; success: boolean; error?: string }> = []
+            let streamTotalTokens = 0
 
             for (const file of filesToGenerate) {
               const meta = file.generationMetadata || {}
@@ -130,6 +132,7 @@ export async function POST(
               try {
                 const result = await generateFile(genRequest)
                 if (result.success) {
+                  streamTotalTokens += result.totalTokens ?? 0
                   generatedFiles.push({ id: result.fileId, name: file.name, path: file.path, success: true })
                   emit({ type: 'file', path: fullPath, name: fileName, success: true })
                 } else {
@@ -143,6 +146,11 @@ export async function POST(
               }
             }
 
+            if (streamTotalTokens > 0 && session.user?.id) {
+              addTokenUsage(session.user.id, streamTotalTokens).catch((err) =>
+                console.warn('Projects files generate (stream): failed to record token usage', err)
+              )
+            }
             emit({
               type: 'done',
               successCount: generatedFiles.filter((f) => f.success).length,
@@ -162,6 +170,7 @@ export async function POST(
     }
 
     const generatedFiles: Array<{ id?: string; name?: string; path?: string; success: boolean; error?: string }> = []
+    let totalTokens = 0
     for (const file of filesToGenerate) {
       try {
         const meta = file.generationMetadata || {}
@@ -192,6 +201,7 @@ export async function POST(
 
         const result = await generateFile(genRequest)
         if (result.success) {
+          totalTokens += result.totalTokens ?? 0
           generatedFiles.push({ id: result.fileId, name: file.name, path: file.path, success: true })
         } else {
           throw new Error(result.error || 'Unknown error generating file')
@@ -207,6 +217,11 @@ export async function POST(
       }
     }
 
+    if (totalTokens > 0 && session.user?.id) {
+      addTokenUsage(session.user.id, totalTokens).catch((err) =>
+        console.warn('Projects files generate: failed to record token usage', err)
+      )
+    }
     return NextResponse.json({
       message: `Generated ${generatedFiles.filter(f => f.success).length} of ${filesToGenerate.length} files`,
       fileCount: filesToGenerate.length,

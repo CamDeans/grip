@@ -1,12 +1,14 @@
 import { ObjectId } from 'mongodb'
 import clientPromise, { DB_NAME } from '@/lib/db'
 import { getOrCloneRepository } from '@/lib/repository'
+import { inferStackFromDepsAndPaths, getScriptsForStack } from '@/lib/services/packageJsonRequirementsService'
 
 interface PackageJsonShape {
   name?: string
   scripts?: Record<string, string>
   dependencies?: Record<string, string>
   devDependencies?: Record<string, string>
+  stackblitz?: Record<string, unknown>
   [key: string]: unknown
 }
 
@@ -35,9 +37,10 @@ function tryFixPackageJsonSyntax(content: string): string {
 
 /**
  * Ensure package.json has dev, start, and build scripts so exported projects run after npm install.
- * Only adds missing scripts; does not overwrite existing ones. Repairs invalid JSON when possible.
+ * When filePaths is provided, infers stack from deps + paths and overwrites scripts to match (deep analysis).
+ * Otherwise only adds missing scripts. Repairs invalid JSON when possible.
  */
-function normalizePackageJsonForExport(content: string): string {
+function normalizePackageJsonForExport(content: string, filePaths?: string[]): string {
   const repaired = tryFixPackageJsonSyntax(content)
   let pkg: PackageJsonShape
   try {
@@ -46,33 +49,40 @@ function normalizePackageJsonForExport(content: string): string {
     return repaired
   }
   if (!pkg.scripts) pkg.scripts = {}
-  const deps = { ...pkg.dependencies, ...pkg.devDependencies } || {}
+  const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }
 
-  if (!pkg.scripts.dev) {
-    if (deps.next) pkg.scripts.dev = 'next dev'
-    else if (deps['react-scripts']) pkg.scripts.dev = 'react-scripts start'
-    else if (deps.vite) pkg.scripts.dev = 'vite'
-    else if (deps.expo) pkg.scripts.dev = 'expo start'
-    else if (deps['react-native']) pkg.scripts.dev = 'react-native start'
-    else if (deps.vue && deps['@vitejs/plugin-vue']) pkg.scripts.dev = 'vite'
-    else if (deps.vue) pkg.scripts.dev = 'vue-cli-service serve'
-    else pkg.scripts.dev = 'node index.js'
-  }
-  if (!pkg.scripts.start) {
-    if (deps.next) pkg.scripts.start = 'next start'
-    else if (deps['react-scripts']) pkg.scripts.start = 'react-scripts start'
-    else pkg.scripts.start = 'npm run dev'
-  }
-  if (!pkg.scripts.build) {
-    if (deps.next) pkg.scripts.build = 'next build'
-    else if (deps['react-scripts']) pkg.scripts.build = 'react-scripts build'
-    else if (deps.vite) pkg.scripts.build = 'vite build'
-    else if (deps.vue && deps['@vitejs/plugin-vue']) pkg.scripts.build = 'vite build'
-    else if (deps.vue) pkg.scripts.build = 'vue-cli-service build'
-    else pkg.scripts.build = "echo 'No build script'"
+  if (filePaths && filePaths.length > 0) {
+    const stack = inferStackFromDepsAndPaths(deps, filePaths)
+    const scripts = getScriptsForStack(stack)
+    pkg.scripts.dev = scripts.dev
+    pkg.scripts.build = scripts.build
+    pkg.scripts.start = scripts.start
+  } else {
+    if (!pkg.scripts.dev) {
+      if (deps.next) pkg.scripts.dev = 'next dev'
+      else if (deps['react-scripts']) pkg.scripts.dev = 'react-scripts start'
+      else if (deps.vite) pkg.scripts.dev = 'vite'
+      else if (deps.expo) pkg.scripts.dev = 'expo start'
+      else if (deps['react-native']) pkg.scripts.dev = 'react-native start'
+      else if (deps.vue && deps['@vitejs/plugin-vue']) pkg.scripts.dev = 'vite'
+      else if (deps.vue) pkg.scripts.dev = 'vue-cli-service serve'
+      else pkg.scripts.dev = 'node index.js'
+    }
+    if (!pkg.scripts.start) {
+      if (deps.next) pkg.scripts.start = 'next start'
+      else if (deps['react-scripts']) pkg.scripts.start = 'react-scripts start'
+      else pkg.scripts.start = 'npm run dev'
+    }
+    if (!pkg.scripts.build) {
+      if (deps.next) pkg.scripts.build = 'next build'
+      else if (deps['react-scripts']) pkg.scripts.build = 'react-scripts build'
+      else if (deps.vite) pkg.scripts.build = 'vite build'
+      else if (deps.vue && deps['@vitejs/plugin-vue']) pkg.scripts.build = 'vite build'
+      else if (deps.vue) pkg.scripts.build = 'vue-cli-service build'
+      else pkg.scripts.build = "echo 'No build script'"
+    }
   }
 
-  // StackBlitz (WebContainers) auto-runs npm install, then runs startCommand. Explicitly use npm run dev so the preview loads.
   if (!pkg.stackblitz || typeof pkg.stackblitz !== 'object') {
     pkg.stackblitz = {}
   }
@@ -86,12 +96,14 @@ function normalizePackageJsonForExport(content: string): string {
 
 /**
  * Apply package.json normalization to the export file set so ZIP/GitHub/StackBlitz all have runnable scripts.
+ * Uses deep analysis (deps + file paths) to set scripts when file list is available.
  */
 function applyPackageJsonNormalization(files: { path: string; content: string }[]): { path: string; content: string }[] {
   const idx = files.findIndex((f) => f.path === 'package.json' || f.path === '/package.json')
   if (idx === -1) return files
   const entry = files[idx]
-  const normalized = normalizePackageJsonForExport(entry.content)
+  const filePaths = files.map((f) => (f.path || '').replace(/^\.\//, '').replace(/^\/+/, '').trim() || f.path)
+  const normalized = normalizePackageJsonForExport(entry.content, filePaths)
   const out = [...files]
   out[idx] = { path: entry.path, content: normalized }
   return out
@@ -135,12 +147,12 @@ export async function getProjectFilesForExport(
     }
   }
 
-  // Read projectFiles with the same native client (lib/db) used when saving copied files
-  // (gripProjectActions), so copied files in nested folders are included in the export.
+  // Read projectFiles; sort by updatedAt ascending so latest write wins when same path exists (e.g. chat-applied package.json)
   const projectFiles = await db
     .collection('projectFiles')
     .find({ projectId: new ObjectId(projectId) })
-    .toArray() as { path: string; filename: string; content?: string }[]
+    .sort({ updatedAt: 1 })
+    .toArray() as { path: string; filename: string; content?: string; updatedAt?: Date }[]
   for (const f of projectFiles) {
     const fullPath = f.path ? `${f.path}/${f.filename}` : f.filename
     fileMap.set(fullPath, f.content ?? '')
