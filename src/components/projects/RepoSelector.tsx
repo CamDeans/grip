@@ -297,7 +297,12 @@ export function RepoSelector({
 
       <RepoPreviewModal
         isOpen={!!previewRepo}
-        onClose={() => setPreviewRepo(null)}
+        onClose={() => {
+          setPreviewRepo(null)
+          setRepos([])
+          setSearch('')
+          setSelectedRepo(null)
+        }}
         owner={previewRepo?.owner.login ?? ''}
         repo={previewRepo?.name ?? ''}
         repoFullName={previewRepo ? `${previewRepo.owner.login}/${previewRepo.name}` : ''}
