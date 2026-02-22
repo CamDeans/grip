@@ -10,7 +10,15 @@
 // Self-executing function to avoid polluting global scope
 (function() {
   if (typeof window !== 'undefined') {
-    console.log('Applying G.R.I.P. global polyfills...');
+    // Suppress known third-party deprecation noise (e.g. zustand default export from instrumentation/deps)
+    var originalWarn = console.warn;
+    console.warn = function() {
+      var msg = arguments[0] != null ? String(arguments[0]) : '';
+      if (msg.indexOf('[DEPRECATED] Default export is deprecated') !== -1 && msg.indexOf('zustand') !== -1) {
+        return;
+      }
+      return originalWarn.apply(console, arguments);
+    };
 
     // Define process if it doesn't exist
     if (!window.process) {
@@ -94,6 +102,5 @@
       };
     }
     
-    console.log('G.R.I.P. global polyfills applied successfully');
   }
 })(); 

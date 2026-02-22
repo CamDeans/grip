@@ -22,11 +22,11 @@ if (process.env.NODE_ENV === 'production' && uri.startsWith('mongodb+srv://')) {
 let client: MongoClient
 let clientPromise: Promise<MongoClient>
 
-if (!process.env.MONGODB_URI) {
-  throw new Error('Please add your Mongo URI to .env.local')
-}
-
-if (process.env.NODE_ENV === 'development') {
+// Defer throw until clientPromise is awaited (avoids crashing client bundle or SSR when env is missing)
+const mongoUri = process.env.MONGODB_URI
+if (!mongoUri) {
+  clientPromise = Promise.reject(new Error('Please add your Mongo URI to .env.local'))
+} else if (process.env.NODE_ENV === 'development') {
   // In development mode, use a global variable so that the value
   // is preserved across module reloads caused by HMR (Hot Module Replacement).
   let globalWithMongo = global as typeof globalThis & {

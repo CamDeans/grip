@@ -92,9 +92,10 @@ const nextConfig = {
       bodySizeLimit: '50mb'
     }
   },
-  // Redirect old chat paths to new consolidated interface
+  // Redirect old chat paths to new consolidated interface; serve icon for /favicon.ico
   async redirects() {
     return [
+      { source: '/favicon.ico', destination: '/icon.svg', permanent: false },
       {
         source: '/projects/:id/enhanced-chat',
         destination: '/dashboard/projects/:id',
