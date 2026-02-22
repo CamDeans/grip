@@ -1027,7 +1027,7 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
       const code = err?.code;
       const isConfigError = code === 'AI_NOT_CONFIGURED' || code === 'AI_KEY_INVALID';
       const fallback = status === 503 ? 'G.R.I.P. AI is temporarily unavailable. Please try again later.' : 'Failed to send message. Please try again.';
-      const message = (msg || fallback) + (isConfigError ? ' The GRIP app\'s AI is configured in the deployment environment, not in project Settings. Contact your administrator.' : '');
+      const message = (msg || fallback) + (isConfigError ? ' Set ANTHROPIC_API_KEY in your deployment (e.g. Vercel env vars or .env.local in dev).' : '');
       setError({
         id: Math.random().toString(),
         message,

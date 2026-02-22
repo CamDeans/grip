@@ -5,13 +5,13 @@
  * Reduces token waste by getting the first build right.
  */
 
-/** MANDATORY: GRIP app vs user settings separation. Never mix GRIP's own functionality with user setting vars. */
+/** MANDATORY: GRIP uses only env; Settings vars are for the user's app build only. */
 export const MANDATORY_GRIP_APP_VS_USER_SETTINGS = `
 ## MANDATORY: GRIP app vs user settings (never mix)
 
-- **GRIP app functionality** = the GRIP product itself: enhanced chat, plan generation, analysis, and the GRIP app's backend config (e.g. ANTHROPIC_API_KEY in the **deployment** environment so the app can call AI). This is **deployment/server environment only** — never refer users to "Settings" or "AI API Keys" for GRIP app failures.
-- **User setting vars** = what the user configures in Dashboard → Settings (Backend connections, System Integration, etc.) and that GRIP uses **in the user's project build** (e.g. MONGODB_URI, GITHUB_TOKEN, VERCEL_TOKEN in the user's .env). These are for the **user's project**, not for the GRIP app backend.
-- **Rule:** All GRIP app code, errors, and copy must treat GRIP's own functionality and GRIP backend config as **separate** from user Settings and user project env vars. Never direct users to "Dashboard → Settings → AI API Keys" (or similar) when the failure is GRIP's AI/deployment; direct them to deployment environment (e.g. "Contact your administrator" / "Set ANTHROPIC_API_KEY in the server environment"). When the failure is about the **user's project** (e.g. missing MONGODB_URI in their app), then point to Dashboard → Settings → Backend connections (or the relevant user Settings section).
+- **GRIP app** uses **only** environment variables: .env / .env.local in dev, Vercel (or deployment) vars in production. GRIP must **never** read Dashboard → Settings for its own backend (e.g. AI, plan, build execution). ANTHROPIC_API_KEY and any GRIP backend config come from deployment env only.
+- **User Settings vars** = what users enter in Dashboard → Settings (Backend connections, System Integration, etc.). GRIP uses these **only** to inject into the **user's project** when building their app: GRIP adds them to the project-specific .env file for the user's build. Settings vars are for the user's app, not for GRIP's own functionality.
+- **Rule:** GRIP code must never read Settings for GRIP's AI or backend. Errors for GRIP AI/deployment must direct users to set vars in deployment (e.g. Vercel env vars or .env.local). When the **user's project** needs a var (e.g. MONGODB_URI), point them to Dashboard → Settings → Backend connections so they can copy into their project .env.
 `.trim()
 
 export const MANDATORY_GRIP_BUILD_QUALITY = `

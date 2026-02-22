@@ -99,11 +99,11 @@ export async function POST(
 
     const currentContent = typeof existing.content === 'string' ? existing.content : ''
 
-    // Merge via AI: integrate newSnippet into currentContent
+    // Merge via AI: GRIP uses only env (.env in dev, Vercel vars in production)
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
     if (!getAnthropicApiKey()) {
       return NextResponse.json(
-        { error: 'AI is not configured. Set ANTHROPIC_API_KEY to use Update file.' },
+        { error: 'AI is not configured. Set ANTHROPIC_API_KEY in your deployment (e.g. Vercel env vars or .env.local in dev).' },
         { status: 503 }
       )
     }

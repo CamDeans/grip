@@ -64,7 +64,7 @@ class AnthropicService extends EventEmitter {
     })
   }
 
-  // Initialize service
+  // Initialize service (GRIP uses only env: .env in dev, Vercel vars in production)
   async initialize(): Promise<void> {
     if (this.isInitialized) return
 

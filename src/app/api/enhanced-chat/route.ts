@@ -1724,13 +1724,13 @@ export async function POST(request: NextRequest) {
     const userHasMongoDB = !!(userDoc?.mongodbUri && String(userDoc.mongodbUri).trim())
     const systemPrompt = buildSystemPrompt(project, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, stackGuidanceFromPlan, tokenBudgetHint, userHasMongoDB, sectionBudgets)
 
-    // Production readiness: fail gracefully when AI is not configured
+    // GRIP uses only env: .env in dev, Vercel vars in production. Settings vars are for the user's app build, not GRIP's AI.
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
     const apiKey = getAnthropicApiKey()
     if (!apiKey) {
       return NextResponse.json(
         {
-          error: 'The GRIP app\'s AI provider is not configured. This is set in the deployment environment (e.g. ANTHROPIC_API_KEY in the server or Vercel environment variables), not in project Settings. Contact your administrator or deployment owner.',
+          error: 'G.R.I.P. AI is not configured. Set ANTHROPIC_API_KEY in your deployment environment (e.g. Vercel env vars or .env.local in dev).',
           code: 'AI_NOT_CONFIGURED'
         },
         { status: 503 }
@@ -1746,7 +1746,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: isKeyOrAuth
-            ? 'The GRIP app\'s AI could not connect. The deployment API key may be invalid or revoked. This is configured in the deployment environment (e.g. ANTHROPIC_API_KEY), not in project Settings. Contact your administrator.'
+            ? 'G.R.I.P. AI could not connect. Check ANTHROPIC_API_KEY in your deployment environment (e.g. Vercel) or .env.local. The key may be invalid or revoked.'
             : 'G.R.I.P. AI is temporarily unavailable. Please try again later.',
           code: isKeyOrAuth ? 'AI_KEY_INVALID' : 'AI_INIT_FAILED'
         },

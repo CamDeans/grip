@@ -301,7 +301,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
     if (!getAnthropicApiKey()) {
       return NextResponse.json(
-        { error: 'G.R.I.P. AI is not configured. Set ANTHROPIC_API_KEY in .env.local.' },
+        { error: 'G.R.I.P. AI is not configured. Set ANTHROPIC_API_KEY in your deployment (e.g. Vercel env vars or .env.local in dev).' },
         { status: 503 }
       )
     }

@@ -238,11 +238,13 @@ If the repo has both frontend and backend (e.g. separate api/ or server/ dirs, o
     const { getAnthropicApiKey } = await import('@/lib/anthropicConfig')
     if (!getAnthropicApiKey()) {
       return NextResponse.json(
-        { error: 'G.R.I.P. AI is not configured.' },
+        { error: 'G.R.I.P. AI is not configured. Set ANTHROPIC_API_KEY in your deployment (e.g. Vercel env vars or .env.local in dev).' },
         { status: 503 }
       )
     }
 
+    const client = await clientPromise
+    const db = client.db('test')
     await anthropicService.initialize()
     const response = await anthropicService.createMessage(
       [{ role: 'user', content: 'Generate the legal-sandbox development plan as JSON.' }],
@@ -260,8 +262,6 @@ If the repo has both frontend and backend (e.g. separate api/ or server/ dirs, o
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     const plan = jsonMatch ? JSON.parse(jsonMatch[0]) : { phases: [] }
 
-    const client = await clientPromise
-    const db = client.db('test')
     await db.collection(COLLECTION).updateOne(
       { projectId: new ObjectId(projectId) },
       {

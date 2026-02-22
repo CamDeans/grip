@@ -1,6 +1,7 @@
 /**
  * Central Anthropic API config for G.R.I.P.
- * Use these helpers so all routes and services behave consistently.
+ * GRIP uses only env: .env / .env.local in dev, Vercel (or deployment) vars in production.
+ * User Settings vars are for the user's app build (injected into project .env), not for GRIP's AI.
  */
 
 export function getAnthropicApiKey(): string | undefined {
