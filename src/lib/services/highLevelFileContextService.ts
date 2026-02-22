@@ -45,6 +45,8 @@ function inferFramework(sa: {
   if (frameworks.some((f) => f.includes('react-scripts') || f.includes('cra'))) return 'cra'
   if (paths.some((p) => p.includes('next.config'))) return 'next'
   if (paths.some((p) => p.includes('vite.config'))) return 'vite'
+  // Prefer Next when app/ or src/app/ exists (App Router) so we don't default to Vite for every project
+  if (paths.some((p) => p.includes('app/') || p.includes('src/app/'))) return 'next'
 
   return 'generic'
 }

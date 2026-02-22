@@ -678,6 +678,7 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
   }, [isTyping, messages.length, messages])
 
   // Auto-open StackBlitz when GRIP says "Run in StackBlitz" in chat. We only open a new tab (never navigate away).
+  // Do NOT auto-open when the user just came from "Send error to GRIP" on Preview — they were routed here to get fixes; opening StackBlitz again would be wrong.
   // On revisit: we try once but do not show "Popup blocked" — that toast is only for when the user clicks and it's blocked.
   useEffect(() => {
     if (!projectId || isTyping || messages.length === 0) return
@@ -688,6 +689,12 @@ function EnhancedChatContent({ className, welcomeMessage }: EnhancedChatContentP
     const lower = content.toLowerCase()
     const mentionsStackBlitz = lower.includes('stackblitz') || lower.includes('run in stackblitz') || lower.includes('preview tab') || lower.includes('preview the app') || lower.includes('test in stackblitz') || /preview.*stackblitz|stackblitz.*preview/i.test(content)
     if (!mentionsStackBlitz || lastOpenedStackBlitzForMessageIdRef.current === last.id) return
+    // Skip auto-open when this reply is to the "Send to GRIP and open Develop" flow (user pasted errors on Preview and was sent here)
+    const prevMessage = messages.length >= 2 ? messages[messages.length - 2] : null
+    const prevIsUser = prevMessage?.role === 'user'
+    const prevContent = prevIsUser && 'content' in prevMessage ? String(prevMessage.content) : ''
+    const cameFromSendErrorsToGrip = prevIsUser && /submitted StackBlitz errors|just submitted.*errors.*fix them/i.test(prevContent)
+    if (cameFromSendErrorsToGrip) return
     lastOpenedStackBlitzForMessageIdRef.current = last.id
     const url = `/dashboard/open-stackblitz/${projectId}`
     const win = window.open(url, '_blank', 'noopener,noreferrer')

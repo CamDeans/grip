@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireAppAccess, requireTokenBalance } from '@/lib/access'
+import { addTokenUsage } from '@/lib/tokenUsage'
 import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { analyzeProject } from '@/lib/services/analysisService'
@@ -57,7 +58,7 @@ export async function POST(
           { status: 400 }
         )
       }
-      const { prompt: technicalPrompt } = await buildTechnicalAnalysisPromptFromIdeation(project.ideation)
+      const { prompt: technicalPrompt, totalTokens: ideationTokens } = await buildTechnicalAnalysisPromptFromIdeation(project.ideation)
       let repoFiles: Array<{ path: string; content: string | null }> | undefined
       try {
         repoFiles = await getOrCloneRepository(repository.owner, repository.name, projectId)
@@ -71,7 +72,13 @@ export async function POST(
         projectId,
         { technicalPrompt: technicalPrompt || undefined, repoFiles }
       )
-      const { totalTokens: _t, ...analysis } = treeResult
+      const { totalTokens: treeTokens, ...analysis } = treeResult
+      const sandboxTokens = (ideationTokens ?? 0) + (treeTokens ?? 0)
+      if (sandboxTokens > 0 && session.user?.id) {
+        addTokenUsage(session.user.id, sandboxTokens).catch((err) =>
+          console.warn('Analysis refresh (sandbox): failed to record token usage', err)
+        )
+      }
       const projectIdObj = new ObjectId(projectId)
       await db.collection(SANDBOX_ANALYSES_COLLECTION).updateOne(
         { $or: [{ projectId: projectIdObj }, { projectId }] },

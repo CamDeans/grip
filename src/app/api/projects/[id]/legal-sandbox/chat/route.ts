@@ -14,7 +14,7 @@ import {
 import { getOrCloneRepository } from '@/lib/repository'
 import { runSandboxProject } from '@/lib/sandbox/runSandboxProject'
 import { getSandboxProject } from '@/lib/services/sandboxProjectService'
-import { MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
 import { STYLING_REQUIREMENTS_FOR_GRIP } from '@/lib/constants/stylingReferenceRepos'
 
 const MAX_HISTORY = 16
@@ -87,6 +87,12 @@ The same GRIP main chat rules apply here: assume the user may be non-technical, 
 ## Styling reference (web/UI projects)
 For web and UI projects, follow these styling requirements (shadcn-ui/ui, tailwindlabs/headlessui):
 ${STYLING_REQUIREMENTS_FOR_GRIP}
+
+## MANDATORY: Only include what is required (package.json and build files)
+${MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD}
+
+## MANDATORY: No blank files — write code for every file in build phases
+${MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD}
 
 ## MANDATORY: Project-specific scaffolding
 ${MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING}

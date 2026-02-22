@@ -16,7 +16,7 @@ import { getProjectState, updateProjectState, recordFileSaveAndAdvanceStep } fro
 import { createProjectFolder, saveProjectFile } from '@/lib/services/gripProjectActions'
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 import { runMainProject } from '@/lib/runMainProject'
-import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
 import { STYLING_REQUIREMENTS_FOR_GRIP } from '@/lib/constants/stylingReferenceRepos'
 import { detectRepoType, getMandatoryRepoTypeRules } from '@/lib/repoTypeDetection'
 import { getReferenceReposGuidanceLine } from '@/lib/constants/referenceRepos'
@@ -238,9 +238,13 @@ ${userUploadsSummary}
   prompt += `\n${MANDATORY_GRIP_APP_VS_USER_SETTINGS}\n\n`
   // Mandatory build quality so GRIP follows same bar (latest libs, modern UX/UI, token efficiency)
   prompt += `\n${MANDATORY_GRIP_BUILD_QUALITY}\n\n`
+  // Mandatory: only include what is required; do not default to Vite for every project
+  prompt += `\n${MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD}\n\n`
+  // Mandatory: no blank files in build phases; every file must have code; project must run in StackBlitz
+  prompt += `\n${MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD}\n\n`
   // Mandatory project-specific scaffolding: package.json/tsconfig/README project-specific; scripts match stack
   prompt += `\n${MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING}\n\n`
-  // Mandatory production readiness: real implementations, valid Route Handlers/App Router, no stubs or code-as-string
+  // Mandatory production readiness: real implementations, valid Route Handlers/App Router, no stubs or blank files
   prompt += `\n${MANDATORY_GRIP_PRODUCTION_READINESS}\n\n`
   // Mandatory package.json and runnable StackBlitz: never blank, never incorrect; deps match code
   prompt += `\n${MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE}\n\n`
@@ -1305,6 +1309,11 @@ export async function POST(request: NextRequest) {
       try {
         const { enhanceIdeationForBuild } = await import('@/lib/services/ideationEnhancementService')
         const enhancedResult = await enhanceIdeationForBuild(project.ideation)
+        if (enhancedResult?.totalTokens && enhancedResult.totalTokens > 0 && session?.user?.id) {
+          addTokenUsage(session.user.id, enhancedResult.totalTokens).catch((err) =>
+            console.warn('Enhanced chat: failed to record ideation-enhancement token usage', err)
+          )
+        }
         if (enhancedResult?.enhanced) {
           await db.collection('sandboxProjects').updateOne(
             { _id: new ObjectId(projectId) },

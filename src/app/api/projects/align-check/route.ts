@@ -12,6 +12,7 @@ import clientPromise from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
 import { anthropicService } from '@/lib/services/anthropicService'
 import { getAnthropicApiKey } from '@/lib/anthropicConfig'
+import { addTokenUsage } from '@/lib/tokenUsage'
 
 const GITHUB_API = 'https://api.github.com'
 
@@ -121,6 +122,13 @@ export async function POST(request: NextRequest) {
         maxTokens: 256,
       }
     )
+
+    const totalTokens = response.usage?.totalTokens ?? (response.usage?.promptTokens ?? 0) + (response.usage?.completionTokens ?? 0)
+    if (totalTokens > 0 && session.user?.id) {
+      addTokenUsage(session.user.id as string, totalTokens).catch((err) =>
+        console.warn('Align-check: failed to record token usage', err)
+      )
+    }
 
     const content = (response.content && String(response.content).trim()) || ''
     const jsonMatch = content.match(/\{[\s\S]*\}/)
