@@ -1,5 +1,14 @@
 import { MongoClient, type MongoClientOptions } from 'mongodb'
 
+// GRIP app DB only — never use user Backend connection (Dashboard Settings) here.
+// Not using "server-only" so client bundles that transitively import this (e.g. terminalChatBridgeService) can build;
+// the guard below throws at runtime if this module runs in the browser.
+if (typeof window !== 'undefined') {
+  throw new Error(
+    'Do not import @/lib/db in client code. This module is for the GRIP app database (MONGODB_URI) only and must run on the server.'
+  )
+}
+
 const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017'
 /** App database name: from env in production, default 'test'. Use this for all client.db() calls. */
 export const DB_NAME = process.env.MONGODB_DB_NAME || 'test'
