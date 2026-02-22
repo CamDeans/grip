@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { MagnifyingGlassIcon, SparklesIcon, XMarkIcon, DocumentMagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { Button } from '@/components/ui'
 import { refreshTokenUsage } from '@/lib/tokenRefresh'
-import { generateKeywords } from '@/lib/services/aiService'
+import { generateKeywords } from '@/lib/client/generateKeywords'
 import { RepoPreviewModal } from '@/components/projects/RepoPreviewModal'
 
 interface Repository {
