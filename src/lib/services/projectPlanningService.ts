@@ -302,7 +302,8 @@ const MANDATORY_STACKBLITZ_FILES: Array<{ path: string; description: string }> =
   { path: 'tsconfig.json', description: 'TypeScript config for build and preview' },
   { path: '.env.example', description: 'Env placeholders for StackBlitz/local run; copy from Dashboard → Settings' },
   { path: 'README.md', description: 'Project-specific README: project name, description, getting started, tech stack' },
-  { path: 'src/index.tsx', description: 'Entry point for app preview' }
+  { path: 'src/index.tsx', description: 'Entry point for app preview' },
+  { path: 'app/globals.css', description: 'Global CSS for Tailwind and base styles' }
 ]
 
 function defaultTemplateForPath(pathOrName: string): string {
@@ -313,9 +314,11 @@ function defaultTemplateForPath(pathOrName: string): string {
   if (name === '.env.example') return 'env-example'
   if (name === 'README.md') return 'readme-md'
   if (name === 'index.tsx' && pathOrName.includes('src')) return 'index-tsx'
+  if (name === 'globals.css' || (name === 'globals.css' && pathOrName.includes('app'))) return 'globals-css'
   if (name === 'page.tsx') return 'nextjs-page'
   if (ext === 'tsx' || ext === 'jsx') return 'react-component'
   if (ext === 'ts' || ext === 'js') return 'ts-utility'
+  if (ext === 'css') return 'globals-css'
   if (ext === 'md' || ext === 'mdx') return 'ts-utility'
   return 'ts-utility'
 }

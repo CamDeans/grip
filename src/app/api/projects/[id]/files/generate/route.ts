@@ -148,7 +148,7 @@ export async function POST(
                 }
               } catch (error) {
                 const errMsg = error instanceof Error ? error.message : 'Unknown error'
-                console.error(`Error generating file ${file.path}/${file.name}:`, error)
+                console.error(`[files/generate] Failed: path=${fullPath} name=${fileName} error=${errMsg}`, error)
                 generatedFiles.push({ name: file.name, path: file.path, success: false, error: errMsg })
                 emit({ type: 'file', path: fullPath, name: fileName, success: false, error: errMsg })
               }
@@ -215,12 +215,14 @@ export async function POST(
           throw new Error(result.error || 'Unknown error generating file')
         }
       } catch (error) {
-        console.error(`Error generating file ${file.path}/${file.name}:`, error)
+        const errMsg = error instanceof Error ? error.message : 'Unknown error'
+        const fullPath = (file.path && !String(file.path).endsWith(file.name)) ? `${file.path.replace(/\/$/, '')}/${file.name}` : (file.path || file.name)
+        console.error(`[files/generate] Failed: path=${fullPath} name=${file.name} error=${errMsg}`, error)
         generatedFiles.push({
           name: file.name,
           path: file.path,
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: errMsg
         })
       }
     }

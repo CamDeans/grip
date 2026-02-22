@@ -62,6 +62,7 @@ export interface FileGenerationResult {
 /**
  * GRIP mandatory rule: no blank or placeholder files so StackBlitz preview runs.
  * Returns true if content is empty, only whitespace, only comments, or a bare empty export.
+ * Allows minimal-but-valid content (e.g. CSS with :root/body, or one import + one real export).
  */
 function isPlaceholderOrEmpty(content: string, filename: string): boolean {
   const trimmed = (content || '').trim()
@@ -70,8 +71,14 @@ function isPlaceholderOrEmpty(content: string, filename: string): boolean {
   if (/^\/\*\*?[\s\S]*\*\/\s*$/m.test(trimmed)) return true
   if (/^\/\/\s*TODO[\s\S]*$/m.test(trimmed)) return true
   const ext = filename.split('.').pop()?.toLowerCase()
+  if (ext === 'css') {
+    if (/^@tailwind\s/m.test(trimmed) || /:root\s*\{/.test(trimmed) || /body\s*\{/.test(trimmed)) return false
+    if (trimmed.length < 30) return true
+    return false
+  }
   if (ext === 'tsx' || ext === 'jsx' || ext === 'ts' || ext === 'js') {
     if (/^import\s+.*\s+from\s+['"][^'"]+['"]\s*;?\s*$/m.test(trimmed)) return true
+    if (/export\s+(const|function|default)\s+\w+/.test(trimmed)) return false
   }
   return false
 }
@@ -133,21 +140,33 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
     // Generate variables if not provided
     let variables = request.variables || {}
     let templateTokens = 0
+    const useDefaultValuesOnly = [
+      'package-json',
+      'tsconfig-json',
+      'env-example',
+      'readme-md',
+      'index-tsx',
+      'globals-css'
+    ].includes(request.templateId)
     if (Object.keys(variables).length === 0) {
-      // Use template defaultValues for mandatory StackBlitz files (no AI call)
-      if (template.defaultValues && Object.keys(template.defaultValues).length > 0 && (request.templateId === 'package-json' || request.templateId === 'tsconfig-json' || request.templateId === 'env-example')) {
+      if (useDefaultValuesOnly && template.defaultValues && Object.keys(template.defaultValues).length >= 0) {
         variables = { ...template.defaultValues } as ITemplateVariables
       } else {
-        const tvResult = await generateTemplateVariables(template, {
-          projectId: request.projectId,
-          filePath: request.filePath,
-          fileNode,
-          projectStructure,
-          description: request.description,
-          phaseContext: request.phaseContext
-        })
-        variables = tvResult.variables
-        templateTokens = tvResult.totalTokens ?? 0
+        try {
+          const tvResult = await generateTemplateVariables(template, {
+            projectId: request.projectId,
+            filePath: request.filePath,
+            fileNode,
+            projectStructure,
+            description: request.description,
+            phaseContext: request.phaseContext
+          })
+          variables = tvResult?.variables ?? { ...template.defaultValues } as ITemplateVariables
+          templateTokens = tvResult?.totalTokens ?? 0
+        } catch (e) {
+          console.warn(`generateTemplateVariables failed for ${request.filePath}, using defaultValues:`, e)
+          variables = { ...template.defaultValues } as ITemplateVariables
+        }
       }
     }
     

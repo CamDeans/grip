@@ -375,6 +375,33 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
       isBuiltIn: true
     })
 
+    // app/globals.css — mandatory for Next/StackBlitz; Tailwind + base styles (no variables)
+    templates.push({
+      id: 'globals-css',
+      name: 'globals.css',
+      description: 'Global CSS for Tailwind and base styles',
+      language: 'css',
+      fileType: 'css',
+      template: `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground: 0 0% 0%;
+  --background: 0 0% 100%;
+}
+
+body {
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  font-family: system-ui, sans-serif;
+}
+`,
+      variables: [],
+      defaultValues: {},
+      isBuiltIn: true
+    })
+
     // API route template
     templates.push({
       id: 'api-route',

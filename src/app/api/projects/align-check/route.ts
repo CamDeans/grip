@@ -3,11 +3,11 @@
  * Compares project ideation + details against the selected GitHub repo and returns
  * alignment percentage and whether to proceed. Used before creating a project so the
  * user can confirm or choose a different repo.
+ * On any server error returns 200 with neutral payload so the UI never sees 500.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getServerAuthSession } from '@/lib/auth'
 import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { anthropicService } from '@/lib/services/anthropicService'
@@ -16,44 +16,70 @@ import { addTokenUsage } from '@/lib/tokenUsage'
 
 const GITHUB_API = 'https://api.github.com'
 
+function neutralResponse(message?: string) {
+  return NextResponse.json({
+    alignmentPercent: 65,
+    message: message ?? 'Alignment check unavailable. You can proceed with the build.',
+    suggestedProceed: true,
+  })
+}
+
 export async function POST(request: NextRequest) {
+  let session: Awaited<ReturnType<typeof getServerAuthSession>> = null
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    session = await getServerAuthSession()
+  } catch (e) {
+    console.error('Align-check: session error', e)
+    return neutralResponse()
+  }
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
-    const body = await request.json()
-    const {
-      title,
-      description,
-      ideation,
-      repository,
-    } = body as {
-      title?: string
-      description?: string
-      ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string }
-      repository?: { owner?: string; name?: string }
-    }
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json(
+      { error: 'Missing required fields: title, repository.owner, repository.name' },
+      { status: 400 }
+    )
+  }
+  const {
+    title,
+    description,
+    ideation,
+    repository,
+  } = (body || {}) as {
+    title?: string
+    description?: string
+    ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string }
+    repository?: { owner?: string; name?: string }
+  }
 
-    if (!title?.trim() || !repository?.owner?.trim() || !repository?.name?.trim()) {
-      return NextResponse.json(
-        { error: 'Missing required fields: title, repository.owner, repository.name' },
-        { status: 400 }
-      )
-    }
+  if (!title?.trim() || !repository?.owner?.trim() || !repository?.name?.trim()) {
+    return NextResponse.json(
+      { error: 'Missing required fields: title, repository.owner, repository.name' },
+      { status: 400 }
+    )
+  }
 
-    const goals = ideation?.goals?.trim() ?? ''
-    const targetAudience = ideation?.targetAudience?.trim() ?? ''
-    const keyFeatures = ideation?.keyFeatures?.trim() ?? ''
-    const technicalRequirements = ideation?.technicalRequirements?.trim() ?? ''
+  try {
+  const goals = ideation?.goals?.trim() ?? ''
+  const targetAudience = ideation?.targetAudience?.trim() ?? ''
+  const keyFeatures = ideation?.keyFeatures?.trim() ?? ''
+  const technicalRequirements = ideation?.technicalRequirements?.trim() ?? ''
 
-    // Fetch repo metadata from GitHub (description, language) if we have a token
-    let repoDescription = ''
-    let repoLanguage = ''
+  let repoDescription = ''
+  let repoLanguage = ''
+  const userId =
+    typeof session.user?.id === 'string' && session.user.id.trim() && ObjectId.isValid(session.user.id)
+      ? session.user.id
+      : null
+
+  try {
     const client = await clientPromise
     const db = client.db(DB_NAME)
-    const userId = typeof session.user?.id === 'string' && session.user.id.trim() ? session.user.id : null
     const user = userId
       ? await db.collection('users').findOne(
           { _id: new ObjectId(userId) },
@@ -104,10 +130,13 @@ export async function POST(request: NextRequest) {
 
     let apiKey = getAnthropicApiKey()
     if (!apiKey && userId) {
-      apiKey = (await getAnthropicApiKeyForUser(userId)) ?? undefined
+      try {
+        apiKey = (await getAnthropicApiKeyForUser(userId)) ?? undefined
+      } catch {
+        // Continue with env key only
+      }
     }
     if (!apiKey) {
-      // No AI: return a neutral alignment so user can still proceed
       return NextResponse.json({
         alignmentPercent: 70,
         message: 'Alignment check is unavailable (no API key). You can proceed with the build.',
@@ -167,9 +196,10 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Align-check error:', error)
-    return NextResponse.json(
-      { error: 'Alignment check failed. You can still proceed with the build.' },
-      { status: 500 }
-    )
+    return neutralResponse('Alignment check failed. You can still proceed with the build.')
+  }
+  } catch (error) {
+    console.error('Align-check unexpected error:', error)
+    return neutralResponse()
   }
 }
