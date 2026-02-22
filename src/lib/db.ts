@@ -1,8 +1,8 @@
+import 'server-only'
 import { MongoClient, type MongoClientOptions } from 'mongodb'
 
 // GRIP app DB only — never use user Backend connection (Dashboard Settings) here.
-// Not using "server-only" so client bundles that transitively import this (e.g. terminalChatBridgeService) can build;
-// the guard below throws at runtime if this module runs in the browser.
+// Kept as runtime guard in case any client code ever imports this again.
 if (typeof window !== 'undefined') {
   throw new Error(
     'Do not import @/lib/db in client code. This module is for the GRIP app database (MONGODB_URI) only and must run on the server.'

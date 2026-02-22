@@ -12,7 +12,6 @@
 
 import { useEffect, useState, Fragment } from 'react'
 import { useSession } from 'next-auth/react'
-import { TerminalChatBridgeService } from '@/lib/services/terminalChatBridgeService'
 import { Button } from '@/components/ui'
 import { TerminalIcon, MessageSquare, Share2, Settings, ArrowRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -130,43 +129,54 @@ export function TerminalChatBridge({
     localStorage.setItem('terminal_auto_share', String(autoShare))
   }, [autoShare])
 
-  // Share a command with chat
+  // Share a command with chat (via API so client never imports server-only db)
   const shareCommand = async (command: string, output: string, exitCode: number) => {
     if (!session?.user) return
 
     try {
-      await TerminalChatBridgeService.shareCommand({
-        terminalId,
-        projectId,
-        command,
-        output,
-        exitCode,
-        userId: session.user.id || session.user.email || 'unknown'
+      const res = await fetch('/api/terminal/bridge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          terminalId,
+          projectId,
+          command,
+          output,
+          exitCode,
+        }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.message || data.error || 'Failed to share command')
+      }
     } catch (error) {
       setError('Failed to share command with chat')
       console.error('Command sharing error:', error)
     }
   }
 
-  // Execute a command from chat
+  // Execute a command from chat (via API so client never imports server-only db)
   const executeCommand = async (command: string) => {
     if (!session?.user) return
 
     try {
-      const result = await TerminalChatBridgeService.executeCommand({
-        terminalId,
-        command,
-        userId: session.user.id || session.user.email || 'unknown'
+      const res = await fetch('/api/terminal/bridge', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ terminalId, command }),
       })
+      const result = res.ok
+        ? (await res.json())
+        : { command, output: '', exitCode: 1 }
 
       if (onCommandExecuted) {
-        onCommandExecuted(result.command, result.output, result.exitCode)
+        onCommandExecuted(result.command, result.output ?? '', result.exitCode ?? 0)
       }
 
-      // If auto-share is enabled, share the command with chat
       if (autoShare) {
-        await shareCommand(result.command, result.output, result.exitCode)
+        await shareCommand(result.command, result.output ?? '', result.exitCode ?? 0)
       }
     } catch (error) {
       setError('Failed to execute command from chat')
