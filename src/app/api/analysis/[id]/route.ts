@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ObjectId } from 'mongodb'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
@@ -31,7 +31,7 @@ export async function GET(
 
     // Connect to database
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     // First check if project exists
     const project = await db.collection('projects').findOne({

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId, type Db } from 'mongodb'
 import type { Session } from 'next-auth'
 
@@ -19,7 +19,7 @@ async function requireAuthAndProjectId(
     return new NextResponse(JSON.stringify({ error: 'Invalid project ID format' }), { status: 400 })
   }
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   return { session, id, db }
 }
 

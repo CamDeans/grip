@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import crypto from 'crypto'
 
@@ -29,7 +29,7 @@ export async function POST(
     }
     const folderPath = rawPath.replace(/^\/+|\/+$/g, '').trim()
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) }) as { userId?: unknown } | null
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     const userId = (session.user as { id?: string }).id ?? (session.user as { email?: string }).email
@@ -104,7 +104,7 @@ export async function DELETE(
     }
     const path = rawPath.replace(/^\/+|\/+$/g, '').trim()
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) }) as { userId?: unknown } | null
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     const userId = (session.user as { id?: string }).id ?? (session.user as { email?: string }).email

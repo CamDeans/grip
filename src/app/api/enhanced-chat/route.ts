@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ObjectId } from 'mongodb'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireAppAccess, requireTokenBalance, getAppAccess } from '@/lib/access'
@@ -1029,7 +1029,7 @@ async function parseAndApplyGripUpdateIdeation(
       return { cleanedMessage, updated: false }
     }
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const project = await db.collection('projects').findOne(
       { _id: new ObjectId(projectId) },
       { projection: { ideation: 1 } }
@@ -1110,7 +1110,7 @@ async function saveChatMessage(projectId: string, message: ChatMessage) {
     console.log('DB: Message:', JSON.stringify(message, null, 2))
 
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     console.log('DB: Connected to database (test)')
 
     // Convert projectId to ObjectId
@@ -1208,7 +1208,7 @@ async function saveChatMessage(projectId: string, message: ChatMessage) {
 async function updateAssistantMessageContent(projectId: string, messageId: string, content: string) {
   try {
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const projectObjectId = new ObjectId(projectId)
     const r = await db.collection('chatHistory').updateOne(
       { projectId: projectObjectId, 'messages.id': messageId },
@@ -1268,7 +1268,7 @@ export async function POST(request: NextRequest) {
 
     // Get project context (check both main and sandbox)
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     let project = await db.collection('projects').findOne({
       _id: new ObjectId(projectId)
     })
@@ -1655,7 +1655,7 @@ export async function POST(request: NextRequest) {
     if (project && !isSandbox && session?.user?.id) {
       try {
         const client = await clientPromise
-        const db = client.db('test')
+        const db = client.db(DB_NAME)
         const sandboxesList = await db
           .collection('sandboxProjects')
           .find({

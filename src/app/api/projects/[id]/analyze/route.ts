@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
 import { requireAppAccess, requireTokenBalance } from '@/lib/access'
 import { addTokenUsage } from '@/lib/tokenUsage'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { analyzeRepositoryStructure } from '@/lib/analysis'
 
@@ -41,7 +41,7 @@ export async function POST(
     )
 
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const projectIdObj = new ObjectId(id)
 
     await db.collection('analyses').updateOne(

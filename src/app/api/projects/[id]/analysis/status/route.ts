@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
-import { clientPromise } from '@/lib/mongodb'
+import { clientPromise, DB_NAME } from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
 
 export async function GET(
@@ -15,7 +15,7 @@ export async function GET(
     }
 
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     // Check if this is a sandbox project
     const sandboxProject = await db.collection('sandboxProjects').findOne({

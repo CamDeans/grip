@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { getOrCloneRepository } from '@/lib/repository'
 
 interface PackageJsonShape {
@@ -113,7 +113,7 @@ export async function getProjectFilesForExport(
   options?: { gripOnly?: boolean }
 ): Promise<{ path: string; content: string }[]> {
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   const project = await db.collection('projects').findOne(
     { _id: new ObjectId(projectId) },
     { projection: { repository: 1, title: 1 } }

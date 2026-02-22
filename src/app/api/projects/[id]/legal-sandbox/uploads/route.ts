@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getSandboxProject } from '@/lib/services/sandboxProjectService'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import crypto from 'crypto'
 import {
@@ -46,7 +46,7 @@ export async function GET(
     }
 
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const docs = await db
       .collection(SANDBOX_FILES_COLLECTION)
       .find({
@@ -121,7 +121,7 @@ export async function POST(
     }
 
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const coll = db.collection(SANDBOX_FILES_COLLECTION)
     const projectIdObj = new ObjectId(projectId)
     const now = new Date()

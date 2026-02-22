@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import crypto from 'crypto'
 import { isImagePath, validateImageContent } from '@/lib/imageValidation'
@@ -29,7 +29,7 @@ export async function POST(
     }
 
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const project = await db.collection('projects').findOne({
       _id: new ObjectId(projectId),
     }) as { userId?: unknown } | null

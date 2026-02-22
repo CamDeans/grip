@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { getChatHistory } from '@/lib/chat'
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
     console.log('API: Processing', messages.length, 'new messages for project:', projectId)
     
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     
     // First, get existing messages
     const existingDoc = await db.collection('chatHistory').findOne({ projectId })

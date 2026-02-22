@@ -80,8 +80,9 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 })
     }
 
-    const client = await (await import('@/lib/db')).default
-    const db = client.db('test')
+    const { default: clientPromise, DB_NAME } = await import('@/lib/db')
+    const client = await clientPromise
+    const db = client.db(DB_NAME)
     const project = await db.collection('projects').findOne({
       _id: new ObjectId(projectId),
     }) as { repository?: { owner: string; name: string } } | null

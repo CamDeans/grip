@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
 import { getOrBuildRepoContextDocument } from '@/lib/services/repoContextService'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 
 /**
@@ -30,7 +30,7 @@ export async function GET(
       ? { $or: [{ projectId: new ObjectId(projectId) }, { projectId }] }
       : { projectId: new ObjectId(projectId) }
 
-    const analysis = await (await clientPromise).db('test').collection(analysisCollection).findOne(
+    const analysis = await (await clientPromise).db(DB_NAME).collection(analysisCollection).findOne(
       projectIdFilter,
       { projection: { projectContextDocument: 1 } }
     ) as { projectContextDocument?: string } | null

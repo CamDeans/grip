@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { clientPromise } from '@/lib/mongodb'
+import { clientPromise, DB_NAME } from '@/lib/mongodb'
 
 export async function GET(request: Request) {
   try {
     // Connect to MongoDB
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     
     // Get all chatHistory documents
     const chatDocs = await db.collection('chatHistory').find({}).toArray()

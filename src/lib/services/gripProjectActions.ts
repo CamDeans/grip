@@ -1,6 +1,6 @@
 import { ObjectId } from 'mongodb'
 import crypto from 'crypto'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { listProjectFiles } from '@/lib/services/fileStorageService'
 import { getOrCloneRepository } from '@/lib/repository'
 import { isImagePath, validateImageContent } from '@/lib/imageValidation'
@@ -16,7 +16,7 @@ export async function createProjectFolder(
   const path = folderPath.replace(/^\/+|\/+$/g, '').trim()
   if (!path) return { ok: false, message: 'path is required' }
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   const coll = db.collection('projectFiles')
   const existing = await coll.findOne({
     projectId: new ObjectId(projectId),
@@ -57,7 +57,7 @@ export async function getFileContentByPath(
     (f) => (f.path ? `${f.path}/${f.filename}` : f.filename) === normalized
   )
   if (file && file.content != null) return file.content
-  const project = await (await clientPromise).db('test').collection('projects').findOne(
+  const project = await (await clientPromise).db(DB_NAME).collection('projects').findOne(
     { _id: new ObjectId(projectId) },
     { projection: { repository: 1 } }
   ) as { repository?: { owner: string; name: string } } | null
@@ -95,7 +95,7 @@ export async function saveProjectFile(
   }
 
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   const coll = db.collection('projectFiles')
   const size = Buffer.byteLength(contentToSave, 'utf8')
   const hash = crypto.createHash('md5').update(contentToSave).digest('hex')

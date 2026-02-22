@@ -1,4 +1,4 @@
-import clientPromise from '../db'
+import clientPromise, { DB_NAME } from '../db'
 import { serializeDocument } from '../utils'
 import { ObjectId, Document } from 'mongodb'
 
@@ -74,7 +74,7 @@ export interface ChatHistory extends Document {
 export async function getChatHistory(projectId: string): Promise<ChatHistory | null> {
   try {
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     console.log('DB: Getting chat history for project:', projectId)
     

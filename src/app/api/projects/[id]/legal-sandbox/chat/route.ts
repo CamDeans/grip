@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireAppAccess, requireTokenBalance } from '@/lib/access'
 import { addTokenUsage } from '@/lib/tokenUsage'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { anthropicService } from '@/lib/services/anthropicService'
 import {
@@ -239,7 +239,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let structuredSummary = ''
     try {
       const client = await clientPromise
-    const doc = await client.db('test').collection('sandboxAnalyses').findOne(
+    const doc = await client.db(DB_NAME).collection('sandboxAnalyses').findOne(
       { projectId: new ObjectId(projectId) },
       { projection: { repositoryAnalysis: 1 } }
     )
@@ -392,7 +392,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Persist chat history so it survives refresh (sandbox-only collection)
     try {
       const client = await clientPromise
-      const db = client.db('test')
+      const db = client.db(DB_NAME)
       const coll = db.collection(SANDBOX_CHAT_HISTORY_COLLECTION)
       const doc = await coll.findOne({ projectId }, { projection: { messages: 1 } })
       const existing = Array.isArray(doc?.messages) ? doc.messages : []

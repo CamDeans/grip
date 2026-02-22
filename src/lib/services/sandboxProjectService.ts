@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 
 const COLLECTION = 'sandboxProjects'
 
@@ -29,7 +29,7 @@ export async function createSandboxProject(data: {
   parentProjectId?: string | ObjectId // Optional: link to main project for experiments
 }): Promise<SandboxProject> {
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   const now = new Date()
   const doc: any = {
     userId: data.userId,
@@ -54,7 +54,7 @@ export async function createSandboxProject(data: {
 
 export async function listSandboxProjects(userId: string): Promise<SandboxProject[]> {
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   const docs = await db
     .collection(COLLECTION)
     .find({ userId })
@@ -66,7 +66,7 @@ export async function listSandboxProjects(userId: string): Promise<SandboxProjec
 export async function getSandboxProject(projectId: string): Promise<SandboxProject | null> {
   if (!projectId || !ObjectId.isValid(projectId)) return null
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   const doc = await db.collection(COLLECTION).findOne({ _id: new ObjectId(projectId) })
   return doc as SandboxProject | null
 }

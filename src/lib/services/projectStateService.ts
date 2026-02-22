@@ -1,4 +1,4 @@
-import { clientPromise } from '../mongodb'
+import { clientPromise, DB_NAME } from '../mongodb'
 import { ObjectId } from 'mongodb'
 import { AIMessage } from '@/types/chat'
 import type { IProjectStateData } from '../models/ProjectState'
@@ -37,7 +37,7 @@ export async function initializeProjectState(projectId: string): Promise<void> {
 
   try {
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     // Check if project state already exists
     const existingState = await db.collection('projectStates').findOne({
@@ -73,7 +73,7 @@ export async function updateProjectState(
 
   try {
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     const updateResult = await db.collection('projectStates').updateOne(
       { projectId: new ObjectId(projectId) },
@@ -107,7 +107,7 @@ export async function addChatMessage(
     }
 
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     // Insert message into chatHistory collection
     const result = await db.collection('chatHistory').insertOne({
@@ -141,7 +141,7 @@ export async function updateStepStatus(
 
   try {
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     const projectState = await db.collection<IProjectStateData>('projectStates').findOne({
       projectId: new ObjectId(projectId)
@@ -215,7 +215,7 @@ export async function getProjectState(projectId: string): Promise<IProjectStateD
 
   try {
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     let objectId: ObjectId
     try {
@@ -356,7 +356,7 @@ export async function reconcileProjectStateFromFiles(projectId: string): Promise
     if (!plan?.phases?.length) return false
 
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const fileCount = await db.collection('projectFiles').countDocuments({
       projectId: new ObjectId(projectId),
     })
@@ -416,7 +416,7 @@ export async function ensureProjectState(projectId: string, phases: IProjectStat
 
   try {
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     let objectId: ObjectId
     try {

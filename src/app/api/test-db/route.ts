@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 
 export async function GET() {
   try {
@@ -10,7 +10,7 @@ export async function GET() {
     const client = await clientPromise
     console.log('Test DB API: Connected to database')
     
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     
     // List collections
     console.log('Test DB API: Listing collections...')

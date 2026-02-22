@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { getOrCloneRepository } from '@/lib/repository'
 import crypto from 'crypto'
 
@@ -32,7 +32,7 @@ export async function getPackageJsonForProject(projectId: string): Promise<{
   source: 'projectFiles' | 'repo' | 'new'
   data: PackageJsonData
 } | null> {
-  const db = (await clientPromise).db('test')
+  const db = (await clientPromise).db(DB_NAME)
   const projectIdObj = new ObjectId(projectId)
 
   // 1. projectFiles: root package.json (path '' or '/', filename 'package.json')
@@ -106,7 +106,7 @@ function upsertProjectFile(
   const hash = crypto.createHash('md5').update(content).digest('hex')
   const now = new Date()
   return clientPromise.then(async (client) => {
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const coll = db.collection('projectFiles')
     const existing = await coll.findOne({
       projectId: new ObjectId(projectId),

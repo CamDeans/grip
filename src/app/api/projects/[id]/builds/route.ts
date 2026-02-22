@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ObjectId } from 'mongodb'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 
 // Mock builds data for demo project
 const mockBuildsData = [
@@ -85,7 +85,7 @@ export async function GET(
     
     // Connect to database
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     
     // Get builds from buildLogs collection
     const builds = await db.collection('buildLogs')

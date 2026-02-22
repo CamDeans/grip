@@ -1,4 +1,4 @@
-import { clientPromise } from '@/lib/mongodb';
+import { clientPromise, DB_NAME } from '@/lib/mongodb';
 import { initializeProjectEnvironment } from '@/lib/project/init';
 import { ObjectId } from 'mongodb';
 import { Project, RepositoryAnalysis } from '@/types';
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
     // Connect to MongoDB
     const client = await clientPromise;
-    const db = client.db('test');
+    const db = client.db(DB_NAME);
 
     // Get project and analysis data
     const projectDoc = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });

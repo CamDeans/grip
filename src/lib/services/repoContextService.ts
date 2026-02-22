@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 
 const MAX_CHARS_PER_FILE = 4000
 const MAX_TOTAL_CHARS = 35000
@@ -25,7 +25,7 @@ export async function buildRepoContextDocument(
   priorityPaths: string[] = []
 ): Promise<string> {
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   const projectCollection = isSandbox ? 'sandboxProjects' : 'projects'
 
   const project = await db.collection(projectCollection).findOne({
@@ -101,7 +101,7 @@ export async function buildRepoContextDocument(
  */
 export async function getOrBuildRepoContextDocument(projectId: string, isSandbox = false): Promise<string> {
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   const analysisCollection = isSandbox ? 'sandboxAnalyses' : 'analyses'
 
   const projectIdObj = new ObjectId(projectId)

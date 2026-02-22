@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { ObjectId } from 'mongodb'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 
 // Phase 8, Step 3: Create API endpoint for retrieving a specific file for preview
 
@@ -22,7 +22,7 @@ export async function GET(
     
     // Connect to database
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     
     // Find file in projectFiles collection
     const file = await db.collection('projectFiles').findOne({
@@ -84,7 +84,7 @@ export async function PATCH(
     const path = typeof body.path === 'string' ? body.path.trim() : undefined
     const filename = typeof body.filename === 'string' ? body.filename.trim() : undefined
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const file = await db.collection('projectFiles').findOne({ _id: new ObjectId(fileId) }) as { projectId?: unknown; content?: string } | null
     if (!file) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 })
@@ -134,7 +134,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid file ID' }, { status: 400 })
     }
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const file = await db.collection('projectFiles').findOne({ _id: new ObjectId(fileId) }) as { projectId?: unknown } | null
     if (!file) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 })

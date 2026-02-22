@@ -1,7 +1,9 @@
 import { MongoClient, type MongoClientOptions } from 'mongodb'
 
 const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017'
-const dbName = process.env.MONGODB_DB_NAME || 'test'
+/** App database name: from env in production, default 'test'. Use this for all client.db() calls. */
+export const DB_NAME = process.env.MONGODB_DB_NAME || 'test'
+const dbName = DB_NAME
 
 const baseOptions: MongoClientOptions = {
   // Ensure default database matches lib/mongodb (projects use Mongoose with same name)

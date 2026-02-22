@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 
 /**
  * Health check for deployment and load balancers.
@@ -8,7 +8,7 @@ import clientPromise from '@/lib/db'
 export async function GET() {
   try {
     const client = await clientPromise
-    await client.db('test').command({ ping: 1 })
+    await client.db(DB_NAME).command({ ping: 1 })
     return NextResponse.json(
       { status: 'ok', database: 'connected', timestamp: new Date().toISOString() },
       { status: 200 }

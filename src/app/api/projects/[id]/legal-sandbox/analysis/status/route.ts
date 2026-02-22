@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { getSandboxProject } from '@/lib/services/sandboxProjectService'
 
@@ -35,7 +35,7 @@ export async function GET(
     }
 
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const doc = await db.collection(SANDBOX_ANALYSES_COLLECTION).findOne(
       { projectId },
       { projection: { repositoryAnalysis: 1, updatedAt: 1 } }

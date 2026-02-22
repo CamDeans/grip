@@ -1,4 +1,4 @@
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { cloneRepository } from './github'
 import { isImagePath, validateImageContent } from './imageValidation'
@@ -41,7 +41,7 @@ export async function getOrCloneRepository(owner: string, repo: string, projectI
     console.log(`Parameters: owner=${owner}, repo=${repo}, projectId=${projectId}`);
     
     const db = await clientPromise;
-    const collection = db.db('test').collection('repositories');
+    const collection = db.db(DB_NAME).collection('repositories');
     
     // Check if repository already exists
     console.log('Checking for existing repository...');
@@ -179,7 +179,7 @@ function getLanguageStats(files: RepositoryFile[]): { [key: string]: number } {
 export async function getRepositoryFiles(owner: string, repo: string, projectId: string | ObjectId) {
   try {
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     // Check if repository is already cached
     const cachedRepo = await db.collection('repositories').findOne({
@@ -205,7 +205,7 @@ export async function updateRepositoryFile(
   content: string
 ) {
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
 
   console.log('Updating repository file:', { projectId, filePath })
 
@@ -258,7 +258,7 @@ export async function updateRepositoryFile(
 /** Remove one file from the cached repo by path */
 export async function deleteRepositoryFile(projectId: string, filePath: string): Promise<boolean> {
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   const repository = await db.collection<CachedRepository>('repositories').findOne({
     linkedProjects: new ObjectId(projectId),
   })
@@ -275,7 +275,7 @@ export async function deleteRepositoryFile(projectId: string, filePath: string):
 /** Rename a file in the cached repo (oldPath → newPath) */
 export async function renameRepositoryFile(projectId: string, oldPath: string, newPath: string): Promise<boolean> {
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   const repository = await db.collection<CachedRepository>('repositories').findOne({
     linkedProjects: new ObjectId(projectId),
   })
@@ -294,7 +294,7 @@ export async function renameRepositoryFile(projectId: string, oldPath: string, n
 /** Remove all files under a folder path from the cached repo (folderPath and folderPath/*) */
 export async function deleteRepositoryFolder(projectId: string, folderPath: string): Promise<number> {
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   const repository = await db.collection<CachedRepository>('repositories').findOne({
     linkedProjects: new ObjectId(projectId),
   })

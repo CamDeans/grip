@@ -5,7 +5,7 @@ import { requireAppAccess, requireTokenBalance, getAppAccess } from '@/lib/acces
 import { buildTokenBudgetPromptFragment } from '@/lib/constants/tokenBudgetPlan'
 import { addTokenUsage } from '@/lib/tokenUsage'
 import { ObjectId } from 'mongodb'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { anthropicService } from '@/lib/services/anthropicService'
 import { getOrCloneRepository } from '@/lib/repository'
 import { listLegalSandboxFiles } from '@/lib/services/legalSandboxService'
@@ -103,7 +103,7 @@ export async function GET(
     }
 
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const planDoc = await db.collection(COLLECTION).findOne({
       projectId: new ObjectId(projectId),
     })
@@ -173,7 +173,7 @@ export async function POST(
     let repositoryAnalysisText = ''
     let structuredAnalysisSummary = ''
     try {
-      const db = (await clientPromise).db('test')
+      const db = (await clientPromise).db(DB_NAME)
       // Support both ObjectId and string projectId (pre/post migration)
       const oid = ObjectId.isValid(projectId) ? new ObjectId(projectId) : null
       const analysisDoc = await db.collection(SANDBOX_ANALYSES_COLLECTION).findOne(
@@ -244,7 +244,7 @@ If the repo has both frontend and backend (e.g. separate api/ or server/ dirs, o
     }
 
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     await anthropicService.initialize()
     const response = await anthropicService.createMessage(
       [{ role: 'user', content: 'Generate the legal-sandbox development plan as JSON.' }],

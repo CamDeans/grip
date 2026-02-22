@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ObjectId } from 'mongodb'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 
 // Phase 8, Step 4: API Endpoint for Action Buttons
 
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     
     // Connect to database
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     
     // Log the action in activityLogs collection
     await db.collection('activityLogs').insertOne({

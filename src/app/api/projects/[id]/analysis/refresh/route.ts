@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireAppAccess, requireTokenBalance } from '@/lib/access'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { analyzeProject } from '@/lib/services/analysisService'
 import { getSandboxProject } from '@/lib/services/sandboxProjectService'
@@ -40,7 +40,7 @@ export async function POST(
 
     const isSandbox = new URL(request.url).searchParams.get('sandbox') === 'true'
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     if (isSandbox) {
       const project = await getSandboxProject(projectId)

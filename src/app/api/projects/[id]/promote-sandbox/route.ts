@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { getSandboxProject } from '@/lib/services/sandboxProjectService'
 import { listLegalSandboxFiles } from '@/lib/services/legalSandboxService'
@@ -53,7 +53,7 @@ export async function POST(
 
     // Verify main project exists and user owns it
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const mainProject = await db.collection('projects').findOne({
       _id: new ObjectId(mainProjectId),
       userId: session.user.id,

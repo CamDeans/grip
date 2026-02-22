@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
 import { getOrCloneRepository } from '@/lib/repository'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 
 /**
@@ -107,7 +107,7 @@ export async function GET(
     }
 
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const project = await db.collection('projects').findOne({
       _id: new ObjectId(projectId),
     }) as { repository?: { owner: string; name: string } } | null

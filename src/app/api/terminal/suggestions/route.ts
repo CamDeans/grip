@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { connectToDatabase } from '@/lib/mongodb'
+import { connectToDatabase, DB_NAME } from '@/lib/mongodb'
 import { getServerAuthSession } from '@/lib/auth'
 import { ObjectId } from 'mongodb'
 import path from 'path'
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     // Get project info from database to determine technology stack
     let projectTech: string[] = []
     try {
-      const db = (global as any).mongoConnection.db('test')
+      const db = (global as any).mongoConnection.db(DB_NAME)
       const projectsCollection = db.collection('projects')
       
       const project = await projectsCollection.findOne({ 

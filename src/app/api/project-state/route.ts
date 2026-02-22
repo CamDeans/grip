@@ -3,7 +3,7 @@ import { getServerAuthSession } from '@/lib/auth'
 import { connectToDatabase } from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
 import { ProjectState } from '@/types/chat'
-import { clientPromise } from '@/lib/mongodb'
+import { clientPromise, DB_NAME } from '@/lib/mongodb'
 
 export async function GET(request: Request) {
   try {
@@ -27,7 +27,7 @@ export async function GET(request: Request) {
 
     // Connect to MongoDB using clientPromise
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     
     const projectObjectId = new ObjectId(projectId)
     
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
 
     // Connect to MongoDB using clientPromise
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     
     const projectObjectId = new ObjectId(projectId)
     

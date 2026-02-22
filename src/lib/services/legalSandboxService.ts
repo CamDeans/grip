@@ -1,6 +1,6 @@
 import { ObjectId } from 'mongodb'
 import crypto from 'crypto'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 import { isImagePath, validateImageContent } from '@/lib/imageValidation'
 
 const COLLECTION = 'legalSandboxFiles'
@@ -18,7 +18,7 @@ export type LegalSandboxFile = {
  */
 export async function listLegalSandboxFiles(projectId: string): Promise<LegalSandboxFile[]> {
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   const docs = await db
     .collection(COLLECTION)
     .find({ projectId: new ObjectId(projectId) })
@@ -55,7 +55,7 @@ export async function upsertLegalSandboxFile(
   }
 
   const client = await clientPromise
-  const db = client.db('test')
+  const db = client.db(DB_NAME)
   const coll = db.collection(COLLECTION)
   const size = Buffer.byteLength(contentToSave, 'utf8')
   const hash = crypto.createHash('md5').update(contentToSave).digest('hex')

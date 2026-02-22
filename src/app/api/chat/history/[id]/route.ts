@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
-import { clientPromise } from '@/lib/mongodb'
+import { clientPromise, DB_NAME } from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
 
 export async function GET(
@@ -15,7 +15,7 @@ export async function GET(
     }
 
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     // Get chat history from projectState
     const projectState = await db.collection('projectState').findOne({
@@ -45,7 +45,7 @@ export async function POST(
 
     const { messages } = await request.json()
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     // Update only projectState with new chat history
     const result = await db.collection('projectState').updateOne(

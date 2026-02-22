@@ -1,11 +1,11 @@
-import { clientPromise } from '../mongodb'
+import { clientPromise, DB_NAME } from '../mongodb'
 import { ObjectId } from 'mongodb'
 import { AIMessage } from '@/types'
 
 export async function saveChatHistory(projectId: string, messages: AIMessage[]) {
   try {
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     console.log('Saving chat history for project:', projectId)
     console.log('Messages to save:', messages.length)
@@ -32,7 +32,7 @@ export async function saveChatHistory(projectId: string, messages: AIMessage[]) 
 export async function loadChatHistory(projectId: string): Promise<AIMessage[]> {
   try {
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     console.log('Loading chat history for project:', projectId)
 

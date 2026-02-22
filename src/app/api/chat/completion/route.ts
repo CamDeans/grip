@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
 import { requireAppAccess, requireTokenBalance } from '@/lib/access'
 import { addTokenUsage } from '@/lib/tokenUsage'
-import { clientPromise } from '@/lib/mongodb'
+import { clientPromise, DB_NAME } from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
 import { AIMessage, ProjectState, ChatResponse, ChatError, StepContext } from '@/types'
 import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
     // Get current project state
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const projectState = await db.collection('projectStates').findOne({
       projectId: new ObjectId(projectId)
     }) as ProjectState | null

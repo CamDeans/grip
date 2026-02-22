@@ -6,7 +6,8 @@ import { MongoClient, ObjectId } from 'mongodb'
 /**
  * GET /api/user/backend-connections/mongodb/collections
  * List collection names from the user's connected MongoDB.
- * Prefers _grip_collections metadata; falls back to listCollections.
+ * GRIP app DB: clientPromise uses MONGODB_URI / MONGODB_DB_NAME from .env or Vercel.
+ * User's MongoDB URI comes from Settings (user profile); if unset, returns { collections: [] } so preview does not error.
  */
 export async function GET() {
   try {
@@ -24,10 +25,7 @@ export async function GET() {
 
     const uri = user?.mongodbUri && String(user.mongodbUri).trim()
     if (!uri) {
-      return NextResponse.json(
-        { error: 'No MongoDB connection configured. Add your connection string in Settings → Backend connections.' },
-        { status: 400 }
-      )
+      return NextResponse.json({ collections: [] })
     }
 
     let userClient: MongoClient | null = null

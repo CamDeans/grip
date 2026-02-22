@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ObjectId } from 'mongodb'
 import { getServerAuthSession } from '@/lib/auth'
 import { connectToDatabase } from '@/lib/mongodb'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 
 /**
  * GET /api/tasks/active
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     // Connect to database
     await connectToDatabase()
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
 
     // Get active tasks (status = queued, scheduled, or running)
     const tasks = await db.collection('tasks')

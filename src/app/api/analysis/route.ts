@@ -1,6 +1,6 @@
 import { getServerAuthSession } from '@/lib/auth'
 import { NextResponse } from 'next/server'
-import { clientPromise } from '@/lib/mongodb'
+import { clientPromise, DB_NAME } from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
 import { analyzeRepository } from '@/lib/ai'
 
@@ -112,7 +112,7 @@ export async function GET(request: Request) {
     }
 
     const client = await clientPromise
-    const db = client.db('test') // Explicitly use 'test' database
+    const db = client.db(DB_NAME)
     console.log('Database connection:', {
       name: db.databaseName,
       status: 'connected'

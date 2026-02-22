@@ -6,7 +6,7 @@ import { addTokenUsage } from '@/lib/tokenUsage'
 import { buildTokenBudgetPromptFragment } from '@/lib/constants/tokenBudgetPlan'
 import { generateProjectPlan, getProjectPlan } from '@/lib/services/projectPlanningService'
 import { ObjectId } from 'mongodb'
-import clientPromise from '@/lib/db'
+import clientPromise, { DB_NAME } from '@/lib/db'
 
 /**
  * GET /api/projects/[id]/plan
@@ -31,7 +31,7 @@ export async function GET(
 
     // Check if this is a sandbox project
     const client = await clientPromise
-    const db = client.db('test')
+    const db = client.db(DB_NAME)
     const sandboxProject = await db.collection('sandboxProjects').findOne({
       _id: new ObjectId(id)
     })
