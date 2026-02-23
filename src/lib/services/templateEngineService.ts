@@ -441,6 +441,71 @@ export default async function handler(
       },
       isBuiltIn: true
     })
+
+    // Next.js App Router API route (app/api/**/route.ts) — export GET/POST with NextResponse
+    templates.push({
+      id: 'nextjs-app-api-route',
+      name: 'Next.js App API Route',
+      description: 'Next.js App Router API route (route.ts) with GET/POST',
+      language: 'typescript',
+      fileType: 'ts',
+      template: `import { NextRequest, NextResponse } from 'next/server'
+
+export async function GET(request: NextRequest) {
+  try {
+    return NextResponse.json({ success: true, data: null })
+  } catch (error) {
+    console.error('API error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json().catch(() => ({}))
+    return NextResponse.json({ success: true, data: body })
+  } catch (error) {
+    console.error('API error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}`,
+      variables: [],
+      defaultValues: {},
+      isBuiltIn: true
+    })
+
+    // Generic API route for non-Next stacks (Vite, SvelteKit, Express, etc.) — stack-agnostic return shape
+    templates.push({
+      id: 'generic-api-route',
+      name: 'Generic API Route',
+      description: 'Stack-agnostic API handler for non-Next.js projects; wire to your server by path/method.',
+      language: 'typescript',
+      fileType: 'ts',
+      template: `/**
+ * API handler — wire to your server (Express, Vite, SvelteKit, etc.) by path/method.
+ * Returns { status, body } so any stack can send the response.
+ */
+export async function get(): Promise<{ status: number; body: unknown }> {
+  try {
+    return { status: 200, body: { success: true, data: null } }
+  } catch (error) {
+    console.error('API error:', error)
+    return { status: 500, body: { error: 'Internal server error' } }
+  }
+}
+
+export async function post(body: unknown): Promise<{ status: number; body: unknown }> {
+  try {
+    return { status: 200, body: { success: true, data: body ?? null } }
+  } catch (error) {
+    console.error('API error:', error)
+    return { status: 500, body: { error: 'Internal server error' } }
+  }
+}`,
+      variables: [],
+      defaultValues: {},
+      isBuiltIn: true
+    })
     
     return templates
   } catch (error) {
@@ -684,6 +749,14 @@ export async function generateTemplateVariables(
     projectStructure: IProjectStructureData;
     description?: string;
     phaseContext?: { currentPhase: string; stepTitles: string[] };
+    /** Inferred from repo + analysis; AI uses this to match project stack */
+    framework?: string;
+    /** Repo type from analysis (e.g. web_js, full_stack_js) */
+    repoCategory?: string;
+    /** Primary languages from tree-sitter analysis (identity.primary_languages) */
+    primaryLanguages?: string[];
+    /** Language extension counts from tree-sitter (mainLanguages) */
+    mainLanguages?: Record<string, number>;
   }
 ): Promise<{ variables: ITemplateVariables; totalTokens: number }> {
   try {
@@ -701,6 +774,14 @@ export async function generateTemplateVariables(
     const phaseBlock = projectContext.phaseContext?.stepTitles?.length
       ? `\nCurrent build phase: "${projectContext.phaseContext.currentPhase}". Steps in this phase: ${projectContext.phaseContext.stepTitles.join('; ')}. Generate variable values that support implementing these steps.\n`
       : ''
+    const stackBlock =
+      projectContext.framework || projectContext.repoCategory
+        ? `\nProject stack (from repo + analysis): Framework: ${projectContext.framework ?? 'not specified'}; Repo type: ${projectContext.repoCategory ?? 'not specified'}. Generate variable values that fit this stack and project structure.\n`
+        : ''
+    const languagesBlock =
+      (projectContext.primaryLanguages?.length ?? 0) > 0 || (projectContext.mainLanguages && Object.keys(projectContext.mainLanguages).length > 0)
+        ? `\nLanguages used/referenced in tree-sitter analysis: Primary: ${(projectContext.primaryLanguages ?? []).join(', ') || 'none'}; Extension counts: ${JSON.stringify(projectContext.mainLanguages ?? {})}. Generate variable values that match the languages and conventions of this project.\n`
+        : ''
     
     // Build prompt for AI
     const prompt = `
@@ -711,7 +792,7 @@ Template Variables: ${missingVariables.join(', ')}
 
 File Path: ${projectContext.filePath}
 Project Description: ${projectContext.description || 'Not provided'}
-${phaseBlock}
+${stackBlock}${languagesBlock}${phaseBlock}
 
 Return ONLY a single JSON object. Use double quotes for keys and string values. Do not use backticks. Keep string values short (under 200 chars) so the JSON is valid. Example: {"ComponentName":"MyComponent","ComponentContent":"<p>Hello</p>"}
 `

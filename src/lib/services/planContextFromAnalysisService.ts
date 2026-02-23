@@ -188,10 +188,15 @@ function buildStackGuidance(
 /**
  * Build full plan context from tree-sitter analysis and ideation. Call this before generating the development plan.
  * Optional tier applies character caps to lower token consumption (Starter = tightest).
+ * When structuredAnalysis is missing, uses mainLanguages/primaryLanguages from tree-sitter so plan still reflects repo languages.
  */
 export function buildPlanContextFromAnalysis(input: {
   structuredAnalysis?: any
   projectAnalysis?: string
+  /** From tree-sitter: extension counts (e.g. { ts: 42, py: 5 }) */
+  mainLanguages?: Record<string, number>
+  /** From tree-sitter structured identity.primary_languages */
+  primaryLanguages?: string[]
   ideation?: IdeationInput
   enhancedBuildRequirements?: EnhancedBuildReqsInput
   hasRepo?: boolean
@@ -214,6 +219,17 @@ export function buildPlanContextFromAnalysis(input: {
   const projectType = (sa?.identity?.project_type as string) || ''
 
   let checklistSummary = buildChecklistSummaryFromStructuredAnalysis(sa)
+  // When no structured checklist (e.g. tree-sitter ran without LLM step), use languages from analysis so plan aligns with repo
+  if (!checklistSummary.trim() && (input.primaryLanguages?.length ?? 0) > 0) {
+    checklistSummary = `Languages (from tree-sitter analysis): ${input.primaryLanguages!.join(', ')}. Implement features per ideation and repo structure.`
+  }
+  if (!checklistSummary.trim() && input.mainLanguages && Object.keys(input.mainLanguages).length > 0) {
+    const top = Object.entries(input.mainLanguages)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([ext]) => ext)
+    checklistSummary = `Languages (from tree-sitter analysis): ${top.join(', ')}. Implement features per ideation and repo structure.`
+  }
   const activeLayers = deriveActiveLayers(ideationText, projectType)
   let layerPrompts = buildLayerPrompts(sa, activeLayers)
   const detected = sa ? detectRepoType(sa) : null

@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
+import { requireAppAccess, requireTokenBalance } from '@/lib/access'
 import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { anthropicService } from '@/lib/services/anthropicService'
@@ -35,6 +36,10 @@ export async function POST(request: NextRequest) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  const appDenied = await requireAppAccess(session)
+  if (appDenied) return appDenied
+  const tokenExhausted = await requireTokenBalance(session)
+  if (tokenExhausted) return tokenExhausted
 
   let body: unknown
   try {

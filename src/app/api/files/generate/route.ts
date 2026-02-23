@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
+import { requireAppAccess, requireTokenBalance } from '@/lib/access'
 import { addTokenUsage } from '@/lib/tokenUsage'
 import { generateFile, FileGenerationRequest } from '@/lib/services/fileGeneratorService'
 
@@ -10,6 +11,14 @@ import { generateFile, FileGenerationRequest } from '@/lib/services/fileGenerato
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerAuthSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const appDenied = await requireAppAccess(session)
+    if (appDenied) return appDenied
+    const tokenExhausted = await requireTokenBalance(session)
+    if (tokenExhausted) return tokenExhausted
+
     const body = await request.json()
     
     // Validate required fields

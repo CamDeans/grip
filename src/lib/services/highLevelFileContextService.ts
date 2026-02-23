@@ -18,6 +18,10 @@ export type HighLevelFileContext = {
   entryPath: string
   framework: 'next' | 'vite' | 'cra' | 'expo' | 'generic'
   repoCategory: RepoTypeCategory
+  /** Primary languages from tree-sitter structured analysis (identity.primary_languages) */
+  primaryLanguages?: string[]
+  /** Language extension counts from tree-sitter analysis (mainLanguages) */
+  mainLanguages?: Record<string, number>
 }
 
 const DEFAULT_ENTRY = 'src/index.tsx'
@@ -86,19 +90,42 @@ export async function getProjectContextForHighLevelFiles(projectId: string): Pro
 
   const analysis = await db.collection('analyses').findOne(
     { projectId: projectIdObj },
-    { projection: { 'repositoryAnalysis.structuredAnalysis': 1 } }
-  ) as { repositoryAnalysis?: { structuredAnalysis?: any } } | null
+    {
+      projection: {
+        'repositoryAnalysis.structuredAnalysis': 1,
+        'repositoryAnalysis.mainLanguages': 1,
+        'codeStructure.mainLanguages': 1
+      }
+    }
+  ) as {
+    repositoryAnalysis?: { structuredAnalysis?: any; mainLanguages?: Record<string, number> }
+    codeStructure?: { mainLanguages?: Record<string, number> }
+  } | null
 
   const sa = analysis?.repositoryAnalysis?.structuredAnalysis ?? {}
   const identity = sa?.identity ?? {}
   const projectType = (identity.project_type ?? '').toLowerCase()
-  const filePaths = (sa?.file_manifest?.paths ?? []).map((p) => String(p).replace(/\\/g, '/'))
-  const mainLanguages = (typeof identity.main_languages === 'object' && identity.main_languages !== null)
-    ? identity.main_languages
-    : {}
+  // file_manifest is array of { path, language, ... }; tree-sitter has no .paths
+  const filePaths = ((sa?.file_manifest ?? []) as Array<{ path?: string }>)
+    .map((f) => (f.path && String(f.path).replace(/\\/g, '/')) || '')
+    .filter(Boolean)
+  // Prefer tree-sitter mainLanguages (extension counts); fallback identity.main_languages or primary_languages
+  let mainLanguages: Record<string, number> =
+    analysis?.repositoryAnalysis?.mainLanguages ??
+    analysis?.codeStructure?.mainLanguages ??
+    {}
+  if (typeof identity.main_languages === 'object' && identity.main_languages !== null) {
+    mainLanguages = identity.main_languages as Record<string, number>
+  }
+  if (Object.keys(mainLanguages).length === 0 && Array.isArray(identity.primary_languages) && identity.primary_languages.length > 0) {
+    identity.primary_languages.forEach((lang: string) => {
+      mainLanguages[lang] = (mainLanguages[lang] ?? 0) + 1
+    })
+  }
 
   const { category } = detectRepoType({
     project_type: projectType,
+    primary_languages: identity.primary_languages,
     detected_frameworks: identity.detected_frameworks ?? [],
     filePaths,
     mainLanguages,
@@ -161,5 +188,7 @@ export async function getProjectContextForHighLevelFiles(projectId: string): Pro
     entryPath,
     framework,
     repoCategory: category,
+    primaryLanguages: identity.primary_languages ?? [],
+    mainLanguages: Object.keys(mainLanguages).length > 0 ? mainLanguages : undefined,
   }
 }

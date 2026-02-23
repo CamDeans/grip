@@ -40,6 +40,14 @@ export interface FileGenerationRequest {
   description?: string;
   /** When set, template variables and descriptions align with this phase and its steps */
   phaseContext?: PhaseContext;
+  /** Inferred from repo + analysis; used for template choice and AI variable generation */
+  framework?: string;
+  /** Repo type from analysis (e.g. web_js, full_stack_js); used in AI context */
+  repoCategory?: string;
+  /** Primary languages from tree-sitter analysis (identity.primary_languages); used in AI context */
+  primaryLanguages?: string[];
+  /** Language extension counts from tree-sitter (mainLanguages); used in AI context */
+  mainLanguages?: Record<string, number>;
 }
 
 /**
@@ -146,7 +154,9 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
       'env-example',
       'readme-md',
       'index-tsx',
-      'globals-css'
+      'globals-css',
+      'nextjs-app-api-route',
+      'generic-api-route'
     ].includes(request.templateId)
     if (Object.keys(variables).length === 0) {
       if (useDefaultValuesOnly && template.defaultValues && Object.keys(template.defaultValues).length >= 0) {
@@ -159,7 +169,11 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
             fileNode,
             projectStructure,
             description: request.description,
-            phaseContext: request.phaseContext
+            phaseContext: request.phaseContext,
+            framework: request.framework,
+            repoCategory: request.repoCategory,
+            primaryLanguages: request.primaryLanguages,
+            mainLanguages: request.mainLanguages
           })
           variables = tvResult?.variables ?? { ...template.defaultValues } as ITemplateVariables
           templateTokens = tvResult?.totalTokens ?? 0

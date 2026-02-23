@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
+import { requireAppAccess, requireTokenBalance } from '@/lib/access'
 import { addTokenUsage } from '@/lib/tokenUsage'
 import { getFilesToGenerate } from '@/lib/services/projectPlanningService'
+import { getProjectStructure, storeProjectStructure } from '@/lib/services/planStorageService'
 import { generateFile, getGeneratedFiles, FileGenerationRequest } from '@/lib/services/fileGeneratorService'
 import { getProjectState } from '@/lib/services/projectStateService'
 import { getProjectContextForHighLevelFiles } from '@/lib/services/highLevelFileContextService'
@@ -20,6 +22,26 @@ function parentFoldersForPath(fullPath: string): string[] {
   return out
 }
 
+/** Resolve template by path and inferred framework so generation matches repo + analysis (not hardcoded Next.js). */
+function resolveTemplateForPath(
+  fullPath: string,
+  planTemplate: string,
+  framework: string | undefined
+): string {
+  const normalized = fullPath.replace(/^\/+/, '').replace(/\\/g, '/')
+  const isNextAppApiRoute = /^app\/api\/.+\/route\.(ts|js)$/.test(normalized)
+  if (isNextAppApiRoute) {
+    return framework === 'next' ? 'nextjs-app-api-route' : 'generic-api-route'
+  }
+  // Other API-like paths (e.g. src/routes/*.ts, src/api/*.ts) for non-Next stacks
+  const looksLikeApiRoute =
+    /^(src\/)?(api|routes)\/.+\.(ts|js)$/.test(normalized) || /\/route\.(ts|js)$/.test(normalized)
+  if (looksLikeApiRoute && framework && framework !== 'next') {
+    return 'generic-api-route'
+  }
+  return planTemplate
+}
+
 /**
  * POST /api/projects/[id]/files/generate
  * Generate files based on project plan. Writes to projectFiles so files appear in Repo and Generated files.
@@ -34,6 +56,10 @@ export async function POST(
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const appDenied = await requireAppAccess(session)
+    if (appDenied) return appDenied
+    const tokenExhausted = await requireTokenBalance(session)
+    if (tokenExhausted) return tokenExhausted
 
     const { id } = await params
 
@@ -53,6 +79,35 @@ export async function POST(
         fileCount: 0,
         generatedFiles: []
       })
+    }
+
+    // Ensure project structure exists so generateFile() can run (plan may have suggestedFiles but structure not yet stored)
+    let structure = await getProjectStructure(id)
+    if (!structure) {
+      const fullPaths = filesToGenerate.map((f) => {
+        const path = (f.path || '').replace(/^\/+/, '')
+        const name = f.name || path.split('/').pop() || 'file'
+        return path && !path.endsWith(name) ? `${path}/${name}` : path || name
+      })
+      const minimalHierarchy = {
+        type: 'directory' as const,
+        name: '',
+        path: '',
+        children: fullPaths.map((fullPath) => ({
+          type: 'file' as const,
+          name: fullPath.split('/').pop() || fullPath,
+          path: fullPath,
+        })),
+      }
+      await storeProjectStructure({
+        projectId: new ObjectId(id),
+        name: 'Project',
+        description: 'From plan',
+        fileHierarchy: minimalHierarchy,
+        dependencies: {},
+        buildConfig: { commands: {}, environment: {} },
+      } as Parameters<typeof storeProjectStructure>[0])
+      structure = await getProjectStructure(id)
     }
 
     const existingFiles = await getGeneratedFiles(id)
@@ -95,6 +150,11 @@ export async function POST(
             const generatedFiles: Array<{ id?: string; name?: string; path?: string; success: boolean; error?: string }> = []
             let streamTotalTokens = 0
 
+            const framework = highLevelContext?.framework ?? undefined
+            const repoCategory = highLevelContext?.repoCategory ?? undefined
+            const primaryLanguages = highLevelContext?.primaryLanguages ?? undefined
+            const mainLanguages = highLevelContext?.mainLanguages ?? undefined
+
             for (const file of filesToGenerate) {
               const meta = file.generationMetadata || {}
               const filePath = file.path || ''
@@ -108,7 +168,7 @@ export async function POST(
                 }
               }
 
-              const templateId = meta.template || 'ts-utility'
+              const templateId = resolveTemplateForPath(fullPath, meta.template || 'ts-utility', framework)
               let variables = meta.variables || {}
               if (templateId === 'package-json' && highLevelContext) {
                 variables = {
@@ -134,7 +194,11 @@ export async function POST(
                 templateId,
                 variables,
                 description: meta.description || 'Generated from plan',
-                phaseContext
+                phaseContext,
+                framework,
+                repoCategory,
+                primaryLanguages,
+                mainLanguages
               }
 
               try {
@@ -177,6 +241,11 @@ export async function POST(
       })
     }
 
+    const framework = highLevelContext?.framework ?? undefined
+    const repoCategory = highLevelContext?.repoCategory ?? undefined
+    const primaryLanguages = highLevelContext?.primaryLanguages ?? undefined
+    const mainLanguages = highLevelContext?.mainLanguages ?? undefined
+
     const generatedFiles: Array<{ id?: string; name?: string; path?: string; success: boolean; error?: string }> = []
     let totalTokens = 0
     for (const file of filesToGenerate) {
@@ -185,7 +254,7 @@ export async function POST(
         const filePath = file.path || ''
         const fileName = file.name || filePath.split('/').pop() || 'file.txt'
         const fullPath = filePath && !filePath.endsWith(fileName) ? `${filePath.replace(/\/$/, '')}/${fileName}` : (filePath || fileName)
-        const templateId = meta.template || 'ts-utility'
+        const templateId = resolveTemplateForPath(fullPath, meta.template || 'ts-utility', framework)
 
         let variables = meta.variables || {}
         if (templateId === 'package-json' && highLevelContext) {
@@ -204,7 +273,11 @@ export async function POST(
           templateId,
           variables,
           description: meta.description || 'Generated from plan',
-          phaseContext
+          phaseContext,
+          framework,
+          repoCategory,
+          primaryLanguages,
+          mainLanguages
         }
 
         const result = await generateFile(genRequest)

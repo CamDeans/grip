@@ -228,8 +228,7 @@ export async function requireTokenBalance(
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const access = await getAppAccess(session)
   if (!access.hasAccess) return null
-  // Paid subscribers: no token limit block (usage still recorded via addTokenUsage)
-  if (access.source === 'subscription') return null
+  // Enforce token limit for all users (admin, subscription, valued tester) so no one exceeds allotted tokens
   const used = access.tokensUsedThisPeriod ?? 0
   const allowance = access.tokenAllowance ?? 0
   const remaining = allowance > 0 ? allowance - used : 0

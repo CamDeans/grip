@@ -146,11 +146,20 @@ export async function generateDevelopmentPlan(projectId: string, options?: Gener
       const analysis = await db.collection('analyses').findOne(
         { projectId: new ObjectId(projectId) },
         { projection: { repositoryAnalysis: 1 } }
-      ) as { repositoryAnalysis?: { structuredAnalysis?: any; projectAnalysis?: string } } | null
+      ) as {
+        repositoryAnalysis?: {
+          structuredAnalysis?: any
+          projectAnalysis?: string
+          mainLanguages?: Record<string, number>
+        }
+      } | null
       const ra = analysis?.repositoryAnalysis
+      const sa = ra?.structuredAnalysis
       planContext = buildPlanContextFromAnalysis({
-        structuredAnalysis: ra?.structuredAnalysis,
+        structuredAnalysis: sa,
         projectAnalysis: ra?.projectAnalysis,
+        mainLanguages: ra?.mainLanguages,
+        primaryLanguages: sa?.identity?.primary_languages,
         ideation: project.ideation,
         enhancedBuildRequirements: project.enhancedBuildRequirements,
         hasRepo: !!(project.repository?.owner && project.repository?.name),

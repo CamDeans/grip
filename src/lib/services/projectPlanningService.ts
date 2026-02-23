@@ -307,15 +307,18 @@ const MANDATORY_STACKBLITZ_FILES: Array<{ path: string; description: string }> =
 ]
 
 function defaultTemplateForPath(pathOrName: string): string {
-  const name = pathOrName.split('/').pop() || ''
+  const normalized = pathOrName.replace(/^\/+/, '').replace(/\\/g, '/')
+  const name = normalized.split('/').pop() || ''
   const ext = name.split('.').pop()?.toLowerCase() || ''
   if (name === 'package.json') return 'package-json'
   if (name === 'tsconfig.json') return 'tsconfig-json'
   if (name === '.env.example') return 'env-example'
   if (name === 'README.md') return 'readme-md'
-  if (name === 'index.tsx' && pathOrName.includes('src')) return 'index-tsx'
-  if (name === 'globals.css' || (name === 'globals.css' && pathOrName.includes('app'))) return 'globals-css'
+  if (name === 'index.tsx' && normalized.includes('src')) return 'index-tsx'
+  if (name === 'globals.css' || (name === 'globals.css' && normalized.includes('app'))) return 'globals-css'
   if (name === 'page.tsx') return 'nextjs-page'
+  // Next.js App Router API routes (app/api/**/route.ts or route.js)
+  if ((name === 'route.ts' || name === 'route.js') && /^app\/api\//.test(normalized)) return 'nextjs-app-api-route'
   if (ext === 'tsx' || ext === 'jsx') return 'react-component'
   if (ext === 'ts' || ext === 'js') return 'ts-utility'
   if (ext === 'css') return 'globals-css'
@@ -379,16 +382,18 @@ export async function getFilesToGenerate(projectId: string): Promise<Array<IFile
     }
     if (plan?.suggestedFiles?.length) {
       const filesToGenerate: Array<IFileNode & { generationMetadata: any }> = plan.suggestedFiles.map((f, idx) => {
-        const path = f.path.replace(/^\/+/, '')
+        const path = f.path.replace(/^\/+/, '').replace(/\\/g, '/')
         const name = path.includes('/') ? path.split('/').pop()! : path
-        const isAppOrPages = /(^|\/)(app|pages)(\/|$)/.test(path)
+        // App Router API routes (app/api/**/route.ts) use nextjs-app-api-route; pages under app/pages use nextjs-page
+        const isAppApiRoute = /^app\/api\/.+\/route\.(ts|js)$/.test(path)
+        const isAppOrPages = !isAppApiRoute && /(^|\/)(app|pages)(\/|$)/.test(path)
         return {
           type: 'file' as const,
           name,
           path,
           description: f.description || `From plan phase ${f.phaseId || '—'}`,
           generationMetadata: {
-            template: isAppOrPages ? 'nextjs-page' : defaultTemplateForPath(path),
+            template: isAppApiRoute ? 'nextjs-app-api-route' : (isAppOrPages ? 'nextjs-page' : defaultTemplateForPath(path)),
             variables: {},
             priority: plan.suggestedFiles!.length - idx,
             dependencies: [],

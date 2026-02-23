@@ -55,10 +55,11 @@ So:
 
 - **addTokenUsage(userId, amount)** (`src/lib/tokenUsage.ts`)  
   Runs on the **users** collection:
-  - `$inc: { tokensUsedThisPeriod: amount }`
-  - `$set: { updatedAt: new Date() }`
+  - Reads current `tokenAllowance` and `tokensUsedThisPeriod`.
+  - Sets `tokensUsedThisPeriod = min(used + amount, tokenAllowance)` so the user never exceeds their allowance.
+  - `$set: { tokensUsedThisPeriod: capped, updatedAt: new Date() }`
 
-All token-consuming routes (chat, enhanced-chat, projects create/analyze, etc.) call this after a successful AI request.
+  Remaining tokens = tokenAllowance − tokensUsedThisPeriod; each tracked request increases used (capped), so the user cannot exceed their allotted amount. All token-consuming routes (chat, enhanced-chat, projects create/analyze, files/generate, etc.) call this after a successful AI request. Routes must also call **requireTokenBalance(session)** before the AI call so requests are blocked when the user has no tokens left (including paid subscribers).
 
 ### 2.4 Period reset
 
