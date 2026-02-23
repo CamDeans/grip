@@ -89,7 +89,7 @@ function buildMergedTree(
 /**
  * GET /api/projects/[id]/project-tree
  * Returns one unified tree: linked repo + generated projectFiles (same folder structure; generated overrides same path).
- * Lets the user see "my project" (repo + their new code) in one place. No restructuring of the original repo.
+ * ?gripOnly=1 = only GRIP-generated files (no repo). User can view "Generated only" on Repo page.
  */
 export async function GET(
   request: NextRequest,
@@ -106,6 +106,9 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 })
     }
 
+    const { searchParams } = new URL(request.url)
+    const gripOnly = searchParams.get('gripOnly') === '1'
+
     const client = await clientPromise
     const db = client.db(DB_NAME)
     const project = await db.collection('projects').findOne({
@@ -115,7 +118,7 @@ export async function GET(
     const repoPaths: { path: string; size?: number }[] = []
     let repoLabel = ''
 
-    if (project?.repository) {
+    if (!gripOnly && project?.repository) {
       const files = await getOrCloneRepository(
         project.repository.owner,
         project.repository.name,
@@ -150,11 +153,13 @@ export async function GET(
       repo: repoLabel,
       fileCount,
       generatedCount,
-      message: generatedCount > 0
-        ? 'Project view: repo + your generated files. Same structure; your files override where paths match.'
-        : repoLabel
-          ? 'Repo only. Save code from chat or generate files to see them here.'
-          : 'No repo linked. Add generated files or link a repo in settings.',
+      message: gripOnly
+        ? (generatedCount > 0 ? 'Generated files only (GRIP-created). GitHub repo is reference only and not shown here.' : 'No generated files yet. Run plan and build or add files in Develop.')
+        : generatedCount > 0
+          ? 'Project view: repo + your generated files. Same structure; your files override where paths match.'
+          : repoLabel
+            ? 'Repo only. Save code from chat or generate files to see them here.'
+            : 'No repo linked. Add generated files or link a repo in settings.',
     })
   } catch (error) {
     console.error('Project tree error:', error)

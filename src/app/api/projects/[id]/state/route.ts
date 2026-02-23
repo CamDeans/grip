@@ -179,10 +179,14 @@ export async function GET(
         // ignore
       }
       if (!state) {
-        return new NextResponse(
-          JSON.stringify({ error: 'Project state not found' }),
-          { status: 404 }
-        )
+        // Return 200 with empty state so overview doesn't see 404 for new/unplanned projects
+        return NextResponse.json({
+          projectId: id,
+          phases: [],
+          currentPhase: '',
+          progress: 0,
+          updatedAt: new Date().toISOString(),
+        })
       }
     }
 

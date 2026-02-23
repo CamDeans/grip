@@ -8,7 +8,7 @@ import { getProjectFilesForExport } from '@/lib/services/exportService'
 
 /**
  * GET /api/projects/[id]/download
- * Returns a ZIP of the full project (repo + projectFiles). No GitHub or terminal needed.
+ * Returns a ZIP of GRIP-generated files only (projectFiles). GitHub repo is reference only—not included.
  */
 export async function GET(
   request: NextRequest,
@@ -55,13 +55,13 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Use appropriate export function based on project type
+    // Use appropriate export function. Main projects: gripOnly so ZIP contains only GRIP-generated files (repo is reference only).
     const filesArray = isSandbox
       ? await (await import('@/lib/services/legalSandboxService')).getLegalSandboxFilesForExport(projectId)
-      : await getProjectFilesForExport(projectId)
+      : await getProjectFilesForExport(projectId, { gripOnly: true })
     if (!filesArray.length) {
       return NextResponse.json(
-        { error: 'No files to download. Add generated files or link a repo.' },
+        { error: 'No files to download. Run the plan and build to generate files, or add files in Develop.' },
         { status: 400 }
       )
     }

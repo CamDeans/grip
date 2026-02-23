@@ -12,9 +12,8 @@ import { embedImagesAndRemoveImageFiles } from '@/lib/stackblitzImageEmbed'
 /**
  * GET /api/projects/[id]/export-files
  * Returns project file set for StackBlitz as { files: Record<path, content>, title }.
- * Includes ALL repo files plus GRIP project files (saved/generated in chat); project files
- * override repo at the same path. So StackBlitz gets the full repo (including images) and
- * any GRIP-created or updated files—no user action required.
+ * GitHub repo is REFERENCE ONLY: only GRIP-generated files (projectFiles) are included.
+ * StackBlitz and exports never include the linked repo—only new code created by GRIP.
  */
 export async function GET(
   _request: NextRequest,
@@ -61,13 +60,13 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Use appropriate export function based on project type
+    // Use appropriate export function based on project type. Main projects: gripOnly so StackBlitz gets only GRIP-generated files (repo is reference only).
     const filesArray = isSandbox
       ? await (await import('@/lib/services/legalSandboxService')).getLegalSandboxFilesForExport(projectId)
-      : await getProjectFilesForExport(projectId, { gripOnly: false })
+      : await getProjectFilesForExport(projectId, { gripOnly: true })
     if (!filesArray.length) {
       return NextResponse.json(
-        { error: 'No files to export. Link a repo or add generated files.' },
+        { error: 'No files to export. Run the plan and build to generate files, or add files in Develop.' },
         { status: 400 }
       )
     }

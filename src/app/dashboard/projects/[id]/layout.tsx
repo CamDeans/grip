@@ -63,7 +63,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
       : `/api/projects/${projectId}/plan`
     Promise.all([
       fetch(`/api/projects/${projectId}/analysis/status`).then((r) => (r.ok ? r.json() : null)).then((d) => d?.hasAnalysis ?? d?.analysisCompleted ?? false).catch(() => false),
-      fetch(planUrl).then((r) => r.ok).catch(() => false),
+      fetch(planUrl).then((r) => r.json()).then((d) => !!d?.plan).catch(() => false),
     ]).then(([analysis, plan]) => {
       setHasAnalysis(!!analysis)
       setHasPlan(!!plan)

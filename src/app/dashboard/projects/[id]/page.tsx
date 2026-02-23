@@ -282,7 +282,7 @@ export default function ProjectOverviewPage() {
     Promise.all([
       fetch(stateUrl).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       fetch(analysisUrl).then((r) => (r.ok ? r.json() : null)).then((d) => d?.hasAnalysis ?? d?.analysisCompleted ?? false).catch(() => false),
-      fetch(planUrl).then((r) => r.ok).catch(() => false),
+      fetch(planUrl).then((r) => r.json()).then((d) => !!d?.plan).catch(() => false),
     ]).then(([state, analysis, plan]) => {
       setProjectState(state && (state.phases?.length || state.currentPhase) ? state : null)
       setHasAnalysis(!!analysis)
@@ -318,7 +318,7 @@ export default function ProjectOverviewPage() {
         if (rerunTrigger === 0) {
           const [stateRes, planRes] = await Promise.all([
             fetch(`/api/projects/${projectId}/state`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-            fetch(`/api/projects/${projectId}/plan`).then((r) => r.ok).catch(() => false),
+            fetch(`/api/projects/${projectId}/plan`).then((r) => r.json()).then((d) => !!d?.plan).catch(() => false),
           ])
           const hasPlanAlready = !!planRes
           const hasPhasesAlready = !!(stateRes?.phases?.length)

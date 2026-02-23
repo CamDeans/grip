@@ -53,7 +53,7 @@ interface ProjectTreeNode extends RepoTreeNode {
   fileId?: string
 }
 
-type ViewMode = 'repo' | 'project'
+type ViewMode = 'repo' | 'project' | 'generated'
 
 /** Indentation per depth level (rem) for proper nested folder display */
 const INDENT_PER_LEVEL = 1.25
@@ -97,8 +97,9 @@ export default function ProjectRepoPage() {
       setLoading(true)
       setError(null)
       try {
-        if (viewMode === 'project') {
-          const res = await fetch(`/api/projects/${projectId}/project-tree`)
+        if (viewMode === 'project' || viewMode === 'generated') {
+          const url = viewMode === 'generated' ? `/api/projects/${projectId}/project-tree?gripOnly=1` : `/api/projects/${projectId}/project-tree`
+          const res = await fetch(url)
           const data = await res.json()
           if (!res.ok) throw new Error(data.error || 'Failed to load project tree')
           setTree((data.tree || []) as ProjectTreeNode[])
@@ -131,8 +132,8 @@ export default function ProjectRepoPage() {
       return
     }
     setContentLoading(true)
-    // Generated or both: fetch from project-files by fileId; else from repo
-    if (selectedFileId && (selectedFileSource === 'generated' || selectedFileSource === 'both')) {
+    // Generated or both: fetch from project-files by fileId; else from repo (project/generated view use project-files when fileId present)
+    if (selectedFileId && (viewMode === 'generated' || selectedFileSource === 'generated' || selectedFileSource === 'both')) {
       fetch(`/api/project-files/${selectedFileId}`)
         .then((r) => r.json())
         .then((data) => {
@@ -167,7 +168,7 @@ export default function ProjectRepoPage() {
         })
         .finally(() => setContentLoading(false))
     }
-  }, [projectId, selectedPath, selectedFileId, selectedFileSource])
+  }, [projectId, selectedPath, selectedFileId, selectedFileSource, viewMode])
 
   useEffect(() => {
     if (!projectId || !searchQuery.trim()) {
@@ -220,7 +221,7 @@ export default function ProjectRepoPage() {
     if (!projectId) return null
     if (selectedPath === path && fileContent != null && fileContent !== '(binary or empty)') return fileContent
     try {
-      if (fileId && (viewMode === 'project')) {
+      if (fileId && (viewMode === 'project' || viewMode === 'generated')) {
         const res = await fetch(`/api/project-files/${fileId}`)
         const data = await res.json()
         return typeof data.content === 'string' ? data.content : null
@@ -289,7 +290,8 @@ export default function ProjectRepoPage() {
       sonnerToast.success(`${ok} file(s) pasted`, { description: targetPath ? `Into ${targetPath}` : 'At project root' })
       setTree([])
       setLoading(true)
-      const res = await fetch(`/api/projects/${projectId}/project-tree`)
+      const url = viewMode === 'generated' ? `/api/projects/${projectId}/project-tree?gripOnly=1` : viewMode === 'project' ? `/api/projects/${projectId}/project-tree` : `/api/projects/${projectId}/repo/tree`
+      const res = await fetch(url)
       const data = await res.json()
       if (res.ok) {
         setTree((data.tree || []) as ProjectTreeNode[])
@@ -360,7 +362,7 @@ export default function ProjectRepoPage() {
     if (!projectId || actionLoading) return
     setActionLoading(true)
     try {
-      if (fileId && (viewMode === 'project')) {
+      if (fileId && (viewMode === 'project' || viewMode === 'generated')) {
         const res = await fetch(`/api/project-files/${fileId}`, { method: 'DELETE' })
         if (!res.ok) throw new Error((await res.json()).error || 'Delete failed')
         sonnerToast.success('File deleted')
@@ -372,7 +374,7 @@ export default function ProjectRepoPage() {
       setDeleteConfirm(null)
       if (selectedPath === path) setSelectedPath(null)
       setLoading(true)
-      const url = viewMode === 'project' ? `/api/projects/${projectId}/project-tree` : `/api/projects/${projectId}/repo/tree`
+      const url = viewMode === 'repo' ? `/api/projects/${projectId}/repo/tree` : viewMode === 'generated' ? `/api/projects/${projectId}/project-tree?gripOnly=1` : `/api/projects/${projectId}/project-tree`
       const res = await fetch(url)
       const data = await res.json()
       if (res.ok) {
@@ -392,7 +394,7 @@ export default function ProjectRepoPage() {
     if (!projectId || actionLoading) return
     setActionLoading(true)
     try {
-      if (viewMode === 'project') {
+      if (viewMode === 'project' || viewMode === 'generated') {
         const [repoRes, filesRes] = await Promise.all([
           fetch(`/api/projects/${projectId}/repo/folder?path=${encodeURIComponent(folderPath)}`, { method: 'DELETE' }),
           fetch(`/api/projects/${projectId}/files/folder?path=${encodeURIComponent(folderPath)}`, { method: 'DELETE' }),
@@ -411,7 +413,7 @@ export default function ProjectRepoPage() {
       setDeleteConfirm(null)
       setTree([])
       setLoading(true)
-      const url = viewMode === 'project' ? `/api/projects/${projectId}/project-tree` : `/api/projects/${projectId}/repo/tree`
+      const url = viewMode === 'repo' ? `/api/projects/${projectId}/repo/tree` : viewMode === 'generated' ? `/api/projects/${projectId}/project-tree?gripOnly=1` : `/api/projects/${projectId}/project-tree`
       const res = await fetch(url)
       const data = await res.json()
       if (res.ok) {
@@ -447,7 +449,7 @@ export default function ProjectRepoPage() {
       setNewSubfolderName('')
       setTree([])
       setLoading(true)
-      const url = viewMode === 'project' ? `/api/projects/${projectId}/project-tree` : `/api/projects/${projectId}/repo/tree`
+      const url = viewMode === 'repo' ? `/api/projects/${projectId}/repo/tree` : viewMode === 'generated' ? `/api/projects/${projectId}/project-tree?gripOnly=1` : `/api/projects/${projectId}/project-tree`
       const treeRes = await fetch(url)
       const treeData = await treeRes.json()
       if (treeRes.ok) {
@@ -488,7 +490,7 @@ export default function ProjectRepoPage() {
     const newPath = renameValue.trim()
     setActionLoading(true)
     try {
-      if (renamePath.fileId && viewMode === 'project') {
+      if (renamePath.fileId && (viewMode === 'project' || viewMode === 'generated')) {
         const lastSlash = newPath.lastIndexOf('/')
         const path = lastSlash >= 0 ? newPath.slice(0, lastSlash) : ''
         const filename = lastSlash >= 0 ? newPath.slice(lastSlash + 1) : newPath
@@ -512,7 +514,7 @@ export default function ProjectRepoPage() {
       setRenameValue('')
       setTree([])
       setLoading(true)
-      const url = viewMode === 'project' ? `/api/projects/${projectId}/project-tree` : `/api/projects/${projectId}/repo/tree`
+      const url = viewMode === 'repo' ? `/api/projects/${projectId}/repo/tree` : viewMode === 'generated' ? `/api/projects/${projectId}/project-tree?gripOnly=1` : `/api/projects/${projectId}/project-tree`
       const res = await fetch(url)
       const data = await res.json()
       if (res.ok) {
@@ -552,7 +554,7 @@ export default function ProjectRepoPage() {
               <FolderOpen className="h-4 w-4 shrink-0 text-amber-500" />
               <span className="truncate">{node.name}</span>
             </button>
-            {viewMode === 'project' && (
+            {(viewMode === 'project' || viewMode === 'generated') && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -566,7 +568,7 @@ export default function ProjectRepoPage() {
                 <FolderPlus className="h-3.5 w-3.5" />
               </button>
             )}
-            {viewMode === 'project' && copiedFiles.length > 0 && (
+            {(viewMode === 'project' || viewMode === 'generated') && copiedFiles.length > 0 && (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); handlePasteIntoFolder(node.path); }}
@@ -587,7 +589,7 @@ export default function ProjectRepoPage() {
               <FolderMinus className="h-3.5 w-3.5" />
             </button>
           </div>
-          {createFolderInside === node.path && viewMode === 'project' && (
+          {createFolderInside === node.path && (viewMode === 'project' || viewMode === 'generated') && (
             <div className="flex items-center gap-2 py-1 px-2 rounded bg-muted/50 ml-6" style={{ paddingLeft: `calc(0.5rem + ${(depth + 1) * INDENT_PER_LEVEL}rem)` }}>
               <Input
                 placeholder="New folder name"
@@ -626,7 +628,7 @@ export default function ProjectRepoPage() {
         )}
         style={{ paddingLeft: `calc(0.5rem + ${depth * INDENT_PER_LEVEL}rem)` }}
       >
-        {viewMode === 'project' && (
+        {(viewMode === 'project' || viewMode === 'generated') && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); toggleFileSelection(fullPath); }}
@@ -708,6 +710,17 @@ export default function ProjectRepoPage() {
             </button>
             <button
               type="button"
+              onClick={() => setViewMode('generated')}
+              className={cn(
+                'flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded',
+                viewMode === 'generated' ? 'bg-background text-foreground shadow' : 'text-text-secondary hover:text-foreground'
+              )}
+            >
+              <FileCode className="h-3.5 w-3.5" />
+              Generated only
+            </button>
+            <button
+              type="button"
               onClick={() => setViewMode('repo')}
               className={cn(
                 'flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded',
@@ -720,7 +733,7 @@ export default function ProjectRepoPage() {
           {repo && (
             <span className="text-sm text-text-secondary">
               {repo}
-              {viewMode === 'project' && generatedCount > 0 ? ` · ${fileCount} repo + ${generatedCount} yours` : ` · ${fileCount} file${fileCount !== 1 ? 's' : ''}`}
+              {viewMode === 'project' && generatedCount > 0 ? ` · ${fileCount} repo + ${generatedCount} yours` : viewMode === 'generated' ? ` · ${generatedCount} generated` : ` · ${fileCount} file${fileCount !== 1 ? 's' : ''}`}
             </span>
           )}
         </div>
@@ -729,7 +742,9 @@ export default function ProjectRepoPage() {
       <p className="text-sm text-text-secondary">
         {viewMode === 'project'
           ? 'One tree: linked repo + your generated files (saved from chat or Plan). Same folder structure; your files override where paths match. No restructuring—you keep ownership of your additions.'
-          : 'Every folder and file in your linked GitHub repo. Click a file to view or edit. Search by path or content.'}
+          : viewMode === 'generated'
+            ? 'GRIP-created folders and files only (no repo). GitHub repo is reference only—StackBlitz and exports use only these files.'
+            : 'Every folder and file in your linked GitHub repo (reference only). Click a file to view or edit. Search by path or content.'}
       </p>
 
       {!loading && !error && tree.length > 0 && (
@@ -759,7 +774,9 @@ export default function ProjectRepoPage() {
           <p className="text-sm text-text-secondary mt-2">
             {viewMode === 'project'
               ? 'Link a GitHub repository in project settings or save code from chat (Develop) to see files here.'
-              : 'Link a GitHub repository in project settings, then return here.'}
+              : viewMode === 'generated'
+                ? 'Run the plan and build on Overview, or add files in Develop, to see generated files here.'
+                : 'Link a GitHub repository in project settings, then return here.'}
           </p>
         </Card>
       ) : tree.length === 0 ? (
@@ -767,7 +784,9 @@ export default function ProjectRepoPage() {
           <p className="text-text-secondary">
             {viewMode === 'project'
               ? 'No repo or generated files yet. Link a repo in settings or save code from chat (Develop) to build your project tree.'
-              : 'No files in repository yet. Clone or refresh the repo.'}
+              : viewMode === 'generated'
+                ? 'No generated files yet. Run the plan and build on Overview, or add files in Develop.'
+                : 'No files in repository yet. Clone or refresh the repo.'}
           </p>
         </Card>
       ) : (
@@ -823,7 +842,7 @@ export default function ProjectRepoPage() {
           <Card className="p-4 max-h-[70vh] overflow-y-auto min-w-0">
             <h3 className="text-sm font-medium text-text-secondary mb-2">Files & folders</h3>
             <p className="text-xs text-text-muted mb-2">Hover a file for Copy/Rename/Delete; use checkboxes to select multiple, then Copy selected. Hover a folder for Paste / New folder / Delete.</p>
-            {viewMode === 'project' && (
+            {(viewMode === 'project' || viewMode === 'generated') && (
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setShowNewFolder((v) => !v)} className="gap-1">
                   <FolderPlus className="h-3.5 w-3.5" />

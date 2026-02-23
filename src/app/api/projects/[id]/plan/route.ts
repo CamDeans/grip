@@ -51,14 +51,16 @@ export async function GET(
           dependencyTree: null,
         })
       }
-      return NextResponse.json({ error: 'Project plan not found' }, { status: 404 })
+      // No plan yet — return 200 with empty so overview doesn't log 404
+      return NextResponse.json({ plan: null, phases: [] })
     }
 
     // Get the project plan for main projects
     const plan = await getProjectPlan(id)
 
     if (!plan) {
-      return NextResponse.json({ error: 'Project plan not found' }, { status: 404 })
+      // No plan yet — return 200 with empty so overview doesn't log 404
+      return NextResponse.json({ plan: null, phases: [] })
     }
 
     return NextResponse.json(plan)

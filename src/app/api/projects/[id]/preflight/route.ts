@@ -69,8 +69,8 @@ export async function GET(
         ? await (await import('@/lib/services/legalSandboxService')).getLegalSandboxFilesForExport(projectId)
         : await getProjectFilesForExport(projectId, { gripOnly: true })
       if (!filesArray.length) {
-        errors.push('No files to run. Add generated files in Develop (chat) or link a repo.')
-        suggestions.push('Use GRIP in Develop to generate code and save files to the project, or connect a GitHub repo.')
+        errors.push('No files to run. Run the plan and build to generate files, or add files in Develop.')
+        suggestions.push('Use Overview automation to generate files, or use Develop to generate and save files.')
       } else {
         const validation = validatePackageJsonForStackBlitz(filesArray)
         if (!validation.ok) {
@@ -83,10 +83,10 @@ export async function GET(
     if (target === 'export') {
       const filesArray = isSandbox
         ? await (await import('@/lib/services/legalSandboxService')).getLegalSandboxFilesForExport(projectId)
-        : await getProjectFilesForExport(projectId)
+        : await getProjectFilesForExport(projectId, { gripOnly: true })
       if (!filesArray.length) {
-        errors.push('No files to export. Add generated files or link a repo.')
-        suggestions.push('Use Develop to generate and save files, or connect a GitHub repo.')
+        errors.push('No files to export. Run the plan and build to generate files, or add files in Develop.')
+        suggestions.push('Use Overview automation to generate files, or use Develop to generate and save files.')
       }
     }
 

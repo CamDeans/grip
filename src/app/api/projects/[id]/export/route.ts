@@ -87,12 +87,11 @@ export async function POST(
       )
     }
 
-    // Full project = same as Repo page: linked repo files + generated projectFiles (projectFiles override same path).
-    // First commit will contain this entire set.
-    const filesArray = await getProjectFilesForExport(projectId)
+    // GitHub repo is REFERENCE ONLY. Export contains only GRIP-generated files (projectFiles), never the linked repo.
+    const filesArray = await getProjectFilesForExport(projectId, { gripOnly: true })
     if (!filesArray.length) {
       return NextResponse.json(
-        { error: 'No files to export. Add generated files in chat or link a repo and ensure it has been cloned.' },
+        { error: 'No files to export. Run the plan and build to generate files, or add files in Develop.' },
         { status: 400 }
       )
     }
