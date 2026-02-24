@@ -30,3 +30,5 @@ alwaysApply: true
 - **files/generate route:** On any file failure, response/stream includes `mandatoryRuleMessage` so the client can show the error.
 
 **Outcome:** Every file in the plan/build either gets real code (and is saved) or generation fails for that file and the user sees the error. No file is ever persisted with empty or placeholder-only content.
+
+**Overview automation (concrete):** During the Overview in-flight modal, GRIP runs file generation for **every** file in the plan. It does not stop early; it does not consider the phase complete until each file has been attempted and either has full code saved or a reported failure. The automation runs until all file creations have full code for ALL files (or explicit failures are emitted). Rerun is available for the user to retry after fixing issues.

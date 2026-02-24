@@ -21,6 +21,7 @@ import {
   MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD,
   MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD,
   MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE,
+  MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE,
   MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP,
   MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING,
   MANDATORY_GRIP_PRODUCTION_READINESS,
@@ -141,6 +142,9 @@ ${MANDATORY_GRIP_PRODUCTION_READINESS}
 
 ## MANDATORY: package.json — never blank, never incorrect (runnable StackBlitz)
 ${MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE}
+
+## MANDATORY: Build artifacts must align with the code (concrete rule)
+${MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE}
 
 ## Full-stack sandbox: single root script (MANDATORY)
 - When the project has both **frontend and backend** (e.g. \`api/\` and \`app/\`, or \`client/\` and \`server/\`, or \`src/frontend\` and \`src/backend\`), you MUST add a **single root script** in package.json (e.g. using \`concurrently\` or \`npm-run-all\`) so **Run in StackBlitz** starts both at once. Do NOT leave this for the user—always provide the complete package.json with a root \`dev\` script that runs both client and server so the user gets a runnable full-stack app in one click.

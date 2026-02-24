@@ -2,24 +2,25 @@
 
 This doc lists all Cursor rules in `.cursor/rules/` and where GRIP's code enforces them. Use it to verify alignment before/after changes.
 
-## Rule index (14 rules, all `alwaysApply: true`)
+## Rule index (15 rules, all `alwaysApply: true`)
 
 | # | Rule file | One-line summary |
 |---|-----------|------------------|
 | 1 | grip-all-code-for-all-files.mdc | Full runnable code for every file; no placeholders/empty |
-| 2 | full-grip-build.mdc | 100% functioning app; export, deploy, preview, full repo, chat-to-files; no future deferrals |
+| 2 | full-grip-build.mdc | 100% functioning app; **mandatory flow fully automated:** create project → analyze → plan → build → create files → write all code; export, deploy, preview, full repo, chat-to-files; no future deferrals |
 | 3 | stackblitz-mandatory-files.mdc | package.json, tsconfig, .env.example, entry point; runnable package.json |
-| 4 | repo-types-mandate.mdc | Handle ALL repo types; category rules from repoTypeDetection |
-| 5 | clean-room-code-generation.mdc | Linked repo reference only; never copy/paste repo source |
-| 6 | code-and-file-reuse.mdc | Reuse services/APIs; extend don't duplicate |
-| 7 | grip-identity-and-env.mdc | You are G.R.I.P.; .env/Vercel only; Settings for user's build |
-| 8 | user-uploads-must-use.mdc | When user uploads images/docs, MUST use them in code |
-| 9 | no-mock-data-production-ready.mdc | No mock data; DB setup when persistence indicated |
-| 10 | project-specific-scaffolding.mdc | Project-specific package/tsconfig/README; no Vite by default |
-| 11 | repo-separation.mdc | Analysis/repo context for user's repo only; never GRIP codebase |
-| 12 | sandbox-parity.mdc | Same rules for main and sandbox (identity, clean-room, repo type, uploads) |
-| 13 | likely-remaining-preference.mdc | Prefer "Likely remaining" before new features; no duplicate work |
-| 14 | phase-completion-revert.mdc | When user says not meeting phase completions, revert-and-fix until aligned |
+| 4 | build-artifacts-align-with-code.mdc | **package.json and all build artifacts must concretely align with the code** (deps match imports; scripts match framework; tsconfig match paths) |
+| 5 | repo-types-mandate.mdc | Handle ALL repo types; category rules from repoTypeDetection |
+| 6 | clean-room-code-generation.mdc | Linked repo reference only; never copy/paste repo source |
+| 7 | code-and-file-reuse.mdc | Reuse services/APIs; extend don't duplicate |
+| 8 | grip-identity-and-env.mdc | You are G.R.I.P.; .env/Vercel only; Settings for user's build |
+| 9 | user-uploads-must-use.mdc | When user uploads images/docs, MUST use them in code |
+| 10 | no-mock-data-production-ready.mdc | No mock data; DB setup when persistence indicated |
+| 11 | project-specific-scaffolding.mdc | Project-specific package/tsconfig/README; no Vite by default |
+| 12 | repo-separation.mdc | Analysis/repo context for user's repo only; never GRIP codebase |
+| 13 | sandbox-parity.mdc | Same rules for main and sandbox (identity, clean-room, repo type, uploads) |
+| 14 | likely-remaining-preference.mdc | Prefer "Likely remaining" before new features; no duplicate work |
+| 15 | phase-completion-revert.mdc | When user says not meeting phase completions, revert-and-fix until aligned |
 
 ---
 
@@ -27,9 +28,10 @@ This doc lists all Cursor rules in `.cursor/rules/` and where GRIP's code enforc
 
 | Rule | Primary code locations |
 |------|-------------------------|
-| grip-all-code-for-all-files | `buildQualityPlan.ts` MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES; `planGeneratorService`; `fileGeneratorService` isPlaceholderOrEmpty; `files/generate` mandatoryRuleMessage |
-| full-grip-build | Export/deploy/preview/repo routes; `FULL-BUILD-REQUIREMENTS.md`; no mock in those flows |
+| grip-all-code-for-all-files | Full code for every file; Overview automation does not stop until every file has full code or reported failure. `buildQualityPlan.ts` MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES; `planGeneratorService`; `fileGeneratorService` isPlaceholderOrEmpty; `files/generate` loop over all files, mandatoryRuleMessage |
+| full-grip-build | **Mandatory flow before enhanced chat:** project creation → analyze (all pipeline steps); analysis results → Anthropic (plan + file gen); Overview in-flight modal runs plan → files/generate (every file, full code) → build autonomously; GRIP runs until all file creations have full code (concrete rule). Code: `src/app/api/projects/route.ts` (create + analyzeProject); `analysisService` (repo clone, ideation→prompt, tree-sitter); `planGeneratorService` + `fileGeneratorService` read analyses; `src/app/dashboard/projects/[id]/page.tsx` setupStep + POST analysis/refresh when no analysis; `files/generate` loop over all files, mandatoryRuleMessage on failure. Export/deploy/preview/repo; `FULL-BUILD-REQUIREMENTS.md`. |
 | stackblitz-mandatory-files | `projectPlanningService` ensureMandatoryStackBlitzFiles, MANDATORY_STACKBLITZ_FILES; `buildQualityPlan` MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE; enhanced-chat injects |
+| build-artifacts-align-with-code | **Concrete:** package.json/tsconfig/.env must align with code. `buildQualityPlan.ts` MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE; enhanced-chat + legal-sandbox chat inject it; `highLevelFileContextService` infers framework/scripts from analysis; `validatePackageJsonForStackBlitz` in preflight and **after files/generate** (stream + JSON response include `buildArtifactAlignment`); `normalizePackageJsonScriptsForStack` on export |
 | repo-types-mandate | `repoTypeDetection.ts` getMandatoryRepoTypeRules, detectRepoType; enhanced-chat injects repoTypeRules |
 | clean-room-code-generation | enhanced-chat "reference only", "clean-room", "do not copy"; planContextFromAnalysisService; legal-sandbox chat/plan |
 | code-and-file-reuse | Centralized services (anthropicService, fileGeneratorService, etc.); no duplicate chat/task/file paths |
@@ -41,6 +43,24 @@ This doc lists all Cursor rules in `.cursor/rules/` and where GRIP's code enforc
 | sandbox-parity | enhanced-chat single route + isSandbox; same buildSystemPrompt and mandatory blocks for main and sandbox when using enhanced-chat |
 | likely-remaining-preference | enhanced-chat injects "Likely remaining to implement" + "Prefer implementing these when..."; likelyRemaining built from checklist minus implemented |
 | phase-completion-revert | enhanced-chat buildSystemPrompt revert-and-rerun block when user says not meeting phase completions |
+
+---
+
+## Full automation concrete requirements (full-grip-build)
+
+These are the concrete requirements for the mandatory flow; code must align so users do not waste tokens on false or partial results.
+
+1. **Project creation and analysis using all pipeline steps ("all middles")** — On create (with repo) or when opening Overview with linked repo but no analysis, GRIP runs full analysis: repo clone, ideation-based technical prompt, tree-sitter/structured analysis. Enforced: `analysisService.analyzeProject` (getOrCloneRepository, buildTechnicalAnalysisPromptFromIdeation, analyzeRepositoryStructureWithTreeSitter); project create calls it; Overview calls POST `analysis/refresh` when `!hasAnalysis` then polls status.
+
+2. **Analysis results sent to Anthropic API calls** — Stored analysis (repositoryAnalysis, structuredAnalysis) is input to plan generation and file generation. Enforced: `planGeneratorService` reads `analyses` and uses `buildPlanContextFromAnalysis`; `fileGeneratorService` / `getProjectContextForHighLevelFiles` use analysis; enhanced-chat uses `buildPlanContextFromAnalysis` and analysis in `buildSystemPrompt`.
+
+3. **Full project plan** — Overview automation generates full plan via POST plan, then sync-state. Enforced: `[id]/page.tsx` setupStep `plan` → POST plan, POST plan/sync-state.
+
+4. **Full project build** — After file generation, run-build is called. Enforced: `[id]/page.tsx` setupStep `build` → POST run-build.
+
+5. **All file and code completion run autonomously in the in-flight modal** — The modal runs preparing → analysis → plan → files → build → done without user steps. File generation is one autonomous run over every file in the plan. Enforced: `[id]/page.tsx` single useEffect that runs the sequence; `files/generate` iterates over `filesToGenerate` (stream or non-stream).
+
+6. **Concrete rule: GRIP runs until all file creations have full code for ALL files** — File generation does not stop until every file in the plan has been processed; each must have full runnable code or a reported failure. No skipping; no partial success. Enforced: `files/generate` route loops over every file; `fileGeneratorService.generateFile` uses `isPlaceholderOrEmpty` and rejects empty/placeholder; response/stream includes `mandatoryRuleMessage` when any file fails; `grip-all-code-for-all-files.mdc` and `full-grip-build.mdc` state this explicitly.
 
 ---
 

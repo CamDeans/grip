@@ -631,7 +631,11 @@ export function EnhancedChatProvider({ children, projectId: initialProjectId, we
       setIsTyping(false)
 
       // Refresh tokenomics in sidebar so user sees updated usage without page refresh
-      refreshTokenUsage()
+      if (data.tokenUsage && typeof data.tokenUsage.tokenAllowance === 'number' && typeof data.tokenUsage.tokensUsedThisPeriod === 'number') {
+        refreshTokenUsage(data.tokenUsage)
+      } else {
+        refreshTokenUsage()
+      }
 
       // After a build ran, refresh project context so next message sends updated lastRunErrors and GRIP can fix
       if (data.buildRan === true) {

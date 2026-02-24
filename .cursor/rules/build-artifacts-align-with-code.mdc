@@ -1,0 +1,46 @@
+---
+description: package.json and all build artifacts must concretely align with the code written in build phases
+alwaysApply: true
+---
+
+# Build Artifacts Align With Code (Concrete Rule)
+
+**Mandate:** All package.json files and other build artifacts (tsconfig.json, .env.example, next.config, vite.config, and stack-specific manifests) MUST **concretely align** with the code being written in the build phases. No mismatch between what the code uses and what the artifacts declare.
+
+## Concrete alignment requirements
+
+1. **package.json**
+   - **Dependencies:** Every `import` / `require` from an npm package in the generated code MUST appear in package.json (`dependencies` or `devDependencies`) with a valid version range. Missing dependencies cause "Cannot find module" and wasted tokens.
+   - **Scripts:** Scripts MUST match the framework and entry points used in the code (e.g. Next.js → `next dev` / `next build`; Vite → `vite` / `vite build` only when the project uses Vite). Infer from repo structure and generated files, not from a default.
+   - **One stack:** Do not mix stacks (e.g. Next.js app with Vite scripts). package.json must reflect the single stack the code actually uses.
+
+2. **tsconfig.json**
+   - **include:** Must cover the actual source paths of generated files (e.g. `src/**/*`, `app/**/*`).
+   - **compilerOptions:** Must suit the stack (e.g. `"jsx": "preserve"` for Next.js; `"jsx": "react-jsx"` for Vite). Never output a generic tsconfig that does not align with the generated file layout.
+
+3. **.env.example**
+   - List only variables the generated app code actually uses (e.g. NEXTAUTH_*, DATABASE_URL, API_KEY). Do not paste GRIP app config; do not list variables the code does not reference.
+
+4. **Other build config (next.config, vite.config, etc.)**
+   - Must match the stack and entry/structure of the generated code. Do not add Vite config to a Next.js project or vice versa.
+
+## Do NOT
+
+- Generate package.json with dependencies that don't match the code, or code that imports packages not in package.json.
+- Output scripts (dev/build/start) that don't match the framework the code uses.
+- Output tsconfig that omits generated paths or uses wrong jsx/compilerOptions for the stack.
+- Treat build artifacts as generic templates; they must be derived from the same plan, analysis, and file set as the code.
+
+## Do
+
+- When generating package.json: use analysis + plan + list of generated file paths to infer stack; include every package the generated code imports; set scripts to match that stack.
+- When generating tsconfig: set include and compilerOptions to match the project's source layout and framework.
+- After file generation (or in preflight): validate package.json against project files (scripts vs stack, imports vs dependencies); surface errors/suggestions so alignment can be fixed (e.g. add missing deps, fix scripts).
+
+## Where this is enforced in code
+
+- **Prompt injection:** `MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE` in buildQualityPlan; injected in enhanced-chat and plan/file-generation context so AI outputs aligned artifacts.
+- **High-level file context:** `getProjectContextForHighLevelFiles` infers framework and scripts from analysis + existing package.json; used when generating package.json in files/generate.
+- **Validation:** `validatePackageJsonForStackBlitz` (packageJsonRequirementsService) checks package.json against project files (imports → deps, scripts → stack); used in preflight and after files/generate.
+- **Export:** `normalizePackageJsonScriptsForStack` applied to package.json on export so scripts match inferred stack.
+- **files/generate:** After generation, run validation; include `buildArtifactAlignment` (ok, errors, suggestions, missingDeps) in response/stream so UI or rerun can fix misalignment.

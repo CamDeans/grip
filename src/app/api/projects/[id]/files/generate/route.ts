@@ -7,6 +7,8 @@ import { getProjectStructure, storeProjectStructure } from '@/lib/services/planS
 import { generateFile, getGeneratedFiles, FileGenerationRequest } from '@/lib/services/fileGeneratorService'
 import { getProjectState } from '@/lib/services/projectStateService'
 import { getProjectContextForHighLevelFiles } from '@/lib/services/highLevelFileContextService'
+import { getProjectFilesForExport } from '@/lib/services/exportService'
+import { validatePackageJsonForStackBlitz } from '@/lib/services/packageJsonRequirementsService'
 import { ObjectId } from 'mongodb'
 
 const STREAM_HEADER = 'x-stream-progress'
@@ -227,6 +229,24 @@ export async function POST(
             if (errorCount > 0) {
               console.warn(`[files/generate] GRIP mandatory: every file must have code. ${errorCount} file(s) failed—see errors above. Paths: ${generatedFiles.filter((f) => !f.success).map((f) => f.path).join(', ')}`)
             }
+            let buildArtifactAlignment: { ok: boolean; errors: string[]; suggestions: string[]; missingDeps?: string[] } | undefined
+            try {
+              const filesArray = await getProjectFilesForExport(id, { gripOnly: true })
+              if (filesArray.length > 0) {
+                const validation = validatePackageJsonForStackBlitz(filesArray)
+                buildArtifactAlignment = {
+                  ok: validation.ok,
+                  errors: validation.errors,
+                  suggestions: validation.suggestions,
+                  missingDeps: validation.missingDeps?.length ? validation.missingDeps : undefined
+                }
+                if (!validation.ok) {
+                  console.warn('[files/generate] Build artifacts not aligned with code:', validation.errors?.join('; '), validation.missingDeps?.length ? `Missing deps: ${validation.missingDeps.join(', ')}` : '')
+                }
+              }
+            } catch (e) {
+              console.warn('[files/generate] Could not validate build artifact alignment:', e)
+            }
             let tokenUsage: { tokenAllowance: number; tokensUsedThisPeriod: number } | undefined
             try {
               const access = await getAppAccess(session)
@@ -240,7 +260,8 @@ export async function POST(
               errorCount,
               generatedFiles,
               tokenUsage,
-              mandatoryRuleMessage: errorCount > 0 ? `GRIP mandatory: every file must have code. ${errorCount} file(s) failed—check errors and retry or fix templates.` : undefined
+              mandatoryRuleMessage: errorCount > 0 ? `GRIP mandatory: every file must have code. ${errorCount} file(s) failed—check errors and retry or fix templates.` : undefined,
+              buildArtifactAlignment
             })
           } catch (err) {
             emit({ type: 'error', error: err instanceof Error ? err.message : 'Stream error' })
@@ -322,6 +343,24 @@ export async function POST(
     if (errorCount > 0) {
       console.warn(`[files/generate] GRIP mandatory: every file must have code. ${errorCount} file(s) failed—see errors above. Paths: ${generatedFiles.filter((f) => !f.success).map((f) => f.path).join(', ')}`)
     }
+    let buildArtifactAlignment: { ok: boolean; errors: string[]; suggestions: string[]; missingDeps?: string[] } | undefined
+    try {
+      const filesArray = await getProjectFilesForExport(id, { gripOnly: true })
+      if (filesArray.length > 0) {
+        const validation = validatePackageJsonForStackBlitz(filesArray)
+        buildArtifactAlignment = {
+          ok: validation.ok,
+          errors: validation.errors,
+          suggestions: validation.suggestions,
+          missingDeps: validation.missingDeps?.length ? validation.missingDeps : undefined
+        }
+        if (!validation.ok) {
+          console.warn('[files/generate] Build artifacts not aligned with code:', validation.errors?.join('; '), validation.missingDeps?.length ? `Missing deps: ${validation.missingDeps.join(', ')}` : '')
+        }
+      }
+    } catch (e) {
+      console.warn('[files/generate] Could not validate build artifact alignment:', e)
+    }
     let tokenUsage: { tokenAllowance: number; tokensUsedThisPeriod: number } | undefined
     try {
       const access = await getAppAccess(session)
@@ -336,7 +375,8 @@ export async function POST(
       errorCount,
       generatedFiles,
       tokenUsage,
-      mandatoryRuleMessage: errorCount > 0 ? `GRIP mandatory: every file must have code. ${errorCount} file(s) failed—check errors and retry or fix templates.` : undefined
+      mandatoryRuleMessage: errorCount > 0 ? `GRIP mandatory: every file must have code. ${errorCount} file(s) failed—check errors and retry or fix templates.` : undefined,
+      buildArtifactAlignment
     })
   } catch (error) {
     console.error('Error generating files:', error)

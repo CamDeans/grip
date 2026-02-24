@@ -16,7 +16,7 @@ import { getProjectState, updateProjectState, recordFileSaveAndAdvanceStep } fro
 import { createProjectFolder, saveProjectFile } from '@/lib/services/gripProjectActions'
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 import { runMainProject } from '@/lib/runMainProject'
-import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
 import { STYLING_REQUIREMENTS_FOR_GRIP } from '@/lib/constants/stylingReferenceRepos'
 import { detectRepoType, getMandatoryRepoTypeRules } from '@/lib/repoTypeDetection'
 import { getReferenceReposGuidanceLine } from '@/lib/constants/referenceRepos'
@@ -77,6 +77,10 @@ You are G.R.I.P., an AI assistant built specifically for helping developers auto
 Your primary purpose is to help guide users through building out projects by writing code, creating files, and implementing features
 based on the project ideation, repository structure, and existing code in the cloned GitHub repository.
 ${isSandboxContext ? '\n## Context: sandbox experiment\nThis conversation is for a **sandbox experiment** (isolated from the main project). Use **this project\'s** analysis, ideation, and checklist only. Prioritize the user\'s current message; do not mix with the main GRIP project build.\n' : ''}
+${!isSandboxContext && (!planContext || !planContext.phases?.length) ? `
+## MANDATORY: Complete Overview first (avoid wasting tokens)
+The user has not completed the project **Overview** setup (plan + file generation). That flow runs on the **Overview** tab—not in chat. Do NOT generate a full development plan or full file set here; that runs on Overview and would waste tokens. Remind them to open the project **Overview** and let GRIP run plan → file generation → build there first. After that, Develop (chat) is for fixing errors, implementing remaining phases, or adding features. If they insist on chatting, answer briefly and direct them to Overview.
+` : ''}
 
 ## Mandatory: Repo type and stack (handle ALL GitHub repo types)
 You MUST handle every kind of repository—not just one-off web apps. This includes: AI/ML/LLM (Python, PyTorch, LangChain, etc.), full-stack (frontend + backend), iOS (Swift/SwiftUI), Android (Kotlin/Gradle), Python, Go, Rust, Ruby, PHP, .NET, CLI tools, and generic web (JS/TS). Use the detected repo type and the rules below; follow the appropriate toolchain, build system, and conventions for that stack. Never assume "just a web app" unless the repo clearly is.
@@ -250,6 +254,8 @@ ${userUploadsSummary}
   prompt += `\n${MANDATORY_GRIP_PRODUCTION_READINESS}\n\n`
   // Mandatory package.json and runnable StackBlitz: never blank, never incorrect; deps match code
   prompt += `\n${MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE}\n\n`
+  // Mandatory build artifacts align with code: package.json/tsconfig/.env match the code written in build phases
+  prompt += `\n${MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE}\n\n`
   // Mandatory .env files and production setup: build .env.example, use GRIP Settings, inform user how to set up and test for production
   prompt += `\n${MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP}\n\n`
 
@@ -2140,6 +2146,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Fresh access so token usage is up to date for sidebar (fixes token count not updating)
+    const accessAfter = await getAppAccess(session)
     return NextResponse.json({
       message: aiMessage,
       refreshContext: false,
@@ -2147,16 +2155,25 @@ export async function POST(request: NextRequest) {
       runErrors: runErrors.length > 0 ? runErrors : undefined,
       buildRan: runAfterApply && lastAppliedPaths.length > 0 ? buildRan : undefined,
       buildSucceeded: runAfterApply && lastAppliedPaths.length > 0 ? buildSucceeded : undefined,
+      tokenUsage:
+        typeof accessAfter.tokenAllowance === 'number' && typeof accessAfter.tokensUsedThisPeriod === 'number'
+          ? { tokenAllowance: accessAfter.tokenAllowance, tokensUsedThisPeriod: accessAfter.tokensUsedThisPeriod }
+          : undefined,
     })
     } catch (postSaveError) {
       // After we had aiMessage and saved it early, something failed (e.g. timeout during build).
       // Return 200 with the message we saved so the user always sees the reply when tokens were used.
       console.error('Enhanced chat: post-save error (returning saved message)', postSaveError)
+      const accessAfter = await getAppAccess(session)
       return NextResponse.json({
         message: earlyAiMessage,
         partialSuccess: true,
         error: postSaveError instanceof Error ? postSaveError.message : String(postSaveError),
         refreshContext: true,
+        tokenUsage:
+          typeof accessAfter.tokenAllowance === 'number' && typeof accessAfter.tokensUsedThisPeriod === 'number'
+            ? { tokenAllowance: accessAfter.tokenAllowance, tokensUsedThisPeriod: accessAfter.tokensUsedThisPeriod }
+            : undefined,
       })
     }
   } catch (error) {

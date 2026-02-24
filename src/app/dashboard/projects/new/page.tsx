@@ -368,7 +368,7 @@ export default function NewProjectPage() {
                     </div>
                   </div>
                   <div className="mt-2 p-3 rounded-md bg-primary/10 border border-primary/20 text-sm text-text-primary">
-                    <strong>Full automation:</strong> After you create the project, G.R.I.P. runs analysis, generates the plan, and writes code for each file in one run. All files are built with code automatically. In Develop, code you get from chat is applied to the project and the build runs automatically—no manual save or run steps. Progress (phases and steps) syncs on the Overview tab.
+                    <strong>Full automation:</strong> After you create the project, open its <strong>Overview</strong> tab—G.R.I.P. runs analysis (when a repo is linked), then generates the plan and writes code for each file in one run there. Do that before using Develop so you don’t waste tokens. In Develop, code from chat is applied and the build runs automatically. Progress (phases and steps) syncs on Overview.
                   </div>
                   <div className="mt-5">
                     <RepoSelector

@@ -337,8 +337,10 @@ export default function ProjectOverviewPage() {
 
         if (!hasAnalysis) {
           setSetupStep('analysis')
+          // Trigger full analysis (all pipeline steps: repo clone, ideation→prompt, tree-sitter) so results feed plan + file gen
+          await fetch(`/api/projects/${projectId}/analysis/refresh`, { method: 'POST', headers: { 'Content-Type': 'application/json' } }).catch(() => null)
           let done = false
-          for (let i = 0; i < 60 && !done; i++) {
+          for (let i = 0; i < 90 && !done; i++) {
             const r = await fetch(`/api/projects/${projectId}/analysis/status`)
             const d = r.ok ? await r.json().catch(() => ({})) : {}
             if (d?.hasAnalysis ?? d?.analysisCompleted) {
@@ -1010,7 +1012,7 @@ export default function ProjectOverviewPage() {
             Get started: set up once, GRIP automates the rest
           </CardTitle>
           <CardDescription>
-            Set ideation and link a repo below. GRIP runs analysis and creates a plan automatically. In Develop chat, GRIP applies code to your project and runs the build automatically—no manual save or run steps. This checklist shows what&apos;s ready.
+            Set ideation and link a repo below. <strong>Analysis runs when you create the project or link a repo.</strong> When you open this Overview, GRIP runs <strong>plan → file generation → build</strong> here first (so you don&apos;t waste tokens in chat). After that, use Develop for fixes and next steps. This checklist shows what&apos;s ready.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1036,7 +1038,7 @@ export default function ProjectOverviewPage() {
             <li className="flex items-start gap-3">
               {stepsComplete[2] ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" /> : <Circle className="w-5 h-5 text-text-muted shrink-0 mt-0.5" />}
               <div>
-                <span className="font-medium">3. Analysis</span> — GRIP analyzes the repo automatically (e.g. when you open Develop or run from Repo). Ensures GRIP understands the codebase before generating code.
+                <span className="font-medium">3. Analysis</span> — GRIP analyzes the repo when you create the project or link a repo (or from Repo tab). Ensures GRIP understands the codebase before plan and file generation.
                 {!stepsComplete[2] && (
                   <Link href={`/dashboard/projects/${projectId}/repo`} className="ml-1 text-primary hover:underline text-sm">Run analysis from Repo</Link>
                 )}
@@ -1045,7 +1047,7 @@ export default function ProjectOverviewPage() {
             <li className="flex items-start gap-3">
               {stepsComplete[3] ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" /> : <Circle className="w-5 h-5 text-text-muted shrink-0 mt-0.5" />}
               <div>
-                <span className="font-medium">4. Plan</span> — Development plan (phases and tasks) is created automatically when you link a repo.
+                <span className="font-medium">4. Plan</span> — Development plan (phases and tasks) is created on <strong>Overview</strong> when you have a linked repo—plan and file generation run here before you use Develop.
                 {!stepsComplete[3] && (
                   <span className="text-sm text-muted-foreground">Plan is created automatically when you link a repo.</span>
                 )}
@@ -1054,7 +1056,7 @@ export default function ProjectOverviewPage() {
             <li className="flex items-start gap-3">
               {stepsComplete[4] ? <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" /> : <Circle className="w-5 h-5 text-text-muted shrink-0 mt-0.5" />}
               <div>
-                <span className="font-medium">5. Build progress</span> — Phases and steps below update automatically as GRIP saves files and runs the build in chat. Start or continue in Develop when ready.
+                <span className="font-medium">5. Build progress</span> — After Overview runs plan → file generation → build, phases and steps below update as GRIP saves files and runs the build (in Develop). Open Develop only after plan and files are ready to avoid wasting tokens.
                 {!stepsComplete[4] && (
                   <span className="text-sm text-text-muted ml-1">Phases appear automatically once a plan exists (after linking a repo).</span>
                 )}
@@ -1180,10 +1182,8 @@ export default function ProjectOverviewPage() {
                 </>
               ) : (
                 <>
-                  <p>No phases yet. Link a repo so GRIP can create a plan and phases automatically, then go to Develop to start building.</p>
-                  <Link href={`/dashboard/projects/${projectId}/${project?.isSandbox ? 'sandbox-chat' : 'enhanced-chat'}`}>
-                    <Button variant="outline">Open Develop anyway</Button>
-                  </Link>
+                  <p>Complete setup on <strong>Overview</strong> first. Plan and file generation run here (automatically when you have a linked repo)—not in Develop. That way GRIP has full context and you don&apos;t waste tokens. After plan and files are ready, use Develop to fix errors or add features.</p>
+                  <p className="text-xs text-text-muted mt-2">Link a repo in Settings, then stay on Overview so GRIP can run analysis → plan → file generation → build. When that finishes, &quot;Go to Develop&quot; will appear above.</p>
                 </>
               )}
             </div>
@@ -1203,7 +1203,7 @@ export default function ProjectOverviewPage() {
         
         <CardContent>
           <p className="text-sm text-text-secondary mb-4">
-            Use the tabs to move through the flow: <strong>Settings</strong> (ideation, repo link) → <strong>Repo</strong> (analysis) → <strong>Develop</strong> (chat; code applies and build runs automatically) → <strong>Preview</strong>. All tabs are always visible. Progress syncs here as GRIP saves files and runs the build.
+            Use the tabs in order: <strong>Settings</strong> (ideation, repo link) → <strong>Overview</strong> (plan + file generation + build run here first—do this before Develop to avoid wasting tokens) → <strong>Develop</strong> (chat for fixes and next steps; code applies and build runs automatically) → <strong>Preview</strong>. Progress syncs here as GRIP saves files and runs the build.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>

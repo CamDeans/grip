@@ -2,11 +2,13 @@
 
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { EnhancedChat } from '@/components/chat/EnhancedChatInterface'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { EnhancedChatProvider } from '@/components/providers/EnhancedChatProvider'
 import { useEnhancedChat } from '@/hooks/useEnhancedChat'
+import { Button } from '@/components/ui'
 
 interface Project {
   _id: string
@@ -22,6 +24,7 @@ interface Project {
     keyFeatures: string
     technicalRequirements: string
   }
+  isSandbox?: boolean
 }
 
 export default function EnhancedChatPage() {
@@ -31,27 +34,33 @@ export default function EnhancedChatPage() {
   const taskParam = searchParams ? searchParams.get('task') : null
   
   const [project, setProject] = useState<Project | null>(null)
+  const [hasPlan, setHasPlan] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchProject = async () => {
+    const fetchProjectAndPlan = async () => {
       try {
-        const response = await fetch(`/api/projects/${projectId}`)
-        if (!response.ok) throw new Error('Failed to fetch project')
-        const data = await response.json()
+        const [projRes, planRes] = await Promise.all([
+          fetch(`/api/projects/${projectId}`),
+          fetch(`/api/projects/${projectId}/plan`)
+        ])
+        if (!projRes.ok) throw new Error('Failed to fetch project')
+        const data = await projRes.json()
         setProject(data)
+        const planData = planRes.ok ? await planRes.json().catch(() => ({})) : {}
+        setHasPlan(!!planData?.plan)
         setError(null)
-      } catch (error) {
-        console.error('Error fetching project:', error)
-        setError(error instanceof Error ? error.message : 'Unknown error')
+      } catch (err) {
+        console.error('Error fetching project:', err)
+        setError(err instanceof Error ? err.message : 'Unknown error')
       } finally {
         setIsLoading(false)
       }
     }
     
     if (projectId) {
-      fetchProject()
+      fetchProjectAndPlan()
     }
   }, [projectId])
 
@@ -73,8 +82,20 @@ export default function EnhancedChatPage() {
   const stackblitzErrorsSubmitted = searchParams?.get('stackblitzErrorsSubmitted') === '1'
   const implementCurrentPhase = searchParams?.get('implementCurrentPhase') === '1'
 
+  const showCompleteOverviewBanner = project && !project.isSandbox && hasPlan === false
+
   return (
     <div className="flex flex-col h-[calc(100vh-12rem)] w-full max-w-full min-w-0 overflow-hidden">
+      {showCompleteOverviewBanner && (
+        <div className="shrink-0 bg-amber-500/10 border-b border-amber-500/30 px-4 py-3 flex items-center justify-between gap-4">
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            <strong>Complete setup on Overview first.</strong> Plan and file generation run there—not in chat. That avoids wasting tokens and gives GRIP full context. Open the project <strong>Overview</strong>, let GRIP run plan → file generation → build, then return here.
+          </p>
+          <Link href={`/dashboard/projects/${projectId}`}>
+            <Button variant="outline" size="sm" className="shrink-0">Go to Overview</Button>
+          </Link>
+        </div>
+      )}
       <EnhancedChatProvider projectId={projectId}>
         <TaskSpecificChat
           projectId={projectId}

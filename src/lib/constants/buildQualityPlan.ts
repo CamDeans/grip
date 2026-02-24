@@ -9,6 +9,7 @@
  * - full-grip-build.mdc, repo-types-mandate.mdc, clean-room-code-generation.mdc, code-and-file-reuse.mdc
  * - user-uploads-must-use.mdc, no-mock-data-production-ready.mdc, project-specific-scaffolding.mdc
  * - repo-separation.mdc, sandbox-parity.mdc, likely-remaining-preference.mdc, phase-completion-revert.mdc
+ * - build-artifacts-align-with-code.mdc
  */
 
 /** MANDATORY: GRIP uses only env; Settings vars are for the user's app build only. */
@@ -135,6 +136,20 @@ export const MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE = `
 - **Missing module errors:** If any build or run error says "Cannot find module", "Module not found", or "Cannot find package", you MUST add the missing package(s) to package.json and output the COMPLETE package.json in a code block—never suggest "run npm install X" without providing the full file. Extract the package name from the error and add it with a valid semver range (e.g. \`"^6.0.0"\`).
 - **Lockfile and package manager:** If the repo or project has a lockfile (package-lock.json → npm, yarn.lock → yarn, pnpm-lock.yaml → pnpm), prefer that package manager and keep dependency version ranges consistent so \`npm install\` / \`yarn\` / \`pnpm install\` and the build succeed in StackBlitz and locally.
 - **Stack version compatibility:** Use compatible versions for the stack (e.g. React 18.x with Next 14.x; Vite 5.x with React 18.x; Expo SDK 50+ with react-native and react-native-web for web). Avoid mixing incompatible major versions (e.g. React 17 with Next 14); prefer latest stable pairings so the project runs in StackBlitz without peer dependency failures.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: package.json and all build artifacts must concretely align with the code written in build phases.
+ * See .cursor/rules/build-artifacts-align-with-code.mdc
+ */
+export const MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE = `
+## MANDATORY: Build artifacts must align with the code (concrete rule)
+
+- **package.json:** Dependencies MUST include every \`import\` / \`require\` from the generated code. Scripts MUST match the framework the code uses (Next → next dev/build; Vite → vite/vite build only when the project uses Vite). Never mix stacks or output scripts that don't match the code.
+- **tsconfig.json:** \`include\` must cover actual source paths; \`compilerOptions\` (e.g. jsx) must suit the stack. Never generic tsconfig that doesn't align with generated files.
+- **.env.example:** List only variables the generated app code actually uses. No GRIP app config; no unused variables.
+- **Other config (next.config, vite.config):** Match the stack and entry/structure of the generated code.
+- When generating package.json or any build artifact, derive it from the same plan, analysis, and file set as the code—so artifacts and code stay aligned. If build errors show missing modules, add those packages to package.json and output the complete file.
 `.trim()
 
 /**

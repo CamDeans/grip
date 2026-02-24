@@ -7,6 +7,22 @@ alwaysApply: true
 
 **Mandate:** GRIP MUST be a 100% functioning app that creates and deploys full projects. We are building the full build now; there are no "future builds" to defer to.
 
+**Mandatory flow (fully automated, before enhanced chat):** GRIP MUST fully automate the mandatory flow: **create project → analyze (repo) → plan → create files → write all code → build** — and all of this MUST complete **before** the user gets to the enhanced chat (Develop) area. The system drives every step on project creation and Overview: run analysis (when repo is linked), generate plan, generate every file in the plan with full runnable code, then run the build. By the time the user opens Develop, the project already has analysis, plan, and generated files with code. Enhanced chat (Develop) is for follow-up: fixing build errors, implementing remaining phases, or adding features — not for replacing the initial plan + file generation. No step in the mandatory flow is optional or deferred to the user or to chat.
+
+**Concrete requirements:**
+
+1. **Project creation and analysis using all pipeline steps ("all middles"):** On project creation (when a repo is provided) or when the user opens Overview with a linked repo but no analysis yet, GRIP runs **full analysis** using all pipeline steps: repo clone/fetch, ideation-based technical prompt, and tree-sitter/structured repository analysis. No analysis step is skipped.
+
+2. **Analysis results sent to Anthropic API calls:** The stored analysis (repositoryAnalysis, structuredAnalysis, checklist, etc.) is the input to **all** downstream Anthropic API calls: plan generation and file generation both read from the analyses collection and use it in their prompts. Plan and file gen must not run without analysis context when a repo is linked.
+
+3. **Full project plan:** The Overview automation generates a **full** development plan (phases and tasks) via the plan API; the plan is then synced to project state.
+
+4. **Full project build:** After file generation, GRIP runs the full project build (run-build). The in-flight modal shows build progress and does not close until build has been invoked.
+
+5. **All file and code completion run autonomously in the in-flight modal:** The Overview in-flight modal runs **autonomously** through the timeline: preparing → analysis (or wait for analysis) → plan → **file generation** → build → done. File generation is a single autonomous run over **every** file in the plan.
+
+6. **Concrete rule — GRIP runs until all file creations have full code for ALL files:** GRIP MUST NOT stop or consider file generation complete until **every** file in the plan has been processed and each has **full, runnable code** (or a reported failure). The automation iterates over every file; files that fail validation (placeholder/empty) are reported with the mandatory-rule message so the user can rerun or fix. No file is skipped; no partial file set is treated as success. This is a concrete, non-negotiable rule.
+
 ## Do NOT
 
 - Leave capabilities as "planned" or "later"
