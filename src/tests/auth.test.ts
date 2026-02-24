@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { MongoClient } from 'mongodb'
 import { hash } from 'bcryptjs'
 import { clientPromise } from '@/lib/mongodb'
 
-describe('Authentication', () => {
+const hasMongo = !!process.env.MONGODB_URI
+;(hasMongo ? describe : describe.skip)('Authentication', () => {
   let client: MongoClient
 
   beforeAll(async () => {

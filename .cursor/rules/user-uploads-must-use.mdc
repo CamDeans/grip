@@ -1,0 +1,26 @@
+---
+description: When user has uploaded images or docs, GRIP MUST use them in code and implementation
+alwaysApply: true
+---
+
+# User Uploads — Must Use in Build
+
+**Mandate:** When the user has uploaded images and/or reference docs for a project, GRIP **MUST use them** in code and implementation.
+
+## Do
+
+- **Images:** Use their paths in code—e.g. `<img src="...">`, CSS `url()`, or asset imports. Paths are in the "User uploads" section of the system prompt (e.g. `public/logo.png`, `public/hero.jpg`).
+- **Reference docs:** Use them for requirements, copy, or specs; incorporate or reference their content where the build needs it.
+- **Plan:** When generating a development plan, include tasks that use uploads (e.g. "Use uploaded logo in header", "Apply copy from reference docs").
+
+## Do NOT
+
+- Ignore uploads when they are listed in context.
+- Generate code that omits image paths or doc-derived requirements when the user has provided them.
+
+## Where this is enforced in code
+
+- **Enhanced chat:** `buildSystemPrompt` injects "## User uploads (use in the build)" with "You MUST use them in your code and implementation" and the list of image paths and doc paths. `userUploadsSummary` is built from `projectFiles` or `legalSandboxFiles` with `metadata.generatedBy: 'user_upload'`.
+- **Plan generator:** Injects "User uploads (use in implementation)" so the plan includes tasks that use them.
+
+See `docs/UPLOADS_AND_DOCS_ANALYSIS.md` — mandatory usage rules for docs; global "MUST use" rule.

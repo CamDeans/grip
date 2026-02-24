@@ -1,0 +1,30 @@
+---
+description: Main GRIP and Sandbox GRIP must receive the same rules (identity, clean-room, repo type, uploads)
+alwaysApply: true
+---
+
+# Sandbox Parity — Same Rules for Main and Sandbox
+
+**Mandate:** Enhancements and mandatory rules apply to **both** main GRIP (main project) and Sandbox GRIP (sandbox experiments). The same prompt rules, identity, clean-room, repo type, and upload usage apply in both contexts.
+
+## Do
+
+- Use the **same** enhanced-chat route for main and sandbox; `isSandbox` only changes project source (projects vs sandboxProjects), analysis collection (analyses vs sandboxAnalyses), and persist targets (projectFiles vs legalSandboxFiles).
+- Inject the same mandatory blocks (identity, clean-room, repo type, package.json runnable, all-code-for-all-files, user uploads "MUST use") in both main and sandbox prompts.
+- Apply the same "Likely remaining" logic and same repo type rules (from `getMandatoryRepoTypeRules`) for both.
+- Ensure analysis refresh, repo context (`getOrBuildRepoContextDocument(projectId, isSandbox)`), and user uploads summary use the same logic with the appropriate collection per context.
+
+## Do NOT
+
+- Apply different identity, clean-room, or repo-type rules to sandbox than to main.
+- Duplicate chat or prompt logic for sandbox; branch only on data source and persist target.
+
+## Parity checklist (reference)
+
+- Enhanced chat: same route, same `buildSystemPrompt`; main vs sandbox via `isSandbox`.
+- Analysis: analyses + tree-sitter (main); sandboxAnalyses + tree-sitter (sandbox).
+- Repo context: `getOrBuildRepoContextDocument(projectId, false)` vs `(projectId, true)`.
+- User uploads: projectFiles vs legalSandboxFiles, same metadata and "MUST use" in prompt.
+- Plan: main plan generator vs legal-sandbox/plan; same clean-room and single-dev-script principles.
+
+See `docs/GRIP_SANDBOX_PARITY.md`; `src/app/api/enhanced-chat/route.ts` (isSandbox branches).

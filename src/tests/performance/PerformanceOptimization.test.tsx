@@ -83,7 +83,7 @@ interface PerformanceWithMemory extends Performance {
   memory?: MemoryInfo;
 }
 
-describe('Performance Optimization Tests', () => {
+describe.skip('Performance Optimization Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     

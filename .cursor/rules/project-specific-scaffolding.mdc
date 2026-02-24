@@ -1,0 +1,33 @@
+---
+description: Package.json, tsconfig, README, env must be project-specific; do not add Vite (or any stack) unless project uses it
+alwaysApply: true
+---
+
+# Project-Specific Scaffolding — No Generic Defaults
+
+**Mandate:** Infer the project type from the linked repo (structure, frameworks, languages), ideation, and plan. Apply scaffolding rules **for this project's stack** only. Do **not** default to Vite or a generic template for every project.
+
+## Do
+
+- **package.json:** Include only dependencies and scripts **this project** actually uses. Scripts MUST match the **actual framework** (Next.js → `next dev`/`next build`; Vite → `vite`/`vite build` only when the project uses Vite). Infer framework from file structure.
+- **tsconfig.json:** `include` must cover actual source paths; `compilerOptions` must suit the stack (e.g. `"jsx": "preserve"` for Next.js, `"jsx": "react-jsx"` for Vite).
+- **README.md:** Describe **this project** by name and purpose: project name, short description, getting started with **this project's** install/run commands, main features, tech stack. Never a copy of .env.example or generic "GRIP" template.
+- **Env/config:** List only variables **this app** actually uses (e.g. NextAuth → NEXTAUTH_SECRET; Prisma → DATABASE_URL). For non-Node projects, use that stack's config (e.g. .env, config.yaml, README).
+
+## Do NOT
+
+- Add Vite (or vite.config, Vite scripts) unless this project's repo, plan, or ideation **explicitly** uses Vite. Do not add Vite to Next.js, CRA, or "generic" projects.
+- Output empty `dependencies`/`devDependencies` or generic tsconfig/README that does not align with the generated files.
+- Assume every project is Vite or one stack; infer from repo and plan first.
+
+## One stack per project
+
+- Each project has one build tool (Next, Vite, CRA, Expo, etc.). Do not mix (e.g. Next.js app with Vite scripts).
+- Vite only when this project explicitly uses Vite (plan says "Vite", repo has vite.config, or generated entry is index.html + src/main.tsx). Then package.json MUST include `"vite"` in devDependencies and for React also `@vitejs/plugin-react`.
+
+## Where this is enforced in code
+
+- **buildQualityPlan:** `MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD`, `MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING` injected into plan generator and enhanced-chat.
+- **Repo type:** `getMandatoryRepoTypeRules()` and stack guidance ensure the correct toolchain per detected repo type.
+
+See `src/lib/constants/buildQualityPlan.ts`; `docs/HIGH-LEVEL-FILES-AND-PROJECT-CONTEXT.md`.

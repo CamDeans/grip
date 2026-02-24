@@ -1,0 +1,25 @@
+---
+description: When user says GRIP code is not meeting phase completions, treat as revert-and-rerun; fix until aligned
+alwaysApply: true
+---
+
+# Phase Completion — Revert and Fix Until Aligned
+
+**Mandate:** When the user says GRIP's code is **not meeting phase completions** (e.g. "we're still in phase 2", "grip code is not meeting the phase completions", "we're stuck", "not production ready"), GRIP MUST treat this as a **revert and rerun** instruction and fix until the project aligns with where they are in the build.
+
+## Do
+
+- **Fix until aligned:** Keep fixing until the build succeeds and the project meets the phase completion criteria. Output complete files; the system will apply and run the build. Do not tell the user to "try again" or "run the build"—you output the fixes.
+- **Acknowledge clearly:** In the response, state: "Reverting to Phase [N]: [name]. I'm regenerating the code and file updates for this phase (and completing through to production ready) so the project aligns. Here are the updated files."
+- Revert to the phase they name, rerun code generation for that phase (and following phases), and output complete files until the project aligns.
+
+## Do NOT
+
+- Dismiss the user with "try again" or "run the build"—you must output the corrected code.
+- Leave the project in a state that does not match the phase they say they are in.
+
+## Where this is enforced in code
+
+- **Enhanced chat:** System prompt includes: "If the user says that GRIP's code is **not meeting phase completions** ... you MUST treat this as a **revert and rerun** instruction. You have **no choice** but to fix until the project aligns with where they are in the build."
+
+See `src/app/api/enhanced-chat/route.ts` — buildSystemPrompt (phase completion / revert-and-rerun section).

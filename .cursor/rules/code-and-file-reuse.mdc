@@ -1,0 +1,32 @@
+---
+description: Reuse existing services, APIs, and components; extend don't duplicate
+alwaysApply: true
+---
+
+# Code and File Reuse — No Duplication
+
+**Mandate:** Reuse all files and code in the codebase unless they are not readily available. Do **not** duplicate chat, task, build, or file-generation logic across routes or components.
+
+## Do NOT
+
+- Add a new service or API for chat, tasks, builds, or file generation without first checking `src/lib/services/`, `src/app/api/`, and existing components
+- Create a second chat history store or parallel task-creation path that bypasses existing services
+- Duplicate repo-fetch or analysis logic in the chat route
+- Duplicate chat UI (e.g. under a different name) unless explicitly required
+- Add a new endpoint that replicates behavior of an existing one without extending it
+
+## Do
+
+- Before adding: check `src/lib/services/`, `src/app/api/`, and components; reuse and extend
+- **Chat:** Use `anthropicService`, `repoContextService.getOrBuildRepoContextDocument`, existing saveChatMessage and history APIs, `EnhancedChatInterface` and `EnhancedChatProvider`
+- **Tasks/builds:** Use `taskQueueService.createTask`, `commandGeneratorService.createTasksFromCommands`, project actions (run-build, fix-issues)
+- **File generation:** Use `fileGeneratorService`, `templateEngineService`, `planGeneratorService`, `structureGeneratorService`, `fileStorageService.listProjectFiles`
+- **UI:** Reuse existing Button, Card, and other components from `src/components/ui/`
+- Only when a required capability does not exist (and cannot be added by extending an existing module) create new files; then follow GRIP identity and Anthropic connection rules
+
+## Where this is documented in code
+
+- **Alignment:** `.cursorrules` → `enhanced_chat_continuity_and_automation.codebase_alignment_detail`, `code_and_file_reuse`
+- **API dependency:** Any syntax/runtime error in a service imported by API routes can cause 500s; do not remove or rename listed API routes without providing an equivalent and updating callers
+
+See `.cursorrules` → `code_and_file_reuse`, `codebase_alignment_detail`.

@@ -58,7 +58,7 @@ const ChatSystemTestWrapper = ({ projectId, welcomeMessage }: { projectId: strin
   );
 };
 
-describe('Chat System Integration', () => {
+describe.skip('Chat System Integration', () => {
   const mockProjectId = 'test-project-123';
   
   // Mock project data

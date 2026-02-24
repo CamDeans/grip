@@ -1,0 +1,33 @@
+---
+description: GRIP is a 100% functioning app; implement full build now, no future deferrals
+alwaysApply: true
+---
+
+# Full GRIP Build — No Future Deferrals
+
+**Mandate:** GRIP MUST be a 100% functioning app that creates and deploys full projects. We are building the full build now; there are no "future builds" to defer to.
+
+## Do NOT
+
+- Leave capabilities as "planned" or "later"
+- Defer export, deploy, preview, full repo analysis, or chat-to-file persistence to a future phase
+- Use mock data or placeholder API responses for these capabilities
+- Implement only partial flows (e.g. export without real repo push, deploy without real Vercel URL)
+
+## Do
+
+- Implement, test, and verify: Export to GitHub, Deploy to Vercel, Preview (URL/StackBlitz), Full repo (tree + view/edit + analysis), Chat-to-files (save code to projectFiles), Project completion flow (Draft → Ready to export → Exported/Deployed)
+- Reuse existing APIs and services (repository, fileStorageService, export route, deploy route); extend rather than duplicate
+- Remove or replace mock data with real DB and real integrations for production readiness
+- Verify each capability: export creates a real repo with content; deploy returns a real Vercel URL; preview loads URL or StackBlitz; Repo shows full tree; chat can save code to projectFiles
+
+## Required capabilities (reference)
+
+- **Export:** POST `/api/projects/[id]/export` — full project (repo files + projectFiles); user sees repo URL
+- **Deploy:** POST `/api/projects/[id]/deploy` — deploy from project's GitHub repo; user sees live URL
+- **Preview:** Project Preview tab — running app (URL iframe or Open in StackBlitz)
+- **Full repo:** Repo tab — every folder and file (tree + view/edit); analysis for chat context
+- **Chat-to-files:** Code generated in chat savable to projectFiles (create/update); appears in Generated files and export
+- **Completion flow:** Status and CTAs: Run preview | Export to my GitHub | Deploy to Vercel
+
+See `docs/FULL-BUILD-REQUIREMENTS.md` and `.cursorrules` → `full_grip_build`.

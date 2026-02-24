@@ -794,6 +794,8 @@ File Path: ${projectContext.filePath}
 Project Description: ${projectContext.description || 'Not provided'}
 ${stackBlock}${languagesBlock}${phaseBlock}
 
+GRIP mandatory rule: every file must have real, runnable code. Generate variable values that produce complete content—never placeholder or empty. The rendered template must be a full, valid file (e.g. a real component with real JSX, or real logic), not a stub or TODO.
+
 Return ONLY a single JSON object. Use double quotes for keys and string values. Do not use backticks. Keep string values short (under 200 chars) so the JSON is valid. Example: {"ComponentName":"MyComponent","ComponentContent":"<p>Hello</p>"}
 `
     const anthropic = getAnthropicClient()

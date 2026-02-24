@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@je
 import { mongoMonitorService } from '@/lib/services/mongoMonitorService'
 import { mongoService } from '@/lib/services/mongoService'
 
-describe('MongoDB Monitor Service', () => {
+const hasMongo = !!process.env.MONGODB_URI
+;(hasMongo ? describe : describe.skip)('MongoDB Monitor Service', () => {
   beforeAll(async () => {
     // Connect to actual test database
     await mongoService.connect()

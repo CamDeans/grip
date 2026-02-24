@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
-import { requireAppAccess, requireTokenBalance } from '@/lib/access'
+import { requireAppAccess, requireTokenBalance, getAppAccess } from '@/lib/access'
 import { addTokenUsage } from '@/lib/tokenUsage'
 import { getFilesToGenerate } from '@/lib/services/projectPlanningService'
 import { getProjectStructure, storeProjectStructure } from '@/lib/services/planStorageService'
@@ -223,11 +223,24 @@ export async function POST(
                 console.warn('Projects files generate (stream): failed to record token usage', err)
               )
             }
+            const errorCount = generatedFiles.filter((f) => !f.success).length
+            if (errorCount > 0) {
+              console.warn(`[files/generate] GRIP mandatory: every file must have code. ${errorCount} file(s) failed—see errors above. Paths: ${generatedFiles.filter((f) => !f.success).map((f) => f.path).join(', ')}`)
+            }
+            let tokenUsage: { tokenAllowance: number; tokensUsedThisPeriod: number } | undefined
+            try {
+              const access = await getAppAccess(session)
+              tokenUsage = { tokenAllowance: access.tokenAllowance ?? 0, tokensUsedThisPeriod: access.tokensUsedThisPeriod ?? 0 }
+            } catch {
+              // ignore
+            }
             emit({
               type: 'done',
               successCount: generatedFiles.filter((f) => f.success).length,
-              errorCount: generatedFiles.filter((f) => !f.success).length,
-              generatedFiles
+              errorCount,
+              generatedFiles,
+              tokenUsage,
+              mandatoryRuleMessage: errorCount > 0 ? `GRIP mandatory: every file must have code. ${errorCount} file(s) failed—check errors and retry or fix templates.` : undefined
             })
           } catch (err) {
             emit({ type: 'error', error: err instanceof Error ? err.message : 'Stream error' })
@@ -305,12 +318,25 @@ export async function POST(
         console.warn('Projects files generate: failed to record token usage', err)
       )
     }
+    const errorCount = generatedFiles.filter((f) => !f.success).length
+    if (errorCount > 0) {
+      console.warn(`[files/generate] GRIP mandatory: every file must have code. ${errorCount} file(s) failed—see errors above. Paths: ${generatedFiles.filter((f) => !f.success).map((f) => f.path).join(', ')}`)
+    }
+    let tokenUsage: { tokenAllowance: number; tokensUsedThisPeriod: number } | undefined
+    try {
+      const access = await getAppAccess(session)
+      tokenUsage = { tokenAllowance: access.tokenAllowance ?? 0, tokensUsedThisPeriod: access.tokensUsedThisPeriod ?? 0 }
+    } catch {
+      // ignore
+    }
     return NextResponse.json({
       message: `Generated ${generatedFiles.filter(f => f.success).length} of ${filesToGenerate.length} files`,
       fileCount: filesToGenerate.length,
       successCount: generatedFiles.filter(f => f.success).length,
-      errorCount: generatedFiles.filter(f => !f.success).length,
-      generatedFiles
+      errorCount,
+      generatedFiles,
+      tokenUsage,
+      mandatoryRuleMessage: errorCount > 0 ? `GRIP mandatory: every file must have code. ${errorCount} file(s) failed—check errors and retry or fix templates.` : undefined
     })
   } catch (error) {
     console.error('Error generating files:', error)

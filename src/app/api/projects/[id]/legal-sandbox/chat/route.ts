@@ -14,8 +14,19 @@ import {
 import { getOrCloneRepository } from '@/lib/repository'
 import { runSandboxProject } from '@/lib/sandbox/runSandboxProject'
 import { getSandboxProject } from '@/lib/services/sandboxProjectService'
-import { MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import {
+  MANDATORY_GRIP_APP_VS_USER_SETTINGS,
+  MANDATORY_GRIP_BUILD_QUALITY,
+  MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES,
+  MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD,
+  MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD,
+  MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE,
+  MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP,
+  MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING,
+  MANDATORY_GRIP_PRODUCTION_READINESS,
+} from '@/lib/constants/buildQualityPlan'
 import { STYLING_REQUIREMENTS_FOR_GRIP } from '@/lib/constants/stylingReferenceRepos'
+import { detectRepoType, getMandatoryRepoTypeRules } from '@/lib/repoTypeDetection'
 
 const MAX_HISTORY = 16
 const SANDBOX_CHAT_HISTORY_COLLECTION = 'sandboxChatHistory'
@@ -26,7 +37,10 @@ function buildLegalSandboxSystemPrompt(
   repoPaths: string[],
   sandboxFilePaths: string[],
   analysisContext?: string,
-  structuredSummary?: string
+  structuredSummary?: string,
+  userUploadsSummary?: string,
+  repoTypeRules?: string,
+  likelyRemaining?: string
 ): string {
   let p = `You are G.R.I.P. (GitHub Repo-Analysis Intellectual Partner) in **legal-sandbox mode** for testing a clean-room build flow. Do not claim to be or reference any other AI product or provider.
 
@@ -84,6 +98,31 @@ The same GRIP main chat rules apply here: assume the user may be non-technical, 
     p += `\n## Structured repo analysis (tree-link JSON summary; capabilities vs requirements; no code)\n${structuredSummary.slice(0, 4000)}\n`
   }
   p += `
+## MANDATORY: GRIP app vs user settings (never mix)
+${MANDATORY_GRIP_APP_VS_USER_SETTINGS}
+
+## MANDATORY: Build quality (no mock data; production-ready; DB when persistence indicated)
+${MANDATORY_GRIP_BUILD_QUALITY}
+
+## MANDATORY: GRIP creates all code for all file creations — no matter what
+${MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES}
+
+## MANDATORY: .env and production setup
+${MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP}
+`
+  if (repoTypeRules?.trim()) {
+    p += `\n## Mandatory: Repo type and stack (handle ALL GitHub repo types)\n${repoTypeRules}\n`
+  }
+  if (userUploadsSummary?.trim()) {
+    p += `\n## User uploads (use in the build)\nThe user has uploaded images and/or reference docs for this project. You MUST use them in your code and implementation.\n${userUploadsSummary}\n- GRIP receives all uploads in context; use each according to its type (image vs reference doc) and path.\n`
+  }
+  if (likelyRemaining?.trim()) {
+    p += `\n## Likely remaining to implement (focus here when relevant)\nThe following do not yet appear to have a matching file in this sandbox. Prefer implementing these when the user asks for progress or next steps:\n${likelyRemaining}\n\n`
+  }
+  p += `
+## Phase completion — revert and fix until aligned
+- If the user says GRIP's code is **not meeting phase completions** (e.g. "we're still in phase 2", "not production ready", "we're stuck"), you MUST treat this as a **revert and rerun** instruction. Fix until the project aligns with where they are in the build. Output complete files; the system will apply and run the build. In your response, state: "Reverting to Phase [N]: [name]. I'm regenerating the code and file updates for this phase so the project aligns. Here are the updated files."
+
 ## Styling reference (web/UI projects)
 For web and UI projects, follow these styling requirements (shadcn-ui/ui, tailwindlabs/headlessui):
 ${STYLING_REQUIREMENTS_FOR_GRIP}
@@ -292,7 +331,61 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       // optional
     }
 
-  const systemPrompt = buildLegalSandboxSystemPrompt(project, repoPaths, sandboxFilePaths, analysisContext, structuredSummary)
+    // User uploads (sandbox-parity: same "MUST use" rule as enhanced-chat)
+    let userUploadsSummary = ''
+    let repoTypeRules = ''
+    let likelyRemaining = ''
+    try {
+      const uploadsClient = await clientPromise
+      const uploads = await uploadsClient.db(DB_NAME).collection('legalSandboxFiles').find(
+        { projectId: new ObjectId(projectId), 'metadata.generatedBy': 'user_upload' },
+        { projection: { path: 1, filename: 1, metadata: 1 } }
+      ).toArray() as Array<{ path?: string; filename?: string; metadata?: { purpose?: string } }>
+      const images = uploads.filter((u) => u.metadata?.purpose === 'image').map((u) => (u.path ? `${u.path}/${u.filename}` : u.filename).trim()).filter(Boolean)
+      const docs = uploads.filter((u) => u.metadata?.purpose === 'reference_doc').map((u) => (u.path ? `${u.path}/${u.filename}` : u.filename).trim()).filter(Boolean)
+      const lines: string[] = []
+      if (images.length) lines.push(`Images (use these paths in your code): ${images.join(', ')}`)
+      if (docs.length) lines.push(`Reference docs (use for requirements or copy): ${docs.join(', ')}`)
+      if (lines.length) userUploadsSummary = lines.join('\n')
+    } catch {
+      // optional
+    }
+
+    // Repo type rules (sandbox-parity: same category rules as enhanced-chat)
+    try {
+      const ra = await (await clientPromise).db(DB_NAME).collection('sandboxAnalyses').findOne(
+        { projectId: new ObjectId(projectId) },
+        { projection: { 'repositoryAnalysis.structuredAnalysis': 1 } }
+      ) as { repositoryAnalysis?: { structuredAnalysis?: { identity?: any } } } | null
+      const sa = ra?.repositoryAnalysis?.structuredAnalysis
+      const detected = detectRepoType({
+        identity: sa?.identity,
+        filePaths: repoPaths.length ? repoPaths : sandboxFilePaths,
+        mainLanguages: {},
+      })
+      repoTypeRules = getMandatoryRepoTypeRules(detected.category, detected.label, detected.hints)
+    } catch {
+      // optional: fallback generic
+      const detected = detectRepoType({ filePaths: sandboxFilePaths, mainLanguages: {} })
+      repoTypeRules = getMandatoryRepoTypeRules(detected.category, detected.label, detected.hints)
+    }
+
+    // Likely remaining (sandbox-parity: focus on unimplemented when user asks for progress)
+    try {
+      const remDoc = await (await clientPromise).db(DB_NAME).collection('sandboxAnalyses').findOne(
+        { projectId: new ObjectId(projectId) },
+        { projection: { 'repositoryAnalysis.structuredAnalysis': 1 } }
+      ) as { repositoryAnalysis?: { structuredAnalysis?: { route_map?: Array<{ route?: string }>; ideation_alignment?: { missing_capabilities?: string[] } } } } | null
+      const sa = remDoc?.repositoryAnalysis?.structuredAnalysis
+      const routes = (sa?.route_map || []).map((r) => r.route).filter(Boolean) as string[]
+      const missing = (sa?.ideation_alignment?.missing_capabilities || []) as string[]
+      const notYetInSandbox = [...routes.filter((r) => !sandboxFilePaths.some((f) => f.includes(r || ''))), ...missing].slice(0, 20)
+      if (notYetInSandbox.length) likelyRemaining = notYetInSandbox.join('\n')
+    } catch {
+      // optional
+    }
+
+  const systemPrompt = buildLegalSandboxSystemPrompt(project, repoPaths, sandboxFilePaths, analysisContext, structuredSummary, userUploadsSummary, repoTypeRules, likelyRemaining)
 
     const history: Array<{ role: 'user' | 'assistant'; content: string }> = []
     if (Array.isArray(body.messages) && body.messages.length > 0) {

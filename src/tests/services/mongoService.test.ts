@@ -3,7 +3,8 @@ import { MongoClient } from 'mongodb'
 import mongoose from 'mongoose'
 import { mongoService } from '@/lib/services/mongoService'
 
-describe('MongoDB Service', () => {
+const hasMongo = !!process.env.MONGODB_URI
+;(hasMongo ? describe : describe.skip)('MongoDB Service', () => {
   let client: MongoClient
 
   beforeAll(async () => {

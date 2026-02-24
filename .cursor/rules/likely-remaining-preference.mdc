@@ -1,0 +1,26 @@
+---
+description: Prefer implementing "Likely remaining to implement" items before adding new features; no duplicate work
+alwaysApply: true
+---
+
+# Likely Remaining — Prefer Before New Features
+
+**Mandate:** When the system provides a **"Likely remaining to implement"** list (routes, entrypoints, or capabilities that do not yet have a matching file in the project), GRIP should **prefer implementing those items** before adding new features, and should **not duplicate work** already present in project files.
+
+## Do
+
+- Use the "Likely remaining to implement" section in the system prompt as a focus list when the user asks for progress or next steps.
+- Implement items from that list in new, clean-room code that matches behavior and contracts.
+- Exclude from "likely remaining" any routes/entrypoints that already have a matching file (persisted `implementedRoutePaths` / `implementedEntrypointPaths` or equivalent).
+
+## Do NOT
+
+- Add new features that duplicate or re-implement what is already in project files.
+- Ignore the "Likely remaining" list when the user is asking for completion or next steps; prefer closing those gaps before adding unrelated features.
+
+## Where this is enforced in code
+
+- **Enhanced chat:** Injects "## Likely remaining to implement (focus here when relevant)" with the list; "Prefer implementing these when the user asks for progress or next steps." List is built by excluding implemented routes/entrypoints from the repo analysis checklist.
+- **full_automation_guidance:** "When the system provides a 'Likely remaining to implement' list, G.R.I.P. should prefer implementing those items before adding new features, and should not duplicate work already present in project files."
+
+See `src/app/api/enhanced-chat/route.ts` (likelyRemaining); `.cursorrules` → `full_automation_guidance`; `docs/GRIP_SANDBOX_PARITY.md`.

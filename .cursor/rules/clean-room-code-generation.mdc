@@ -1,0 +1,34 @@
+---
+description: Linked repo is reference only; never copy/paste repo source; generate original code
+alwaysApply: true
+---
+
+# Clean-Room Code Generation
+
+**Mandate:** When the project has a **linked GitHub repository**, treat the cloned repo as a **reference and dependency only**—not as a source of code to copy. All generated code is **original implementation** that follows the repo's patterns and structure.
+
+## Do NOT
+
+- Copy, paste, or directly derive code from the repository
+- Duplicate repo source files into generated output
+- Use repo snippets as the body of generated files (except for config/static assets where reference copy is explicitly allowed by project rules)
+
+## Do
+
+- Use the repo for: structure analysis, pattern recognition, API contracts, dependency analysis, file organization, naming conventions
+- Generate **new, clean-room code** that implements the same behavior or features using those patterns
+- Follow repo patterns (architecture, frameworks, dependencies) but write all code from scratch
+- When the system provides a "Likely remaining to implement" list, implement those items in new code only; use repo reference for patterns and APIs only
+
+## Legal and quality
+
+- Avoids licensing issues; generated code is the user's own work, informed by patterns
+- Ensures GRIP outputs are consistent and maintainable, not patchworks of copied snippets
+
+## Where this is enforced in code
+
+- **Enhanced-chat / full_automation_guidance:** "When the project has a linked repo: G.R.I.P. MUST use tree-sitter analysis as the implementation checklist. Implement each item in new, clean-room code only; never copy, paste, or duplicate repo source."
+- **System prompts:** "The user has a linked GitHub repository. You MUST treat it as reference only; do not copy code from the repo."
+- **Plan generation:** Plans and file lists assume implementation is generated, not copied.
+
+See `docs/CLEAN_ROOM_CODE_GENERATION.md`, `.cursorrules` → `full_automation_guidance.rules`.

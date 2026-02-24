@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { Coins } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/use-toast'
+import type { TokenUsageDetail } from '@/lib/tokenRefresh'
 
 type AccessData = {
   hasAccess: boolean
@@ -46,11 +47,23 @@ export function TokenUsage() {
     return () => { cancelled = true }
   }, [])
 
-  // Refetch token usage when enhanced chat (or other AI) records new usage so numbers stay current without page refresh
+  // Update token usage when any AI route records usage (sidebar/dashboard show new amount without page refresh)
   useEffect(() => {
-    const handler = () => refetch()
+    let delayRef: ReturnType<typeof setTimeout> | null = null
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<TokenUsageDetail | null>).detail
+      if (detail && typeof detail.tokenAllowance === 'number' && typeof detail.tokensUsedThisPeriod === 'number') {
+        setData((prev) => (prev ? { ...prev, tokenAllowance: detail.tokenAllowance, tokensUsedThisPeriod: detail.tokensUsedThisPeriod } : null))
+      }
+      refetch()
+      if (delayRef) clearTimeout(delayRef)
+      delayRef = setTimeout(refetch, 400)
+    }
     window.addEventListener('grip-token-update', handler)
-    return () => window.removeEventListener('grip-token-update', handler)
+    return () => {
+      window.removeEventListener('grip-token-update', handler)
+      if (delayRef) clearTimeout(delayRef)
+    }
   }, [refetch])
 
   // Refetch when tab becomes visible so sidebar shows latest after switching back (e.g. from another tab)

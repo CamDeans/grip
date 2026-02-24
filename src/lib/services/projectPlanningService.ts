@@ -405,7 +405,12 @@ export async function getFilesToGenerate(projectId: string): Promise<Array<IFile
       })
       filesToGenerate.sort((a, b) => (b.generationMetadata.priority ?? 0) - (a.generationMetadata.priority ?? 0))
       console.log(`Using plan suggestedFiles (${filesToGenerate.length} files) for full build in one run`)
-      return ensureMandatoryStackBlitzFiles(filesToGenerate)
+      let result = ensureMandatoryStackBlitzFiles(filesToGenerate)
+      if (result.length < MANDATORY_STACKBLITZ_FILES.length) {
+        console.warn(`getFilesToGenerate: plan had ${result.length} files; re-merged mandatory to ensure full set`)
+        result = ensureMandatoryStackBlitzFiles(result)
+      }
+      return result
     }
 
     const structure = await getProjectStructure(projectId)
@@ -471,8 +476,13 @@ export async function getFilesToGenerate(projectId: string): Promise<Array<IFile
     filesToGenerate.sort((a, b) =>
       (b.generationMetadata?.priority ?? 0) - (a.generationMetadata?.priority ?? 0)
     )
-    
-    return ensureMandatoryStackBlitzFiles(filesToGenerate)
+    let result = ensureMandatoryStackBlitzFiles(filesToGenerate)
+    // Safeguard: never return fewer than mandatory files so we never generate only one file (e.g. just globals.css)
+    if (result.length < MANDATORY_STACKBLITZ_FILES.length) {
+      console.warn(`getFilesToGenerate: list had ${result.length} files; re-merged mandatory to ensure full set`)
+      result = ensureMandatoryStackBlitzFiles(result)
+    }
+    return result
   } catch (error) {
     console.error(`Error getting files to generate: ${error}`)
     throw error

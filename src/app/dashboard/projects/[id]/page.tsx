@@ -387,7 +387,7 @@ export default function ProjectOverviewPage() {
                 const trimmed = line.trim()
                 if (!trimmed) continue
                 try {
-                  const event = JSON.parse(trimmed) as { type: string; total?: number; path?: string; name?: string; success?: boolean; error?: string; successCount?: number; errorCount?: number; generatedFiles?: Array<{ success?: boolean }> }
+                  const event = JSON.parse(trimmed) as { type: string; total?: number; path?: string; name?: string; success?: boolean; error?: string; successCount?: number; errorCount?: number; generatedFiles?: Array<{ success?: boolean }>; tokenUsage?: { tokenAllowance: number; tokensUsedThisPeriod: number } }
                   if (event.type === 'start' && typeof event.total === 'number') {
                     setBuildPreviewTotal(event.total)
                   } else if (event.type === 'folder' && event.path) {
@@ -396,6 +396,7 @@ export default function ProjectOverviewPage() {
                     setBuildPreviewItems((prev) => [...prev, { type: 'file', path: event.path!, name: event.name, success: event.success, error: event.error }])
                   } else if (event.type === 'done') {
                     fileCount = event.successCount ?? event.generatedFiles?.filter((f) => f.success).length ?? 0
+                    if (event.tokenUsage) refreshTokenUsage(event.tokenUsage)
                   } else if (event.type === 'error') {
                     throw new Error((event as { error?: string }).error ?? 'File generation failed')
                   }
@@ -411,6 +412,7 @@ export default function ProjectOverviewPage() {
         } else {
           const filesData = await filesRes.json().catch(() => ({}))
           fileCount = filesData.skipped ? (filesData.fileCount ?? 0) : (filesData.successCount ?? filesData.generatedFiles?.filter((f: { success?: boolean }) => f.success).length ?? 0)
+          if (filesData.tokenUsage) refreshTokenUsage(filesData.tokenUsage)
         }
         refreshTokenUsage()
         const state = await fetch(`/api/projects/${projectId}/state`).then((r) => (r.ok ? r.json() : null)).catch(() => null)

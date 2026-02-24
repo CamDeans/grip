@@ -3,6 +3,12 @@
  * Injected into plan generation and enhanced chat so every build follows the same bar:
  * latest stable libraries, modern UX/UI, clean design, best practices.
  * Reduces token waste by getting the first build right.
+ *
+ * Concrete Cursor rules (must stay in sync): .cursor/rules/
+ * - grip-all-code-for-all-files.mdc, stackblitz-mandatory-files.mdc, grip-identity-and-env.mdc
+ * - full-grip-build.mdc, repo-types-mandate.mdc, clean-room-code-generation.mdc, code-and-file-reuse.mdc
+ * - user-uploads-must-use.mdc, no-mock-data-production-ready.mdc, project-specific-scaffolding.mdc
+ * - repo-separation.mdc, sandbox-parity.mdc, likely-remaining-preference.mdc, phase-completion-revert.mdc
  */
 
 /** MANDATORY: GRIP uses only env; Settings vars are for the user's app build only. */
@@ -59,6 +65,18 @@ export const MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING = `
 **For every project (all stacks):**
 - **README.md MUST be project-specific:** Describe **this project** by name and purpose. Include: (1) project name and short description, (2) getting started using **this project's** install/run commands (npm/pip/go/cargo/etc.), (3) main features or usage relevant to this app, (4) tech stack used. NEVER a copy of .env.example, generic "GRIP" text, or a template with no project-specific content.
 - **Env/config MUST be project-specific:** List only variables **this app** actually uses (e.g. NextAuth → NEXTAUTH_SECRET, NEXTAUTH_URL; Prisma → DATABASE_URL; Python → API_KEY, DATABASE_URL). Do not paste GRIP Dashboard variables unless the generated app needs them. Document each variable briefly. For non-Node projects, use that stack's config (e.g. .env, config.yaml, environment in README).
+`.trim()
+
+/**
+ * Mandatory GRIP rule: GRIP creates ALL code for ALL file creations, no matter what.
+ * No skipping, no placeholders, no empty files — every file in the plan/build gets full, runnable code.
+ */
+export const MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES = `
+## MANDATORY: GRIP creates all code for all file creations — no matter what
+
+- **All code for all files:** GRIP MUST generate **full, runnable code** for **every** file that is created or listed in the plan or build. No exceptions. No skipping files. No "add later", no placeholders, no empty files, no comment-only stubs. Every file path in the plan or build MUST receive complete, production-ready code so the project runs in StackBlitz without the user fixing anything.
+- **No partial builds:** Do not create a file without writing its code. Do not list a file in the "files" array or in a phase without providing the full implementation. If a file is in the plan, GRIP creates it with real code—every time.
+- **Enforcement:** This rule is non-negotiable. GRIP's automation and file generation reject empty or placeholder content; every file must have real code. When generating a plan or build, assume every file you list will be created by GRIP—so every file must have code ready (either in your response or via GRIP's templates). Never output a plan or file list that includes files without full code.
 `.trim()
 
 /**

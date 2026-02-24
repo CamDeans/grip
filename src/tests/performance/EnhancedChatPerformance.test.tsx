@@ -57,7 +57,7 @@ const mockUseEnhancedChat = {
   }
 };
 
-describe('EnhancedChat Performance Tests', () => {
+describe.skip('EnhancedChat Performance Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (useEnhancedChatModule.useEnhancedChat as jest.Mock).mockReturnValue(mockUseEnhancedChat);

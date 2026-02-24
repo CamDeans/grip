@@ -68,7 +68,8 @@ export interface FileGenerationResult {
 }
 
 /**
- * GRIP mandatory rule: no blank or placeholder files so StackBlitz preview runs.
+ * GRIP mandatory rule: GRIP creates all code for all file creations — no matter what.
+ * We reject empty or placeholder content so every file has real, runnable code (see MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES).
  * Returns true if content is empty, only whitespace, only comments, or a bare empty export.
  * Allows minimal-but-valid content (e.g. CSS with :root/body, or one import + one real export).
  */
@@ -187,10 +188,10 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
     // Generate filename if not provided
     const filename = request.filename || generateFileName(template, variables)
 
-    // GRIP mandatory: do not save blank or placeholder files (StackBlitz must get runnable code)
+    // GRIP mandatory: create all code for all files — no placeholders, no empty files (MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES)
     const content = renderTemplate(template, variables)
     if (isPlaceholderOrEmpty(content, filename)) {
-      const msg = `Generated content for ${request.filePath || filename} is empty or placeholder. GRIP requires every file to have real code so the app runs in StackBlitz.`
+      const msg = `Generated content for ${request.filePath || filename} is empty or placeholder. GRIP mandatory rule: create all code for all file creations — every file must have real, runnable code.`
       console.warn(msg)
       return {
         fileId: '',

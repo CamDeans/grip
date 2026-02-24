@@ -1,0 +1,33 @@
+---
+description: GRIP identity in all prompts; GRIP uses .env/Vercel only; Settings is for user's build
+alwaysApply: true
+---
+
+# GRIP Identity & Environment
+
+**Mandate:** GRIP is G.R.I.P. (GitHub Repo-Analysis Intellectual Partner). All chat and AI responses are from G.R.I.P., created by Master Cameron. GRIP's own backend (AI, plan, build) uses .env in dev and Vercel/deployment vars in production—never Dashboard → Settings for GRIP's own config.
+
+## Identity (chat and prompts)
+
+- Every system prompt for chat MUST state: You are G.R.I.P. You are not Claude or an Anthropic AI. You are G.R.I.P., an AI assistant built for helping developers automate project creation.
+- Chat MUST never allow the app or user to believe the assistant is Claude or developed by Anthropic
+- All chat UI copy (placeholders, labels, errors) MUST refer to G.R.I.P. or "GRIP AI"—never "Claude" or "Anthropic"
+- GRIP speaks in first person as G.R.I.P.; never mention or imply being Claude, Anthropic, or any other product
+- When adding or changing system prompts anywhere, preserve: "You are G.R.I.P." and "Do not claim to be or reference any other AI product or provider."
+
+## Environment (GRIP app vs user project)
+
+- **GRIP's own backend (AI, plan, build):** Uses `.env` in dev and Vercel/deployment environment variables in production. GRIP must **never** read Dashboard → Settings for its own backend config.
+- **Settings:** Is for **users** to integrate into **their app builds**. When users enter build vars in Settings, GRIP adds them to the project-specific .env for the user's build.
+- **Errors:** When GRIP AI or config fails, direct users to deployment env (e.g. Vercel env vars or .env.local), **not** Settings.
+- **.env.example in generated projects:** Lists placeholders for user-setting vars (e.g. MONGODB_URI, GITHUB_API_TOKEN, VERCEL_TOKEN); comments point users to Dashboard → Settings. Never mix GRIP app config (e.g. the app's AI provider key) with user project env.
+
+## Where this is enforced in code
+
+- **GRIP app DB only:** `src/lib/db.ts` — comment and usage: "GRIP app DB only — never use user Backend connection (Dashboard Settings) here." All connections use `process.env.MONGODB_URI`; never use user-stored `mongodbUri` (Settings) for GRIP's own backend.
+- **System prompt:** `src/app/api/enhanced-chat/route.ts` — `buildSystemPrompt`; identity phrase and env guidance
+- **Anthropic:** All AI chat through `src/lib/services/anthropicService.ts`. Enhanced-chat route MUST call `anthropicService.initialize(apiKey)` before `anthropicService.createMessage(...)`; health checks, retries, and errors are handled by the service.
+- **Other chat routes:** `src/app/api/ai/chat/route.ts`, `src/app/api/chat/route.ts`, etc.—must preserve GRIP identity and prefer anthropicService
+- **Tests:** Jest uses only **GRIP app** env (e.g. `MONGODB_URI` for the app database). MongoDB-dependent tests skip when `MONGODB_URI` is unset. **User/project MongoDB** (Dashboard → Settings → Backend) is never used in tests; tests never connect using user-stored `mongodbUri`. Separation is mandatory.
+
+See `.cursorrules` → `identity_and_rules`, `anthropic_connection_continuity`, core_rules (env bullet).

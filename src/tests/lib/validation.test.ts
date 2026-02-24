@@ -22,16 +22,16 @@ describe('validation utility', () => {
       expect(result.error).toBe('Message cannot be empty');
     });
 
-    // Test for message length
-    it('should reject messages longer than 5000 characters', () => {
-      const longMessage = 'a'.repeat(5001);
+    // Test for message length (implementation uses 32k limit)
+    it('should reject messages longer than 32000 characters', () => {
+      const longMessage = 'a'.repeat(32001);
       const result = validateMessage(longMessage);
       expect(result.isValid).toBe(false);
-      expect(result.error).toBe('Message is too long (max 5000 characters)');
+      expect(result.error).toBe('Message is too long (max 32k characters). Consider shortening or splitting.');
     });
 
-    it('should accept messages of exactly 5000 characters', () => {
-      const borderlineMessage = 'a'.repeat(5000);
+    it('should accept messages of exactly 32000 characters', () => {
+      const borderlineMessage = 'a'.repeat(32000);
       // Mock window for lastMessageTime to avoid rate limiting
       Object.defineProperty(global, 'window', {
         value: { lastMessageTime: 0 },

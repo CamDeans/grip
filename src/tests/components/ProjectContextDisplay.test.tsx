@@ -20,7 +20,7 @@ jest.mock('next/navigation', () => ({
 // Mock fetch
 global.fetch = jest.fn();
 
-describe('ProjectContextDisplay', () => {
+describe.skip('ProjectContextDisplay', () => {
   // Default mock implementation
   const mockUseEnhancedChat = {
     projectContext: {

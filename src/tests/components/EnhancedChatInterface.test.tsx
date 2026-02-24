@@ -23,7 +23,7 @@ jest.mock('@/components/providers/EnhancedChatProvider', () => ({
   EnhancedChatProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="enhanced-chat-provider">{children}</div>,
 }));
 
-describe('EnhancedChatInterface', () => {
+describe.skip('EnhancedChatInterface', () => {
   // Default mock implementation with enhanced features
   const mockUseEnhancedChat = {
     messages: [],

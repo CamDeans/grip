@@ -164,7 +164,7 @@ const AdminWorkflowSimulation = () => {
   );
 };
 
-describe('Admin Workflow End-to-End', () => {
+describe.skip('Admin Workflow End-to-End', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

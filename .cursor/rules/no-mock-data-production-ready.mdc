@@ -1,0 +1,31 @@
+---
+description: No mock data or placeholder APIs; production-ready code only; add DB when persistence indicated
+alwaysApply: true
+---
+
+# No Mock Data — Production-Ready Code Only
+
+**Mandate:** For new project creations and automation, do **not** include mock data, fake APIs, or placeholder data in file creations or code generation. All files and code MUST be production ready.
+
+## Do
+
+- Use real environment variables (e.g. `process.env.API_URL`), real API contracts, and real data flow.
+- Document required env vars in .env.example; do not hardcode dummy values.
+- When the app needs an API key or backend URL, use env vars and point the user to where to set them (e.g. Dashboard → Settings → Backend connections).
+
+## Database setup when persistence is indicated (MANDATORY)
+
+- If there is **any** mention of: content creation, saved data, user-generated content, images, video, uploads, "save", "persist", "store data", "user data", "posts", "comments", "media", or similar—you **MUST** add **database setup** to the build.
+- Include: (1) `MONGODB_URI` (or appropriate DB connection) in .env.example and wire the app to the database; (2) connection logic and at least one collection/model for the data being saved; (3) instructions pointing the user to **Dashboard → Settings → Backend connections** for MongoDB (or the relevant GRIP setting).
+- Do not assume the app is "static" or "client-only" when the user's goals imply saving or storing data—add the database layer by default.
+
+## Do NOT
+
+- Include mock data, fake APIs, or placeholder data in generated code.
+- Leave persistence-related features without a real database connection and .env documentation.
+
+## Where this is enforced in code
+
+- **buildQualityPlan:** `MANDATORY_GRIP_BUILD_QUALITY` includes "No mock data; production-ready code only" and "Database setup when persistence is indicated (MANDATORY)". Injected into plan generator and enhanced-chat.
+
+See `src/lib/constants/buildQualityPlan.ts` → `MANDATORY_GRIP_BUILD_QUALITY`.

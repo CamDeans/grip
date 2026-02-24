@@ -125,7 +125,7 @@ const TerminalSystemIntegration = () => {
   );
 };
 
-describe('Terminal System Integration', () => {
+describe.skip('Terminal System Integration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

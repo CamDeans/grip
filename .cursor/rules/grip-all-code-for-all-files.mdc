@@ -1,0 +1,32 @@
+---
+description: GRIP must generate full code for every file—no placeholders, no empty files
+alwaysApply: true
+---
+
+# GRIP: All Code for All File Creations
+
+**Mandatory rule:** GRIP MUST generate **full, runnable code** for **every** file that is created or listed in the plan or build. No exceptions.
+
+## Do NOT
+
+- Skip files or leave them for "later"
+- Create placeholder-only content (e.g. `// TODO`, `...`, empty bodies)
+- Save empty files or comment-only stubs
+- List files in plans or file lists that will not receive complete implementations
+
+## Do
+
+- Generate complete, runnable content for each file in the plan/build file list
+- Ensure every file that gets created has real code (or config) that fits the project
+- If full code cannot be produced for a file, do not include it in the generation list; only list files for which full implementations can be provided
+- When implementing file generation: reject empty/placeholder content and surface the mandatory-rule message on failure (e.g. "GRIP mandatory: every file must have code; N file(s) failed.")
+
+## Where this is enforced in code
+
+- **Plan generation:** `MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES` in AI prompts; plans and "files" arrays assume every listed file gets full code.
+- **deriveSuggestedFilesFromPlan:** Prompt states every file in the list will be generated with full code.
+- **Template variable generation:** Variable values must produce complete content—never placeholder or empty.
+- **File generation:** `isPlaceholderOrEmpty()` rejects empty/placeholder content; file is not saved; generation returns failure with mandatory-rule message.
+- **files/generate route:** On any file failure, response/stream includes `mandatoryRuleMessage` so the client can show the error.
+
+**Outcome:** Every file in the plan/build either gets real code (and is saved) or generation fails for that file and the user sees the error. No file is ever persisted with empty or placeholder-only content.

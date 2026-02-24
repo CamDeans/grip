@@ -4,7 +4,7 @@ import { Anthropic } from '@anthropic-ai/sdk'
 import { getOrCreateProjectStructure } from './structureGeneratorService'
 import { IProjectStructureData } from '@/lib/models/ProjectStructure'
 import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
-import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
 import { buildPlanContextFromAnalysis, type PlanContextFromAnalysis } from './planContextFromAnalysisService'
 
 /**
@@ -334,6 +334,8 @@ ${uploadsBlock}
 ${MANDATORY_GRIP_APP_VS_USER_SETTINGS}
 
 ${MANDATORY_GRIP_BUILD_QUALITY}
+
+${MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES}
 
 ${MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD}
 
@@ -679,6 +681,8 @@ export async function deriveSuggestedFilesFromPlan(projectId: string): Promise<S
     .join('\n\n')
 
   const prompt = `Given this development plan, output a JSON object with a single key "files": an array of file paths to implement the full build. Each item: {"path":"package.json","phaseId":"1","description":"deps"} or {"path":"src/app/layout.tsx","phaseId":"1","taskId":"1.1","description":"root layout"}. Include package.json, tsconfig.json, .env.example, README.md, src/app/layout.tsx, src/app/page.tsx, API routes, lib, and key components. For Next.js do not include src/index.tsx; for Vite include src/index.tsx. Output only valid JSON: no markdown, no trailing commas, no text after the closing brace. List 25-50 key files.
+
+GRIP mandatory rule: every file in this list will be generated with full code. Only list files for which full implementations can be provided—no placeholders, no empty files, no "add later" stubs. Every path you list must receive complete, runnable code.
 
 Plan:
 ${phasesText}`

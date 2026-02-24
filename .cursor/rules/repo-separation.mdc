@@ -1,0 +1,29 @@
+---
+description: Analysis and repo context are for the user's linked repo only; never GRIP codebase
+alwaysApply: true
+---
+
+# Repo Separation — User Repo Only, Never GRIP Codebase
+
+**Mandate:** Repository analysis and repo context are for the **user's linked repo** (owner/repo) only. GRIP must **never** fetch or analyze the GRIP codebase itself.
+
+## Do
+
+- Clone, analyze, and build repo reference documents only for the project's linked GitHub repository (the repo the user selected for the project).
+- Use `repositories` collection and repo APIs with the project's `repository.owner` and `repository.name` only.
+- In tree-sitter and repo context: owner/repo refer to the user's linked repo; file paths and content are from that repo only.
+
+## Do NOT
+
+- Fetch, clone, or analyze the GRIP application repo (e.g. the repo containing this codebase) as if it were the user's project.
+- Mix GRIP source code or GRIP repo structure into analysis or repo context intended for the user's project.
+- Use repo context or analysis for any repo other than the one linked to the current project.
+
+## Where this is enforced in code
+
+- **treeSitterAnalysis:** "Only the user's linked repo is analyzed—never GRIP codebase." owner/repo are the user's linked repo only; we never fetch or analyze GRIP codebase.
+- **treeSitterNative:** "Only used for user's linked repo—never GRIP code."
+- **repoContextService:** Builds repo reference document from the project's stored repo (repositories collection keyed by project's repo).
+- **BACKEND_EXPECTATIONS_SANDBOX_TO_MAIN:** "Repo separation: only user repo (owner/name); never GRIP code in analysis."
+
+See `src/lib/treeSitter/treeSitterAnalysis.ts`, `src/lib/treeSitter/treeSitterNative.ts`, `docs/BACKEND_EXPECTATIONS_SANDBOX_TO_MAIN.md`.

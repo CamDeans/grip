@@ -25,6 +25,13 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Test
+        run: npm test
+        env:
+          # No MONGODB_URI: unit tests run; MongoDB-dependent suites skip (see grip-identity-and-env: tests use GRIP app env only).
+          NEXTAUTH_SECRET: build-time-secret-min-32-chars-long
+          NEXTAUTH_URL: http://localhost:3000
+
       - name: Build
         run: npm run build
         env:

@@ -1,0 +1,39 @@
+---
+description: G.R.I.P. must handle ALL GitHub repo types with correct toolchain and conventions
+alwaysApply: true
+---
+
+# Repo Types Mandate — Handle ALL GitHub Repos
+
+**Mandate:** G.R.I.P. MUST handle **every kind** of GitHub repository—not just one-off web apps. Use the correct toolchain, build system, and conventions for the detected stack.
+
+## Do NOT
+
+- Assume "just a web app" unless the repo clearly is
+- Suggest React Native for iOS repos; suggest npm for Python/Go/Rust; remove ML framework unless user asks
+- Strip or replace stack-specific structure (e.g. Xcode layout, Gradle, pyproject.toml) without user direction
+- Apply only generic web rules when the repo is AI/ML, iOS, Android, full-stack, Python, Go, Rust, Ruby, PHP, .NET, or CLI
+
+## Do
+
+- Detect repo type from structured analysis (`identity`, `file_manifest`, `mainLanguages`) or from saved project files when no analysis yet
+- Apply category-specific rules: AI/ML/LLM, iOS (Swift), Android (Kotlin), full-stack JS, web JS, Python, Go, Rust, Ruby, PHP, .NET, CLI, generic
+- Preserve the project's stack (deps, configs, entry points); add code that fits existing patterns
+- Follow the mandatory rules per category injected into the enhanced-chat system prompt (see `src/lib/repoTypeDetection.ts`)
+
+## Categories (reference)
+
+- **AI/ML/LLM:** Preserve ML stack (PyTorch, TensorFlow, LangChain); keep model configs and API usage
+- **iOS (Swift):** Swift/SwiftUI or UIKit only; respect Xcode structure and Info.plist; Apple HIG
+- **Android (Kotlin):** Kotlin/Java and Gradle; app/src/main and manifests; Material Design
+- **Full-stack JS:** Single root dev script (e.g. concurrently); keep API contracts and env in sync
+- **Web JS:** Repo's frontend stack (React, Next, Vite) and package.json scripts
+- **Python / Go / Rust / Ruby / PHP / .NET / CLI:** Standard layout and build system for each; preserve entrypoints and conventions
+
+## Where this is enforced in code
+
+- **Repo type detection:** `src/lib/repoTypeDetection.ts` — `RepoTypeCategory`, `getMandatoryRepoTypeRules()`
+- **Enhanced-chat route:** Injects "Mandatory: Repo type and stack" + category-specific rules into system prompt
+- **Fallback:** When no structured analysis, infer from saved project files (path + extension counts)
+
+See `.cursorrules` → `repo_types_mandate`, `full_automation_guidance`, `docs/REPO_TYPES_AND_GRIP.md`.

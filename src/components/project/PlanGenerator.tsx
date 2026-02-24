@@ -180,7 +180,7 @@ export function PlanGenerator({ projectId }: PlanGeneratorProps) {
         title: 'Files Generated',
         description: data.message || (total ? `Created ${successCount} of ${total} file(s). They appear in Repo and Generated files.` : 'Project files have been created based on the plan'),
       })
-      refreshTokenUsage()
+      refreshTokenUsage(data.tokenUsage)
       router.refresh()
       fetchFilesToGenerate()
     } catch (err) {

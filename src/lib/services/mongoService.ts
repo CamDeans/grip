@@ -121,8 +121,11 @@ async function withRetry<T>(
   throw lastError
 }
 
-// Initialize MongoDB client
+// Initialize MongoDB client (skip when URI is missing so tests without MONGODB_URI can load)
 if (isClient) {
+  clientPromise = new Promise(() => {})
+} else if (!MONGODB_URI) {
+  // Lazy pending promise so modules load without connecting; tests can skip when !MONGODB_URI
   clientPromise = new Promise(() => {})
 } else {
   if (process.env.NODE_ENV === 'development') {

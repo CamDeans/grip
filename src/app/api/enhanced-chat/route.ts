@@ -7,8 +7,8 @@ import { requireAppAccess, requireTokenBalance, getAppAccess } from '@/lib/acces
 import { buildTokenBudgetPromptFragment, getChatResponseMaxTokens } from '@/lib/constants/tokenBudgetPlan'
 import { getChatSectionBudgets } from '@/lib/constants/tokenLimitsByTier'
 import { addTokenUsage } from '@/lib/tokenUsage'
-import { Anthropic } from '@anthropic-ai/sdk'
-import { getAnthropicApiKey, getAnthropicApiKeyForUser, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
+import { getAnthropicApiKey, getAnthropicApiKeyForUser } from '@/lib/anthropicConfig'
+import { anthropicService } from '@/lib/services/anthropicService'
 import { getOrBuildRepoContextDocument } from '@/lib/services/repoContextService'
 import { listProjectFiles } from '@/lib/services/fileStorageService'
 import { getProjectPlan } from '@/lib/services/projectPlanningService'
@@ -16,7 +16,7 @@ import { getProjectState, updateProjectState, recordFileSaveAndAdvanceStep } fro
 import { createProjectFolder, saveProjectFile } from '@/lib/services/gripProjectActions'
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 import { runMainProject } from '@/lib/runMainProject'
-import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
 import { STYLING_REQUIREMENTS_FOR_GRIP } from '@/lib/constants/stylingReferenceRepos'
 import { detectRepoType, getMandatoryRepoTypeRules } from '@/lib/repoTypeDetection'
 import { getReferenceReposGuidanceLine } from '@/lib/constants/referenceRepos'
@@ -238,6 +238,8 @@ ${userUploadsSummary}
   prompt += `\n${MANDATORY_GRIP_APP_VS_USER_SETTINGS}\n\n`
   // Mandatory build quality so GRIP follows same bar (latest libs, modern UX/UI, token efficiency)
   prompt += `\n${MANDATORY_GRIP_BUILD_QUALITY}\n\n`
+  // Mandatory: GRIP creates all code for all file creations — no matter what
+  prompt += `\n${MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES}\n\n`
   // Mandatory: only include what is required; do not default to Vite for every project
   prompt += `\n${MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD}\n\n`
   // Mandatory: no blank files in build phases; every file must have code; project must run in StackBlitz
@@ -1749,34 +1751,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const anthropic = new Anthropic({ apiKey })
+    await anthropicService.initialize(apiKey)
     const responseMaxTokens = getChatResponseMaxTokens(remainingTokens)
     let response: { content: string; usage: { promptTokens: number; completionTokens: number; totalTokens: number }; stopReason: string }
     try {
-      const raw = await anthropic.messages.create({
-        model: ANTHROPIC_MODEL_CHAT,
-        max_tokens: responseMaxTokens,
-        temperature: 0.7,
-        system: systemPrompt,
-        messages: history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-      })
-      const content = (raw.content ?? [])
-        .filter((b: { type?: string }) => b?.type === 'text')
-        .map((b: { text?: string }) => b?.text ?? '')
-        .join('')
-        .trim()
-      if (content.toLowerCase().includes('claude') || content.toLowerCase().includes('anthropic')) {
-        throw new Error('Response contains unauthorized identity references')
-      }
-      response = {
-        content,
-        usage: {
-          promptTokens: raw.usage?.input_tokens ?? 0,
-          completionTokens: raw.usage?.output_tokens ?? 0,
-          totalTokens: (raw.usage?.input_tokens ?? 0) + (raw.usage?.output_tokens ?? 0),
-        },
-        stopReason: raw.stop_reason ?? 'unknown',
-      }
+      response = await anthropicService.createMessage(
+        history.map(m => ({ role: m.role, content: m.content })),
+        { system: systemPrompt, maxTokens: responseMaxTokens }
+      )
     } catch (apiErr) {
       console.error('G.R.I.P. AI request failed:', apiErr)
       const msg = apiErr instanceof Error ? apiErr.message : String(apiErr)
@@ -2004,27 +1986,10 @@ export async function POST(request: NextRequest) {
           ]
           const systemPromptRetry = buildSystemPrompt(projectForPrompt, analysis, repoReferenceDoc, savedFiles, planContext, projectStateContext, structuredSummary, sandboxExperimentsSummary, repoFeaturesChecklist, isSandbox, likelyRemaining, lastAttemptSummary, userUploadsSummary, repoTypeRules, stackGuidanceFromPlan, tokenBudgetHint, userHasMongoDB, sectionBudgets)
 
-          const rawRetry = await anthropic.messages.create({
-            model: ANTHROPIC_MODEL_CHAT,
-            max_tokens: responseMaxTokens,
-            temperature: 0.7,
-            system: systemPromptRetry,
-            messages: historyForRetry.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-          })
-          const contentRetry = (rawRetry.content ?? [])
-            .filter((b: { type?: string }) => b?.type === 'text')
-            .map((b: { text?: string }) => b?.text ?? '')
-            .join('')
-            .trim()
-          const responseRetry = {
-            content: contentRetry,
-            usage: {
-              promptTokens: rawRetry.usage?.input_tokens ?? 0,
-              completionTokens: rawRetry.usage?.output_tokens ?? 0,
-              totalTokens: (rawRetry.usage?.input_tokens ?? 0) + (rawRetry.usage?.output_tokens ?? 0),
-            },
-            stopReason: rawRetry.stop_reason ?? 'unknown',
-          }
+          const responseRetry = await anthropicService.createMessage(
+            historyForRetry.map(m => ({ role: m.role, content: m.content })),
+            { system: systemPromptRetry, maxTokens: responseMaxTokens }
+          )
           const tokensRetry = responseRetry.usage?.totalTokens ?? (responseRetry.usage?.promptTokens ?? 0) + (responseRetry.usage?.completionTokens ?? 0)
           if (tokensRetry > 0 && session.user?.id) {
             await addTokenUsage(session.user.id, tokensRetry).catch(() => {})

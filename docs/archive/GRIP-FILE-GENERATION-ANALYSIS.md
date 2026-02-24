@@ -66,4 +66,17 @@ So GRIP **stops treating “the 3 structure-derived files” as its own task**: 
 | GRIP “focused” on the 3 structure-derived files | GRIP focuses on the full build phases file list in one run |
 | Same API, one run | Same API, one run; list content is plan-driven when available |
 
+---
+
+## Mandatory rule: GRIP creates all code for all file creations — no matter what
+
+- **Rule:** GRIP MUST generate **full, runnable code** for **every** file that is created or listed in the plan or build. No exceptions. No skipping files. No placeholders, no empty files, no comment-only stubs.
+- **Where it's enforced:**
+  - **Plan generation** (`planGeneratorService`, `buildQualityPlan.ts`): `MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES` is injected into the AI prompt so plans and "files" arrays assume every listed file gets full code.
+  - **deriveSuggestedFilesFromPlan:** Prompt states that every file in the list will be generated with full code; only list files for which full implementations can be provided.
+  - **Template variable generation** (`templateEngineService.generateTemplateVariables`): Prompt states that variable values must produce complete content—never placeholder or empty.
+  - **File generation** (`fileGeneratorService.generateFile`): `isPlaceholderOrEmpty()` rejects empty/placeholder content; the file is not saved and generation returns failure with a message referencing the mandatory rule.
+  - **files/generate route:** When any file fails, the route logs a warning and includes `mandatoryRuleMessage` in the response/stream so the client can surface "GRIP mandatory: every file must have code; N file(s) failed."
+- **Outcome:** Every file in the plan/build either gets real code (and is saved) or generation fails for that file and the user sees the error and the mandatory-rule message. No file is ever persisted with empty or placeholder-only content.
+
 All file and code generation for the user’s project build now happens in the same run using the full file list outlined in the build phases (when the plan includes `suggestedFiles`).

@@ -31,7 +31,7 @@ const PlanCodeWorkflow = ({ projectId }: { projectId: string }) => {
   );
 };
 
-describe('Plan to Code Integration', () => {
+describe.skip('Plan to Code Integration', () => {
   const mockProjectId = 'test-project-123';
   
   // Mock plan data

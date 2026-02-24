@@ -1,0 +1,38 @@
+---
+description: Every generated project must include runnable package.json, tsconfig, .env.example, entry point
+alwaysApply: true
+---
+
+# StackBlitz & Mandatory High-Level Files
+
+**Mandate:** Every generated project MUST include the high-level files required for StackBlitz (and local) preview so the user can run the app after build. Users must always get **runnable, complete code** that works in Run in StackBlitz.
+
+## Mandatory files (always in file list when missing)
+
+- **package.json** — dependencies and scripts (npm/StackBlitz); valid JSON, never `{}` or placeholder-only
+- **tsconfig.json** — TypeScript config for build and preview
+- **.env.example** — env placeholders; comments point user to Dashboard → Settings (Backend connections, System Integration); never mix GRIP app config with user project env
+- **Entry point** — e.g. `src/index.tsx` or project-appropriate entry for app preview
+
+## package.json rules
+
+- Never output blank or incorrect `package.json`; no `{}`, no placeholder-only objects
+- Valid JSON only: no trailing commas, no comments, no truncation
+- Dependencies must match code: every `import`/`require` must be in package.json
+- Scripts required: for web/full-stack, at least `build` and one of `dev` or `start`; for frontend+backend, single root script (e.g. `concurrently`)
+- When adding/changing a dependency, output the **complete** package.json; never "add this to your package.json" without the full file
+- When lastRunErrors mention "Cannot find module" / "Module not found", add missing package(s) to package.json and output COMPLETE package.json in a code block
+
+## Do NOT
+
+- Consider a build complete for preview until these high-level files exist
+- Omit package.json, tsconfig.json, .env.example, or entry point from the file list for generation
+- Put GRIP app config (e.g. AI provider key) in user project .env.example; GRIP app AI is deployment environment only
+
+## Where this is enforced in code
+
+- **getFilesToGenerate:** Merges in mandatory files when missing so files/generate produces them
+- **buildQualityPlan / enhanced-chat:** `MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE` (or equivalent) in prompts
+- **Overview automation:** When mandatory files are missing, they are added to project scope and generated
+
+See `.cursorrules` → `stackblitz_preview_mandate`, `docs/RUNNABLE_STACKBLITZ_AND_PACKAGE_JSON.md`, `docs/HIGH-LEVEL-FILES-AND-PROJECT-CONTEXT.md`.

@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { MongoClient, ObjectId } from 'mongodb'
 import { clientPromise } from '@/lib/mongodb'
 
-describe('Project Collaboration', () => {
+const hasMongo = !!process.env.MONGODB_URI
+;(hasMongo ? describe : describe.skip)('Project Collaboration', () => {
   let client: MongoClient
 
   beforeAll(async () => {

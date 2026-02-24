@@ -1,19 +1,12 @@
 import { Server as SocketIOServer } from 'socket.io'
 import { NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
-import Anthropic from '@anthropic-ai/sdk'
-import { getAnthropicApiKey, ANTHROPIC_MODEL_OPUS } from '@/lib/anthropicConfig'
+import { getAnthropicApiKey } from '@/lib/anthropicConfig'
+import { anthropicService } from '@/lib/services/anthropicService'
 
 // Singleton instance management
 let io: SocketIOServer | null = null
 let serverInitialized = false
-
-// Anthropic client created per-request when key is present (see POST)
-function getAnthropicClient() {
-  const apiKey = getAnthropicApiKey()
-  if (!apiKey) return null
-  return new Anthropic({ apiKey })
-}
 
 function initializeSocketServer() {
   if (serverInitialized) {
@@ -120,13 +113,14 @@ export async function POST(request: Request) {
     const tokenExhausted = await requireTokenBalance(session)
     if (tokenExhausted) return tokenExhausted
 
-    const anthropic = getAnthropicClient()
-    if (!anthropic) {
+    const apiKey = getAnthropicApiKey()
+    if (!apiKey) {
       return NextResponse.json(
         { error: 'G.R.I.P. AI is not configured. Set ANTHROPIC_API_KEY in .env.local or environment.' },
         { status: 503 }
       )
     }
+    await anthropicService.initialize(apiKey)
 
     const body = await request.json()
     const { projectId, message, currentPhase, phases } = body
@@ -154,21 +148,13 @@ Always maintain a professional but friendly tone, and provide specific, actionab
       // Extract message content, handling both string and object formats
       const messageContent = typeof message === 'string' ? message : message.content
 
-      // Call G.R.I.P. AI
-      const response = await anthropic.messages.create({
-        model: ANTHROPIC_MODEL_OPUS,
-        max_tokens: 4096,
-        temperature: 0.7,
-        system: context,
-        messages: [
-          {
-            role: 'user',
-            content: messageContent
-          }
-        ]
-      })
+      // Call G.R.I.P. AI via anthropicService (identity, retries, usage logging)
+      const response = await anthropicService.createMessage(
+        [{ role: 'user', content: messageContent }],
+        { system: context, maxTokens: 4096 }
+      )
 
-      const totalTokens = (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0)
+      const totalTokens = response.usage.totalTokens
       if (totalTokens > 0 && session.user?.id) {
         const { addTokenUsage } = await import('@/lib/tokenUsage')
         await addTokenUsage(session.user.id, totalTokens).catch((err) =>
@@ -177,7 +163,7 @@ Always maintain a professional but friendly tone, and provide specific, actionab
       }
 
       console.log('API: Received response from G.R.I.P.:', {
-        responseLength: response.content[0].text.length,
+        responseLength: response.content.length,
       })
 
       // Safely determine step ID without causing errors
@@ -192,7 +178,7 @@ Always maintain a professional but friendly tone, and provide specific, actionab
 
       // Process the response
       const aiResponse = {
-        content: response.content[0].text,
+        content: response.content,
         stepContext: {
           phase: currentPhase || 'Development Environment Setup',
           stepId: stepId,

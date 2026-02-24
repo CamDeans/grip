@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server'
 import { getServerAuthSession } from '@/lib/auth'
 import { requireAppAccess, requireTokenBalance } from '@/lib/access'
 import { addTokenUsage } from '@/lib/tokenUsage'
-import { Anthropic } from '@anthropic-ai/sdk'
 import { AIMessage } from '@/types'
-import { getAnthropicApiKey, ANTHROPIC_MODEL_OPUS } from '@/lib/anthropicConfig'
+import { getAnthropicApiKey } from '@/lib/anthropicConfig'
+import { anthropicService } from '@/lib/services/anthropicService'
 
 export async function POST(request: Request) {
   try {
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const anthropic = new Anthropic({ apiKey })
+    await anthropicService.initialize(apiKey)
     const { message, history, context } = await request.json()
 
     // Update the system prompt
@@ -81,25 +81,21 @@ Your role is to:
     })
 
     console.log('Sending to G.R.I.P.:', {
-      model: ANTHROPIC_MODEL_OPUS,
       system: systemPrompt,
       messages: formattedMessages
     })
 
-    // Get AI response
-    const response = await anthropic.messages.create({
-      model: ANTHROPIC_MODEL_OPUS,
-      max_tokens: 4000,
+    // Get AI response via anthropicService (identity, retries, usage logging)
+    const response = await anthropicService.createMessage(formattedMessages, {
       system: systemPrompt,
-      messages: formattedMessages,
-      temperature: 0.7,
+      maxTokens: 4000
     })
 
-    if (!response.content || !response.content[0] || !response.content[0].text) {
+    if (!response.content || !response.content.trim()) {
       throw new Error('Invalid response from G.R.I.P.')
     }
 
-    const totalTokens = (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0)
+    const totalTokens = response.usage.totalTokens
     if (totalTokens > 0 && session.user?.id) {
       await addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('AI chat: failed to record token usage', err)
@@ -107,7 +103,7 @@ Your role is to:
     }
 
     // Extract code blocks if present
-    const content = response.content[0].text
+    const content = response.content
     let code = null
 
     // Simple code block extraction
