@@ -282,7 +282,7 @@ export default function DashboardPage() {
                   {(access.tokenAllowance ?? 0) > 0 && (
                     <>
                       <p className="text-sm text-text-secondary">
-                        {(access.tokensUsedThisPeriod ?? 0).toLocaleString()} / {(access.tokenAllowance ?? 0).toLocaleString()} tokens this period
+                        {Math.max(0, (access.tokenAllowance ?? 0) - (access.tokensUsedThisPeriod ?? 0)).toLocaleString()} left of {(access.tokenAllowance ?? 0).toLocaleString()} tokens this period
                       </p>
                       {access.subscriptionPeriodEnd && (
                         <p className="text-xs text-text-muted">

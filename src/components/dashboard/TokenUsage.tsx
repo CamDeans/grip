@@ -102,6 +102,7 @@ export function TokenUsage() {
   const planLabel = TIER_LABELS[data.tier || ''] || data.tier || 'Plan'
   const used = data.tokensUsedThisPeriod ?? 0
   const allowance = data.tokenAllowance ?? 0
+  const remaining = allowance > 0 ? Math.max(0, allowance - used) : 0
   const pct = allowance > 0 ? Math.min(100, Math.round((used / allowance) * 100)) : 0
   const resetsAt = data.subscriptionPeriodEnd
     ? new Date(data.subscriptionPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -115,8 +116,8 @@ export function TokenUsage() {
       </div>
       {allowance > 0 && (
         <>
-          <p className="text-xs text-text-secondary">
-            {used.toLocaleString()} / {allowance.toLocaleString()} tokens
+          <p className="text-xs text-text-secondary" title={`Used: ${used.toLocaleString()} · Allowance: ${allowance.toLocaleString()} (cap per period). Remaining goes down as you use tokens.`}>
+            {remaining.toLocaleString()} left of {allowance.toLocaleString()} tokens
           </p>
           {resetsAt && (
             <p className="text-[10px] text-text-muted mt-0.5">Resets {resetsAt}</p>

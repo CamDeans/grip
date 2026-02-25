@@ -72,6 +72,8 @@ export async function getAppAccess(session: Session | null): Promise<AppAccess> 
   const limits = await getTokenLimits()
 
   // 1. Admin: full access with configurable tokens/month (default 500k) for app usage and testing
+  // When syncing allowance from admin limits, never overwrite tokensUsedThisPeriod except on period reset,
+  // so that usage recorded by addTokenUsage is never lost (remaining = allowance - tokensUsedThisPeriod).
   if (isAdminUser(session)) {
     const allowance = limits.adminTokenAllowance
     const now = new Date()

@@ -44,8 +44,8 @@ export async function setTokenLimits(limits: Partial<TokenLimits>): Promise<void
 /**
  * Add token usage for a user this period. Call after a successful AI request.
  * Caps at allowance so we never record an overage (tokensUsedThisPeriod never exceeds tokenAllowance).
- * User's remaining tokens = tokenAllowance - tokensUsedThisPeriod; each call increases used (capped),
- * so remaining decreases and the user cannot exceed their allotted amount.
+ * Allowance = fixed monthly cap (set by admin or plan). Remaining = allowance - tokensUsedThisPeriod;
+ * as usage goes up, remaining goes down (allowance does not go down).
  */
 export async function addTokenUsage(userId: string, amount: number): Promise<void> {
   if (amount <= 0) return
