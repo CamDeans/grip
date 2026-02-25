@@ -2,6 +2,12 @@ Always start with "Master Cameron!!!"
 
 # G.R.I.P. (GitHub Repo-Analysis Intellectual Partner) Project Rules
 
+# Mandatory process rule (source of truth and changes)
+# We work only from CONCRETE-RULES-AND-ALIGNMENT.md and this .cursorrules file. All changes to these two files must be verified and confirmed before updating so we stay on track and on the same page.
+process_and_source_of_truth:
+  - "Work only from docs/CONCRETE-RULES-AND-ALIGNMENT.md and .cursorrules. No other doc or rule set overrides these two."
+  - "Verify and confirm every change to CONCRETE-RULES-AND-ALIGNMENT.md or .cursorrules before updating either file. Do not edit these two files without that confirmation."
+
 # Core Rules
 core_rules:
   - always use the .env.local file for testing purposes
@@ -63,6 +69,13 @@ stackblitz_preview_mandate:
     - ".env.example MUST list placeholders only for user-setting vars that the project needs: MONGODB_URI (Backend connections), GITHUB_API_TOKEN and VERCEL_TOKEN (System Integration). Never mix GRIP app config (e.g. the app's AI provider key) with user project env—GRIP app AI is deployment environment only. Comments MUST point the user to Dashboard → Settings (Backend connections, System Integration) so they can copy values for run/preview."
     - "Overview automation MUST treat these as mandatory: when they are missing, getFilesToGenerate merges them in so files/generate produces them and adds them to the project scope."
     - "Do not consider a build complete for preview purposes until these high-level files exist; overview automation that finds missing files will add and generate them."
+
+# Build artifacts must align with code (concrete rule)
+# package.json, tsconfig.json, .env.example, and other build config must match the code written in build phases. See .cursor/rules/build-artifacts-align-with-code.mdc and CONCRETE-RULES-AND-ALIGNMENT.md.
+build_artifacts_align_with_code:
+  - "package.json: dependencies MUST include every import/require from the generated code; scripts MUST match the framework the code uses (Next vs Vite, etc.). No mixing stacks."
+  - "tsconfig.json: include must cover actual source paths; compilerOptions (e.g. jsx) must suit the stack. .env.example: list only variables the generated app code actually uses."
+  - "All build artifacts must be derived from the same plan, analysis, and file set as the code. Validation runs after file generation and on preflight; alignment warnings surface on Overview when misaligned."
 
 # G.R.I.P. AI Assistant Enhancement Plan
 # The plan is divided into small, manageable phases with granular steps

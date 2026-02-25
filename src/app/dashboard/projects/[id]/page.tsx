@@ -82,6 +82,8 @@ export default function ProjectOverviewPage() {
   /** Live preview: folders and files as they are generated (streaming from files/generate) */
   const [buildPreviewItems, setBuildPreviewItems] = useState<Array<{ type: 'folder' | 'file'; path: string; name?: string; success?: boolean; error?: string }>>([])
   const [buildPreviewTotal, setBuildPreviewTotal] = useState(0)
+  /** When file generation returns buildArtifactAlignment and !ok, show this so user can fix in Develop or rerun */
+  const [buildArtifactAlignmentWarning, setBuildArtifactAlignmentWarning] = useState<string | null>(null)
   const [uploads, setUploads] = useState<Array<{ path: string; filename: string; size: number; purpose: string }>>([])
   const [loadingUploads, setLoadingUploads] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -389,7 +391,19 @@ export default function ProjectOverviewPage() {
                 const trimmed = line.trim()
                 if (!trimmed) continue
                 try {
-                  const event = JSON.parse(trimmed) as { type: string; total?: number; path?: string; name?: string; success?: boolean; error?: string; successCount?: number; errorCount?: number; generatedFiles?: Array<{ success?: boolean }>; tokenUsage?: { tokenAllowance: number; tokensUsedThisPeriod: number } }
+                  const event = JSON.parse(trimmed) as {
+                    type: string
+                    total?: number
+                    path?: string
+                    name?: string
+                    success?: boolean
+                    error?: string
+                    successCount?: number
+                    errorCount?: number
+                    generatedFiles?: Array<{ success?: boolean }>
+                    tokenUsage?: { tokenAllowance: number; tokensUsedThisPeriod: number }
+                    buildArtifactAlignment?: { ok: boolean; errors?: string[]; suggestions?: string[]; missingDeps?: string[] }
+                  }
                   if (event.type === 'start' && typeof event.total === 'number') {
                     setBuildPreviewTotal(event.total)
                   } else if (event.type === 'folder' && event.path) {
@@ -399,6 +413,12 @@ export default function ProjectOverviewPage() {
                   } else if (event.type === 'done') {
                     fileCount = event.successCount ?? event.generatedFiles?.filter((f) => f.success).length ?? 0
                     if (event.tokenUsage) refreshTokenUsage(event.tokenUsage)
+                    if (event.buildArtifactAlignment && !event.buildArtifactAlignment.ok) {
+                      const msg = event.buildArtifactAlignment.errors?.length
+                        ? event.buildArtifactAlignment.errors.join(' ')
+                        : 'Package.json may not match generated code (e.g. missing deps or script mismatch).'
+                      setBuildArtifactAlignmentWarning(msg)
+                    }
                   } else if (event.type === 'error') {
                     throw new Error((event as { error?: string }).error ?? 'File generation failed')
                   }
@@ -445,11 +465,12 @@ export default function ProjectOverviewPage() {
     run()
   }, [projectId, project?.repository?.owner, project?.repository?.name, hasAnalysis, rerunTrigger])
 
-  // Clear build preview when modal is dismissed so next run shows fresh list
+  // Clear build preview and alignment warning when modal is dismissed so next run shows fresh list
   useEffect(() => {
     if (setupStep === null) {
       setBuildPreviewItems([])
       setBuildPreviewTotal(0)
+      setBuildArtifactAlignmentWarning(null)
     }
   }, [setupStep])
 
@@ -596,6 +617,11 @@ export default function ProjectOverviewPage() {
                 <p className="text-sm text-muted-foreground">
                   The automated build process is complete. You can now move to <strong>Develop</strong> or <strong>Preview</strong>.
                 </p>
+                {buildArtifactAlignmentWarning && (
+                  <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 px-3 py-2 rounded-md w-full text-left">
+                    {buildArtifactAlignmentWarning} Fix in Develop or rerun automation.
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-2 justify-center pt-2">
                   <Button
                     variant="default"

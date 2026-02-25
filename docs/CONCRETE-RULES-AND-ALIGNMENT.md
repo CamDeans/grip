@@ -2,6 +2,16 @@
 
 This doc lists all Cursor rules in `.cursor/rules/` and where GRIP's code enforces them. Use it to verify alignment before/after changes.
 
+---
+
+## Mandatory process rule (source of truth and changes)
+
+**We work only from this file and `.cursorrules`.** All GRIP behavior, rules, and alignment are defined and tracked here and in `.cursorrules`. No other doc or rule set overrides these two.
+
+**Before updating either file:** Every change to `docs/CONCRETE-RULES-AND-ALIGNMENT.md` or `.cursorrules` must be **verified and confirmed** (e.g. proposed, then approved) so we stay on track and on the same page. Do not edit these two files without that confirmation.
+
+---
+
 ## Rule index (15 rules, all `alwaysApply: true`)
 
 | # | Rule file | One-line summary |
