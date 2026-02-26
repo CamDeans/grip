@@ -83,6 +83,7 @@ export async function POST(
       })
     }
 
+    console.info('[GRIP Files] POST /files/generate: generating', filesToGenerate.length, 'files. Anthropic will be called for templates that need AI (e.g. nextjs-page, react-component). Ensure ANTHROPIC_API_KEY is set.')
     // Ensure project structure exists so generateFile() can run (plan may have suggestedFiles but structure not yet stored)
     let structure = await getProjectStructure(id)
     if (!structure) {

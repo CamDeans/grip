@@ -220,6 +220,7 @@ Return only the JSON array, no explanation.
     // Use AI to extract features
     const anthropic = getAnthropicClient()
     if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
+    console.info('[GRIP Plan] Calling Anthropic API for structure enhancement (extractFeaturesFromIdeation). Usage will appear in Anthropic console.')
     const response = await anthropic.messages.create({
       model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 2000,

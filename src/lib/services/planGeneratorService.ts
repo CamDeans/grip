@@ -400,6 +400,7 @@ For dependencies, use task IDs (e.g., "1.1", "2.3") to reference tasks that must
     // Call Anthropic API
     const anthropic = getAnthropicClient()
     if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
+    console.info('[GRIP Plan] Calling Anthropic API for plan phases/tasks (addTasksToPhases). Usage will appear in Anthropic console for this key.')
     const response = await anthropic.messages.create({
       model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 6000,

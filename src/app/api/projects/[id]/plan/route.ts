@@ -94,14 +94,21 @@ export async function POST(
     }
 
     const accessDenied = await requireAppAccess(session)
-    if (accessDenied) return accessDenied
+    if (accessDenied) {
+      console.warn('[GRIP Plan] POST /plan blocked: requireAppAccess denied (403). Anthropic will not be called.')
+      return accessDenied
+    }
     const tokenExhausted = await requireTokenBalance(session)
-    if (tokenExhausted) return tokenExhausted
+    if (tokenExhausted) {
+      console.warn('[GRIP Plan] POST /plan blocked: requireTokenBalance denied (403). Anthropic will not be called.')
+      return tokenExhausted
+    }
 
     const access = await getAppAccess(session)
     const remainingTokens = Math.max(0, (access.tokenAllowance ?? 0) - (access.tokensUsedThisPeriod ?? 0))
     const tokenBudgetHint = buildTokenBudgetPromptFragment(remainingTokens, access.tier ?? 'starter', 'plan')
 
+    console.info('[GRIP Plan] Calling generateProjectPlan (Anthropic will be used for plan phases). Ensure ANTHROPIC_API_KEY is set in .env.local or deployment env.')
     const result = await generateProjectPlan(id, { tokenBudgetHint, tier: access.tier ?? 'starter' })
     const totalTokens = (result as { totalTokens?: number }).totalTokens ?? 0
     if (totalTokens > 0 && session.user?.id) {

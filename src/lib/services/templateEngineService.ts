@@ -134,7 +134,9 @@ export const {{ComponentName}}: FC<{{ComponentName}}Props> = ({
 }`,
       variables: ['ComponentName', 'props', 'ComponentContent'],
       defaultValues: {
-        ComponentContent: 'Component content goes here'
+        ComponentName: 'Component',
+        ComponentContent: 'Component content goes here',
+        props: []
       },
       isBuiltIn: true
     })
@@ -177,9 +179,11 @@ const {{PageName}}: NextPage<{{PageName}}Props> = ({
 export default {{PageName}}`,
       variables: ['PageName', 'props', 'PageTitle', 'MetaDescription', 'PageContent'],
       defaultValues: {
+        PageName: 'Page',
         PageTitle: 'Page Title',
         MetaDescription: 'Page description',
-        PageContent: 'Page content goes here'
+        PageContent: 'Page content goes here',
+        props: []
       },
       isBuiltIn: true
     })
@@ -211,7 +215,9 @@ export function {{name}}({{#params}}{{name}}: {{type}}{{^last}}, {{/last}}{{/par
 {{/functions}}`,
       variables: ['FileName', 'Description', 'functions'],
       defaultValues: {
-        Description: 'Collection of utility functions'
+        FileName: 'utils',
+        Description: 'Collection of utility functions',
+        functions: [{ name: 'placeholder', description: 'Placeholder', params: [], returnType: 'void', body: 'return', returnDescription: 'None' }]
       },
       isBuiltIn: true
     })
@@ -800,6 +806,7 @@ Return ONLY a single JSON object. Use double quotes for keys and string values. 
 `
     const anthropic = getAnthropicClient()
     if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
+    console.info('[GRIP Files] Calling Anthropic API for template variables (generateTemplateVariables). Usage will appear in Anthropic console.')
     const response = await anthropic.messages.create({
       model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 1000,
@@ -904,6 +911,7 @@ Format the response as a JSON object with the following structure:
     // Use Anthropic AI to generate template
     const anthropic = getAnthropicClient()
     if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
+    console.info('[GRIP Files] Calling Anthropic API for template generation. Usage will appear in Anthropic console.')
     const response = await anthropic.messages.create({
       model: ANTHROPIC_MODEL_CHAT,
       max_tokens: 4000,

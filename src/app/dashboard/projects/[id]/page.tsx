@@ -325,6 +325,10 @@ export default function ProjectOverviewPage() {
           const hasPlanAlready = !!planRes
           const hasPhasesAlready = !!(stateRes?.phases?.length)
           if (hasPlanAlready && hasPhasesAlready) {
+            // No POST /plan or /files/generate — Anthropic is not called for this project load
+            if (typeof console !== 'undefined' && console.info) {
+              console.info('[GRIP Overview] Skipping plan + file automation (plan and phases already exist). No Anthropic API calls will be made. Use "Rerun plan and build" to run again.')
+            }
             autoPlanRanRef.current = projectId
             setHasPlan(true)
             setProjectState(stateRes && (stateRes.phases?.length || stateRes.currentPhase) ? stateRes : null)
@@ -357,6 +361,8 @@ export default function ProjectOverviewPage() {
         setSetupStep('plan')
         const planPostRes = await fetch(`/api/projects/${projectId}/plan`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
         if (!planPostRes.ok) {
+          const errBody = await planPostRes.text()
+          console.warn('[GRIP Overview] Plan POST failed:', planPostRes.status, errBody || planPostRes.statusText, '— Anthropic plan phase was not run. Check server logs and ANTHROPIC_API_KEY.')
           setSetupStep(null)
           return
         }
@@ -689,6 +695,14 @@ export default function ProjectOverviewPage() {
                             {buildPreviewItems.filter((x) => x.type === 'file').length} of {buildPreviewTotal} files…
                           </li>
                         )}
+                        {setupStep === 'done' && (() => {
+                          const failed = buildPreviewItems.filter((x) => x.type === 'file' && x.success === false)
+                          return failed.length > 0 ? (
+                            <li className="text-destructive/90 text-xs py-2 px-2 border-t border-border mt-1">
+                              {failed.length} file(s) failed. Hover ✗ on each for the error. Fix in Develop or rerun automation.
+                            </li>
+                          ) : null
+                        })()}
                       </ul>
                     </ScrollArea>
                   </div>
