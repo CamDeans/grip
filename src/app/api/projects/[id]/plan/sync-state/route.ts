@@ -26,8 +26,10 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 })
     }
 
+    console.info('[GRIP Stage 3] plan/sync-state start', { projectId: id })
     const planResult = await getProjectPlan(id)
     if (!planResult?.plan) {
+      console.warn('[GRIP Stage 3] plan/sync-state no plan found', { projectId: id })
       return NextResponse.json(
         { error: 'No plan found. Generate a plan first from the Planning tab.' },
         { status: 404 }
@@ -36,18 +38,20 @@ export async function POST(
 
     const ok = await syncProjectStateFromPlan(id, planResult.plan)
     if (!ok) {
+      console.error('[GRIP Stage 3] plan/sync-state syncProjectStateFromPlan returned false', { projectId: id })
       return NextResponse.json(
         { error: 'Failed to sync project state from plan' },
         { status: 500 }
       )
     }
 
+    console.info('[GRIP Stage 3] plan/sync-state complete', { projectId: id })
     return NextResponse.json({
       success: true,
       message: 'Build steps synced from plan. Chat and project state now use the same phases.',
     })
   } catch (error) {
-    console.error('Error syncing plan to state:', error)
+    console.error('[GRIP Stage 3] plan/sync-state error:', error)
     return NextResponse.json(
       { error: 'Failed to sync project state' },
       { status: 500 }

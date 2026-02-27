@@ -181,10 +181,30 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
         } catch (e) {
           console.warn(`generateTemplateVariables failed for ${request.filePath}, using defaultValues:`, e)
           variables = { ...template.defaultValues } as ITemplateVariables
+          // Derive component/page name from path so fallback content is valid and not generic
+          const nameFromPath = (path: string) => {
+            const name = path.split('/').pop() || 'Component'
+            const base = name.replace(/\.[^.]+$/, '')
+            return base.split(/[-_]/).map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('')
+          }
+          if (template.variables?.includes('ComponentName')) (variables as Record<string, unknown>).ComponentName = nameFromPath(request.filePath)
+          if (template.variables?.includes('PageName')) (variables as Record<string, unknown>).PageName = nameFromPath(request.filePath)
         }
       }
     }
-    
+    // Ensure every template variable has a value (fill missing or empty from defaultValues) so render never leaves {{placeholders}}
+    if (template.defaultValues && Object.keys(template.defaultValues).length > 0) {
+      const merged = { ...template.defaultValues, ...variables } as ITemplateVariables
+      Object.keys(template.defaultValues).forEach(k => {
+        const v = merged[k]
+        if (v === undefined || (typeof v === 'string' && v.trim() === '')) {
+          const def = template.defaultValues![k]
+          if (def !== undefined && def !== null) (merged as Record<string, unknown>)[k] = def
+        }
+      })
+      variables = merged
+    }
+
     // Generate filename if not provided
     const filename = request.filename || generateFileName(template, variables)
 
@@ -192,7 +212,7 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
     const content = renderTemplate(template, variables)
     if (isPlaceholderOrEmpty(content, filename)) {
       const msg = `Generated content for ${request.filePath || filename} is empty or placeholder. GRIP mandatory rule: create all code for all file creations — every file must have real, runnable code.`
-      console.warn(msg)
+      console.warn('[GRIP Stage 4] file rejected as placeholder/empty', { path: request.filePath, filename, templateId: request.templateId, contentLength: content?.length ?? 0, contentPreview: (content || '').slice(0, 120) })
       return {
         fileId: '',
         projectId: request.projectId,

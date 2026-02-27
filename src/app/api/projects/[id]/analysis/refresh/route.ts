@@ -40,6 +40,7 @@ export async function POST(
     }
 
     const isSandbox = new URL(request.url).searchParams.get('sandbox') === 'true'
+    console.info('[GRIP Stage 2] analysis/refresh start', { projectId, isSandbox })
     const client = await clientPromise
     const db = client.db(DB_NAME)
 
@@ -92,6 +93,7 @@ export async function POST(
         },
         { upsert: true }
       )
+      console.info('[GRIP Stage 2] analysis/refresh sandbox complete', { projectId })
     } else {
       const projectDoc = await db.collection('projects').findOne(
         { _id: new ObjectId(projectId) },
@@ -120,11 +122,12 @@ export async function POST(
         { projectId: new ObjectId(projectId) },
         { $unset: { projectContextDocument: '' }, $set: { updatedAt: new Date() } }
       )
+      console.info('[GRIP Stage 2] analysis/refresh main complete', { projectId })
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Analysis refresh error:', error)
+    console.error('[GRIP Stage 2] analysis/refresh error:', error)
     const message = error instanceof Error ? error.message : 'Failed to refresh analysis'
     return NextResponse.json({ error: message }, { status: 500 })
   }

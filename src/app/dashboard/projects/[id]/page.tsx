@@ -338,26 +338,38 @@ export default function ProjectOverviewPage() {
         autoPlanRanRef.current = projectId
         if (rerunTrigger > 0) setRerunTrigger(0)
 
+        // Stage 1: preparing — do not advance until delay complete
         setSetupStep('preparing')
         await new Promise((resolve) => setTimeout(resolve, 1800))
 
+        // Stage 2: analysis — do not advance to plan until analysis has completed successfully
         if (!hasAnalysis) {
           setSetupStep('analysis')
-          // Trigger full analysis (all pipeline steps: repo clone, ideation→prompt, tree-sitter) so results feed plan + file gen
-          await fetch(`/api/projects/${projectId}/analysis/refresh`, { method: 'POST', headers: { 'Content-Type': 'application/json' } }).catch(() => null)
-          let done = false
-          for (let i = 0; i < 90 && !done; i++) {
+          const refreshRes = await fetch(`/api/projects/${projectId}/analysis/refresh`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+          if (!refreshRes.ok) {
+            console.warn('[GRIP Overview] Stage 2 (analysis) failed: analysis/refresh returned', refreshRes.status)
+            setSetupStep(null)
+            return
+          }
+          let analysisDone = false
+          for (let i = 0; i < 90 && !analysisDone; i++) {
             const r = await fetch(`/api/projects/${projectId}/analysis/status`)
             const d = r.ok ? await r.json().catch(() => ({})) : {}
             if (d?.hasAnalysis ?? d?.analysisCompleted) {
               setHasAnalysis(true)
-              done = true
+              analysisDone = true
             } else {
               await new Promise((resolve) => setTimeout(resolve, 1000))
             }
           }
+          if (!analysisDone) {
+            console.warn('[GRIP Overview] Stage 2 (analysis) did not complete within 90s. Stopping; do not advance to plan.')
+            setSetupStep(null)
+            return
+          }
         }
 
+        // Stage 3: plan — do not advance to files until plan + sync-state both return success
         setSetupStep('plan')
         const planPostRes = await fetch(`/api/projects/${projectId}/plan`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
         if (!planPostRes.ok) {
@@ -369,10 +381,12 @@ export default function ProjectOverviewPage() {
         refreshTokenUsage()
         const syncRes = await fetch(`/api/projects/${projectId}/plan/sync-state`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
         if (!syncRes.ok) {
+          console.warn('[GRIP Overview] Stage 3 (plan) sync-state failed:', syncRes.status)
           setSetupStep(null)
           return
         }
 
+        // Stage 4: files — do not advance to build until files/generate returns 200 and stream sends 'done'
         setSetupStep('files')
         setBuildPreviewItems([])
         setBuildPreviewTotal(0)
@@ -381,8 +395,15 @@ export default function ProjectOverviewPage() {
           headers: { 'Content-Type': 'application/json', 'X-Stream-Progress': 'true' },
           body: JSON.stringify({})
         })
+        if (!filesRes.ok) {
+          const errBody = await filesRes.text()
+          console.warn('[GRIP Overview] Stage 4 (files) failed: files/generate returned', filesRes.status, errBody?.slice(0, 200))
+          setSetupStep(null)
+          return
+        }
         let fileCount = 0
-        if (filesRes.ok && filesRes.body) {
+        let stage4Done = false
+        if (filesRes.body) {
           const reader = filesRes.body.getReader()
           const decoder = new TextDecoder()
           let buffer = ''
@@ -417,6 +438,7 @@ export default function ProjectOverviewPage() {
                   } else if (event.type === 'file' && event.path) {
                     setBuildPreviewItems((prev) => [...prev, { type: 'file', path: event.path!, name: event.name, success: event.success, error: event.error }])
                   } else if (event.type === 'done') {
+                    stage4Done = true
                     fileCount = event.successCount ?? event.generatedFiles?.filter((f) => f.success).length ?? 0
                     if (event.tokenUsage) refreshTokenUsage(event.tokenUsage)
                     if (event.buildArtifactAlignment && !event.buildArtifactAlignment.ok) {
@@ -439,18 +461,31 @@ export default function ProjectOverviewPage() {
           }
         } else {
           const filesData = await filesRes.json().catch(() => ({}))
+          stage4Done = true
           fileCount = filesData.skipped ? (filesData.fileCount ?? 0) : (filesData.successCount ?? filesData.generatedFiles?.filter((f: { success?: boolean }) => f.success).length ?? 0)
           if (filesData.tokenUsage) refreshTokenUsage(filesData.tokenUsage)
+        }
+        if (!stage4Done) {
+          console.warn('[GRIP Overview] Stage 4 (files) stream ended without done event. Stopping; do not advance to build.')
+          setSetupStep(null)
+          return
         }
         refreshTokenUsage()
         const state = await fetch(`/api/projects/${projectId}/state`).then((r) => (r.ok ? r.json() : null)).catch(() => null)
         setProjectState(state && (state.phases?.length || state.currentPhase) ? state : null)
         setHasPlan(true)
 
+        // Stage 5: build — do not advance to done until run-build returns success
         setSetupStep('build')
         const buildRes = await fetch(`/api/projects/${projectId}/run-build`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-        const buildData = buildRes.ok ? await buildRes.json().catch(() => ({})) : { success: false, errors: ['Build request failed'] }
+        if (!buildRes.ok) {
+          console.warn('[GRIP Overview] Stage 5 (build) failed: run-build returned', buildRes.status)
+          setSetupStep(null)
+          return
+        }
+        const buildData = await buildRes.json().catch(() => ({ success: false, errors: ['Build response invalid'] }))
 
+        // Stage 6: done — only reached when all previous stages succeeded
         setSetupStep('done')
         refetchPhaseStatus()
         refreshGeneratedFiles()

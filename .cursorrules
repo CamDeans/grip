@@ -56,6 +56,25 @@ full_grip_build:
     - "Remove or replace mock data and placeholder responses with real DB and real integrations so production readiness is maintained."
     - "Verify each capability: export creates a real repo with content; deploy returns a real Vercel URL; preview loads a URL or StackBlitz; Repo shows full tree; chat can save code to projectFiles."
 
+# Overview in-flight modal: sequential stages (no advance until success)
+# The build automation modal must NOT move to the next stage until the current stage returns success. This keeps us on the same page and prevents partial runs.
+overview_in_flight_stages:
+  rule: "GRIP does not advance from one modal stage to the next until the current stage has a successful return."
+  stages:
+    - "Stage 1 (preparing): delay only; then Stage 2."
+    - "Stage 2 (analysis): advance only when POST analysis/refresh returns 200 and analysis/status reports completion within 90s."
+    - "Stage 3 (plan): advance only when POST plan and POST plan/sync-state both return 200."
+    - "Stage 4 (files): advance only when POST files/generate returns 200 and the NDJSON stream sends a 'done' event."
+    - "Stage 5 (build): advance only when POST run-build returns 200."
+  on_failure: "On any stage failure, clear the modal (setSetupStep null) and stop automation; do not advance."
+
+# Build automation logging (Vercel / server-side)
+# Required so we can find where errors occur when full file creation or a stage fails.
+build_automation_logging:
+  rule: "Server-side logs for build automation use the prefix [GRIP Stage N] (N = 2, 3, 4, 5) so Vercel logs can be filtered."
+  locations: "analysis/refresh, plan, plan/sync-state, files/generate, run-build; fileGeneratorService when content is rejected as placeholder/empty."
+  do_not: "Do not remove or weaken these logs; they are required for diagnosing why GRIP is not writing full code for each file."
+
 # Mandatory StackBlitz preview files (GRIP must always include so user can preview upon completion)
 stackblitz_preview_mandate:
   description: "Every generated project MUST include high-level files required for StackBlitz (and local) preview so the user can run the app after build."

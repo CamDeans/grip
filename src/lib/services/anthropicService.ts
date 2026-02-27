@@ -96,16 +96,29 @@ class AnthropicService extends EventEmitter {
     }
   }
 
-  // Validate API key (use a stable model for the ping so deprecated main model doesn't break init)
+  // Validate API key (use fast model for ping; if model 404/deprecated, retry with chat model)
   private async validateApiKey(): Promise<void> {
-    try {
-      await this.client.messages.create({
-        model: ANTHROPIC_MODEL_FAST,
+    const ping = async (model: string) =>
+      this.client.messages.create({
+        model,
         max_tokens: 1,
         messages: [{ role: 'user', content: 'test' }]
       })
+    try {
+      await ping(ANTHROPIC_MODEL_FAST)
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
+      const isModelNotFound = /404|not_found|model.*not found/i.test(msg)
+      if (isModelNotFound) {
+        try {
+          await ping(ANTHROPIC_MODEL_CHAT)
+          return
+        } catch (fallbackErr) {
+          const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
+          console.error('Anthropic API key validation failed (fast and chat model):', fallbackMsg)
+          throw new Error(`Anthropic API key invalid or unreachable: ${fallbackMsg}`)
+        }
+      }
       console.error('Anthropic API key validation failed:', msg)
       throw new Error(`Anthropic API key invalid or unreachable: ${msg}`)
     }

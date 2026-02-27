@@ -108,9 +108,11 @@ export async function POST(
     const remainingTokens = Math.max(0, (access.tokenAllowance ?? 0) - (access.tokensUsedThisPeriod ?? 0))
     const tokenBudgetHint = buildTokenBudgetPromptFragment(remainingTokens, access.tier ?? 'starter', 'plan')
 
+    console.info('[GRIP Stage 3] plan POST start', { projectId: id })
     console.info('[GRIP Plan] Calling generateProjectPlan (Anthropic will be used for plan phases). Ensure ANTHROPIC_API_KEY is set in .env.local or deployment env.')
     const result = await generateProjectPlan(id, { tokenBudgetHint, tier: access.tier ?? 'starter' })
     const totalTokens = (result as { totalTokens?: number }).totalTokens ?? 0
+    console.info('[GRIP Stage 3] plan POST complete', { projectId: id, totalTokens })
     if (totalTokens > 0 && session.user?.id) {
       await addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('Project plan: failed to record token usage', err)
@@ -120,7 +122,7 @@ export async function POST(
     const { totalTokens: _drop, ...plan } = result as { totalTokens?: number; [k: string]: unknown }
     return NextResponse.json(plan)
   } catch (error) {
-    console.error('Error generating project plan:', error)
+    console.error('[GRIP Stage 3] plan POST error:', error)
     return NextResponse.json(
       { error: 'Failed to generate project plan' },
       { status: 500 }

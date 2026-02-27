@@ -26,6 +26,7 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 })
     }
 
+    console.info('[GRIP Stage 5] run-build start', { projectId })
     const client = await clientPromise
     const db = client.db(process.env.MONGODB_DB_NAME || 'test')
     let project = await db.collection('projects').findOne(
@@ -51,6 +52,7 @@ export async function POST(
     }
 
     const result = await runMainProject(projectId, isSandbox)
+    console.info('[GRIP Stage 5] run-build complete', { projectId, success: result.success, errorCount: result.errors?.length ?? 0 })
 
     // Persist lastRunErrors on project so enhanced chat can show them later
     const projectCollection = isSandbox ? 'sandboxProjects' : 'projects'
@@ -83,7 +85,7 @@ export async function POST(
       buildCommand: result.buildCommand ?? 'npm run build',
     })
   } catch (error) {
-    console.error('Run-build API error:', error)
+    console.error('[GRIP Stage 5] run-build error:', error)
     return NextResponse.json(
       { error: 'Build run failed', success: false, errors: [String(error)] },
       { status: 500 }
