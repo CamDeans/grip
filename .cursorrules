@@ -119,11 +119,11 @@ preview_ready_navigation_and_styling:
   enforcement: "buildQualityPlan MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY and MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX injected in planGeneratorService, enhanced-chat, and legal-sandbox chat. In-flight modal only advances to done when build succeeds; these rules ensure generated code includes working navigation and styling."
   see_also: ".cursor/rules/preview-ready-navigation-and-styling.mdc; docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 20."
 
-# StackBlitz/preview: route to main page (mandatory concrete rule — enforce in generated code)
+# StackBlitz/preview: route to main page (mandatory concrete rule — enforce in generated code + export)
 # GRIP must generate code so the user is always routed to the main page when previewing in StackBlitz or GRIP Preview.
 stackblitz_main_page_on_first_visit:
   rule: "GRIP MUST enforce in the code it generates that the user is routed to the main page when the app is opened (StackBlitz or GRIP Preview). Root path (/) is the main page. Do not generate middleware, redirects, or router logic that send first-time visitors away from /. Next.js: app/page.tsx (or src/app/page.tsx) is the main landing content for /; do not redirect / elsewhere. Vite/SPA: index.html and root component must render the main view at /."
-  enforcement: "buildQualityPlan MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT injected in planGeneratorService, enhanced-chat, and legal-sandbox chat; templateEngineService full-file prompt includes CRITICAL block when generating app/page.tsx or src/app/page.tsx; stackblitzOpen.inferOpenFile prefers app/page.tsx for Next.js."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT injected in planGeneratorService, enhanced-chat, and legal-sandbox chat; templateEngineService full-file prompt includes CRITICAL block when generating app/page.tsx or src/app/page.tsx; stackblitzOpen.inferOpenFile prefers app/page.tsx (or src/app/page.tsx) for Next.js; view: 'preview' so user sees the app first. Export: GET /api/projects/[id]/export-files MUST guarantee GET / returns 200 for Next.js—if root page is missing or invalid (no export default or very short), inject minimal app/layout.tsx and app/page.tsx (or src/app) so StackBlitz preview never shows Compiling /_not-found or 404."
   see_also: ".cursor/rules/stackblitz-main-page-on-first-visit.mdc; docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 21."
 
 # First build = 100% deployable product (mandatory concrete rule)

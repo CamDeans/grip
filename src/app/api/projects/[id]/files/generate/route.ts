@@ -37,7 +37,14 @@ function resolveTemplateForPath(
   if (baseName.startsWith('tailwind.config.') || baseName.startsWith('postcss.config.') || baseName.startsWith('next.config.')) {
     return 'full-file'
   }
-  const isNextAppApiRoute = /^app\/api\/.+\/route\.(ts|js)$/.test(normalized)
+  // lib, types, sanity: full-file so AI returns complete code (ts-utility produces stubs and causes ✗)
+  if (/^(src\/)?lib\/.+\.(ts|js)$/.test(normalized)) return 'full-file'
+  if (/^(src\/)?types\/.+\.(ts|js)$/.test(normalized)) return 'full-file'
+  if (/^sanity\/.+\.(ts|js)$/.test(normalized)) return 'full-file'
+  // public SVG: full-file so AI returns valid SVG (ts-utility would produce wrong content)
+  if (/^public\/.+\.svg$/i.test(normalized)) return 'full-file'
+  // Next.js App Router API routes (app or src/app)
+  const isNextAppApiRoute = /^(src\/)?app\/api\/.+\/route\.(ts|js)$/.test(normalized)
   if (isNextAppApiRoute) {
     return framework === 'next' ? 'nextjs-app-api-route' : 'generic-api-route'
   }

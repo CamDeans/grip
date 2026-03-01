@@ -183,7 +183,8 @@ export async function GET(
       }
     }
 
-    // Next.js: ensure root route (/) exists so StackBlitz preview does not show "Compiling /_not-found" and GET / 404.
+    // Next.js: ensure root route (/) exists so StackBlitz preview loads the main page (no "Compiling /_not-found", no GET / 404).
+    // Concrete rule: stackblitz-preview-loads-main-page — export must guarantee GET / returns 200.
     try {
       const pkgRaw = files['package.json']
       if (pkgRaw) {
@@ -191,15 +192,12 @@ export async function GET(
         const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }
         if (deps.next) {
           const keys = Object.keys(files)
-          const hasAppPage = keys.includes('app/page.tsx') || keys.includes('app/page.jsx') || keys.includes('src/app/page.tsx') || keys.includes('src/app/page.jsx')
-          const rootPageContent = hasAppPage
-            ? (files['app/page.tsx'] ?? files['app/page.jsx'] ?? files['src/app/page.tsx'] ?? files['src/app/page.jsx'] ?? '')
-            : ''
+          const rootPageKey = keys.find((k) => k === 'app/page.tsx' || k === 'app/page.jsx' || k === 'src/app/page.tsx' || k === 'src/app/page.jsx')
+          const rootPageContent = (rootPageKey ? files[rootPageKey] : '') as string
           const hasValidRootPage =
-            hasAppPage &&
             typeof rootPageContent === 'string' &&
-            rootPageContent.trim().length > 20 &&
-            /export\s+default\s+(function|const|class|\()/.test(rootPageContent)
+            rootPageContent.trim().length >= 80 &&
+            /\bexport\s+default\b/.test(rootPageContent)
           if (!hasValidRootPage) {
             const useSrcApp = keys.some((k) => k.startsWith('src/app/'))
             const appDir = useSrcApp ? 'src/app' : 'app'

@@ -326,12 +326,15 @@ function defaultTemplateForPath(pathOrName: string): string {
   if (name.startsWith('postcss.config.') || name === 'postcss.config.js') return 'full-file'
   if (normalized === 'prisma/schema.prisma' || normalized.endsWith('/schema.prisma')) return 'full-file'
   if (normalized === 'middleware.ts' || normalized === 'middleware.js') return 'full-file'
-  if (/^lib\/.+\.(ts|js)$/.test(normalized)) return 'full-file'
-  if (/^hooks\/.+\.(ts|js)$/.test(normalized)) return 'full-file'
-  if (normalized === 'types/index.ts' || normalized === 'types/index.js') return 'full-file'
+  if (/^(src\/)?lib\/.+\.(ts|js)$/.test(normalized)) return 'full-file'
+  if (/^(src\/)?hooks\/.+\.(ts|js)$/.test(normalized)) return 'full-file'
+  if (/^(src\/)?types\/.+\.(ts|js)$/.test(normalized) || normalized === 'types/index.ts' || normalized === 'types/index.js') return 'full-file'
+  if (/^sanity\/.+\.(ts|js)$/.test(normalized)) return 'full-file'
   if (normalized === 'public/manifest.json' || normalized === 'public/sw.js') return 'full-file'
   // public image/binary assets: use static-asset (minimal placeholder), not ts-utility (AI returns text and fails)
   if (/^public\/.+/i.test(normalized) && ['png', 'ico', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return 'static-asset'
+  // public SVG: full-file so AI returns valid SVG markup (ts-utility would produce wrong type)
+  if (/^public\/.+/i.test(normalized) && ext === 'svg') return 'full-file'
   // docs/*.md and docs/*.mdx: full-file so AI returns full markdown (ts-utility would render comment-only)
   if (/^docs\/.+\.(md|mdx)$/.test(normalized)) return 'full-file'
   if (ext === 'ts' || ext === 'js') return 'ts-utility'
