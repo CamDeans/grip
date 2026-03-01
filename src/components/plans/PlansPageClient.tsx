@@ -6,16 +6,12 @@ import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Coins, Zap } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
+import { TOKEN_ADD_ONS } from '@/lib/stripe'
 
 const TIERS = [
   { id: 'starter', name: 'Starter', price: '$19', priceLabel: '/month', tokens: '1.3M tokens/month', description: 'Light use, side projects. Enough for regular chat and code generation without worrying about limits.', popular: false },
   { id: 'pro', name: 'Pro', price: '$49', priceLabel: '/month', tokens: '3.5M tokens/month', description: 'Serious builders, daily use. Heavy development and multiple projects with plenty of headroom.', popular: true },
   { id: 'team', name: 'Team', price: '$99', priceLabel: '/month', tokens: '7M tokens/month', description: 'Small teams, heavy usage. Maximum allowance for shipping multiple apps and experiments.', popular: false },
-] as const
-
-const ADD_TOKEN_PACKS = [
-  { id: '500k', name: '500K tokens', tokens: '500,000', oneTime: true },
-  { id: '1M', name: '1M tokens', tokens: '1,000,000', oneTime: true },
 ] as const
 
 export function PlansPageClient() {
@@ -143,7 +139,7 @@ export function PlansPageClient() {
           </div>
           <p className="text-sm text-text-muted mb-4">Need extra tokens this period? Add a one-time pack without changing your plan.</p>
           <div className="flex flex-wrap gap-4">
-            {ADD_TOKEN_PACKS.map((pack) => (
+            {TOKEN_ADD_ONS.map((pack) => (
               <Button
                 key={pack.id}
                 size="sm"
@@ -151,7 +147,7 @@ export function PlansPageClient() {
                 disabled={!!loadingAddTokens}
                 onClick={() => handleAddTokens(pack.id)}
               >
-                {loadingAddTokens === pack.id ? 'Redirecting…' : `${pack.name} (one-time)`}
+                {loadingAddTokens === pack.id ? 'Redirecting…' : `${pack.name} — $${(pack.displayPriceCents / 100).toFixed(2)} (one-time)`}
               </Button>
             ))}
           </div>

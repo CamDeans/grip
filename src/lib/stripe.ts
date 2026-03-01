@@ -35,10 +35,10 @@ export function getTokensPerMonthForTier(tierId: TierId): number {
   return t?.tokensPerMonth ?? 0
 }
 
-/** One-time add-tokens packs (not subscription). Price IDs from env. */
+/** One-time add-tokens packs (not subscription). Price IDs from env; displayPriceCents for landing/plans (must match Stripe). */
 export const TOKEN_ADD_ONS = [
-  { id: '500k', name: '500K tokens', tokens: 500_000, stripePriceId: process.env.STRIPE_PRICE_ID_ADD_TOKENS_500K },
-  { id: '1M', name: '1M tokens', tokens: 1_000_000, stripePriceId: process.env.STRIPE_PRICE_ID_ADD_TOKENS_1M },
+  { id: '500k', name: '500K tokens', tokens: 500_000, displayPriceCents: 699, stripePriceId: process.env.STRIPE_PRICE_ID_ADD_TOKENS_500K },
+  { id: '1M', name: '1M tokens', tokens: 1_000_000, displayPriceCents: 1399, stripePriceId: process.env.STRIPE_PRICE_ID_ADD_TOKENS_1M },
 ] as const
 
 export type TokenAddOnId = typeof TOKEN_ADD_ONS[number]['id']

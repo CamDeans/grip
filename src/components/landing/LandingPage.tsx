@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FullLogo } from '@/components/ui/FullLogo'
+import { TOKEN_ADD_ONS } from '@/lib/stripe'
 
 const fadeInUp = {
   initial: { opacity: 0, y: 24 },
@@ -320,7 +321,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'What token add-ons are available and how much do they cost?',
-    a: 'We offer one-time token packs: 500K tokens and 1M tokens. Pricing is shown on the Plans page when you\'re signed in and when you run out of tokens (/plans). You can buy a pack at any time to add tokens to your current billing period.',
+    a: 'We offer one-time token packs: 500K tokens ($6.99) and 1M tokens ($13.99). Buy them on the Plans page when you\'re signed in or when you run out of tokens (/plans); they top up your current billing period.',
   },
 ]
 
@@ -331,7 +332,7 @@ export function LandingPage() {
       <header className="border-b border-border bg-background-secondary/50 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <Link href="/" className="logo logo-glow flex items-center shrink-0" aria-label="G.R.I.P. home">
-            <FullLogo className="h-9 w-auto sm:h-10 w-auto" />
+            <FullLogo className="h-9 w-auto sm:h-10" />
           </Link>
           <div className="flex items-center gap-3">
             <Link
@@ -522,17 +523,15 @@ export function LandingPage() {
                 When you reach your monthly limit, add more tokens without changing your plan. One-time packs are added to your current billing period.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
-                <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-background-secondary/50">
-                  <span className="font-medium text-text-primary">500K tokens</span>
-                  <span className="text-sm text-text-muted">One-time</span>
-                </div>
-                <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-background-secondary/50">
-                  <span className="font-medium text-text-primary">1M tokens</span>
-                  <span className="text-sm text-text-muted">One-time</span>
-                </div>
+                {TOKEN_ADD_ONS.map((addOn) => (
+                  <div key={addOn.id} className="flex items-center justify-between p-4 rounded-lg border border-border bg-background-secondary/50">
+                    <span className="font-medium text-text-primary">{addOn.name}</span>
+                    <span className="text-sm font-medium text-text-primary">${(addOn.displayPriceCents / 100).toFixed(2)}</span>
+                  </div>
+                ))}
               </div>
               <p className="text-sm text-text-muted mt-4">
-                Pricing and purchase on the <Link href="/plans" className="text-primary hover:underline">Plans</Link> page when you&apos;re signed in, or when you run out of tokens.
+                Purchase on the <Link href="/plans" className="text-primary hover:underline">Plans</Link> page when you&apos;re signed in, or when you run out of tokens.
               </p>
             </div>
 
@@ -772,7 +771,8 @@ export function LandingPage() {
                     type="button"
                     onClick={() => setFaqOpen(faqOpen === i ? null : i)}
                     className="w-full flex items-center justify-between gap-4 px-4 py-3 text-left text-sm font-medium text-text-primary hover:bg-background-tertiary/50 transition-colors"
-                    aria-expanded={faqOpen === i ? 'true' : 'false'}
+                    {...(faqOpen === i ? { 'aria-expanded': 'true' as const } : { 'aria-expanded': 'false' as const })}
+                    aria-controls={`faq-answer-${i}`}
                   >
                     <span>{item.q}</span>
                     <ChevronDown
@@ -781,7 +781,7 @@ export function LandingPage() {
                     />
                   </button>
                   {faqOpen === i && (
-                    <div className="px-4 pb-4 pt-0">
+                    <div id={`faq-answer-${i}`} className="px-4 pb-4 pt-0" role="region" aria-label={item.q}>
                       <p className="text-sm text-text-secondary leading-relaxed">{item.a}</p>
                     </div>
                   )}
