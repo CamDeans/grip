@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb'
-import { clientPromise } from '../mongodb'
+import { clientPromise, DB_NAME } from '../mongodb'
 import { getRepositoryFiles, getOrCloneRepository } from '../repository'
 import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/treeSitter/treeSitterAnalysis'
 import { buildTechnicalAnalysisPromptFromIdeation } from '@/lib/sandbox/ideationToTechnicalPrompt'
@@ -69,7 +69,7 @@ export async function analyzeProject(projectId: string, repository: { owner: str
     }
 
     const client = await clientPromise;
-    const db = client.db();
+    const db = client.db(DB_NAME);
 
     // Optional: use project ideation to shape tree-sitter analysis (same as sandbox)
     let repositoryAnalysis: any | null = null
@@ -293,7 +293,7 @@ export async function getProjectAnalysis(projectId: string): Promise<ProjectAnal
 
     console.log(`Fetching analysis data for project ${projectId}`)
     const client = await clientPromise
-    const db = client.db()
+    const db = client.db(DB_NAME)
 
     const analysis = await db.collection<ProjectAnalysis>('analyses').findOne({
       projectId: new ObjectId(projectId)
@@ -314,7 +314,7 @@ export async function getProjectAnalysis(projectId: string): Promise<ProjectAnal
       analysisCache.delete(projectId)
       // Retry once
       const client = await clientPromise
-      const db = client.db()
+      const db = client.db(DB_NAME)
       return await db.collection<ProjectAnalysis>('analyses').findOne({
         projectId: new ObjectId(projectId)
       })
@@ -436,7 +436,7 @@ export async function initializeAnalysis(projectId: string, files: RepositoryFil
   try {
     const projectObjectId = new ObjectId(projectId)
     const client = await clientPromise
-    const db = client.db()
+    const db = client.db(DB_NAME)
 
     const analysis = await db.collection('analysis').insertOne({
       projectId: projectObjectId,

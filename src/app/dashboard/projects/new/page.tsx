@@ -236,15 +236,11 @@ export default function NewProjectPage() {
       // Analysis and uploads are handled by the Overview pipeline (or fired in background).
       router.push(`/dashboard/projects/${project._id}`)
 
-      // Fire analysis and upload in background so user is already on Overview (no await).
-      if (project && formData.repository) {
-        fetch(`/api/projects/${project._id}/analyze`, {
+      // Fire analysis in background via same pipeline as Overview (analysis/refresh → analysis/run).
+      if (project) {
+        fetch(`/api/projects/${project._id}/analysis/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            repository: formData.repository,
-            ideation: formData.ideation
-          }),
           credentials: 'include'
         }).catch(() => {})
       }

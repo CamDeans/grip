@@ -4,8 +4,16 @@ import { requireAppAccess, requireTokenBalance } from '@/lib/access'
 import { addTokenUsage } from '@/lib/tokenUsage'
 import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
-import { analyzeRepositoryStructure } from '@/lib/analysis'
+import { analyzeProject } from '@/lib/services/analysisService'
 
+/** Same long-running analysis as analysis/run; allow up to 2 min to avoid gateway 504. */
+export const maxDuration = 120
+
+/**
+ * POST /api/projects/[id]/analyze
+ * Runs repository analysis (clone + tree-sitter) using the same pipeline as analysis/run.
+ * Repository can come from body or from project doc. Callers: new project (background), EnhancedChat, ProjectForm.
+ */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -25,52 +33,40 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 })
     }
 
-    const body = await request.json().catch(() => ({}))
-    const repository = body?.repository
+    const projectIdObj = new ObjectId(id)
+    const client = await clientPromise
+    const db = client.db(DB_NAME)
+
+    let repository = (await request.json().catch(() => ({})))?.repository
+    if (!repository?.owner || !repository?.name) {
+      const project = await db.collection('projects').findOne(
+        { _id: projectIdObj, userId: session.user?.id },
+        { projection: { repository: 1 } }
+      ) as { repository?: { owner: string; name: string } } | null
+      repository = project?.repository
+    }
     if (!repository?.owner || !repository?.name) {
       return NextResponse.json(
-        { error: 'Missing repository (owner and name required)' },
+        { error: 'Missing repository (owner and name required in body or project)' },
         { status: 400 }
       )
     }
 
-    const { analysis, totalTokens } = await analyzeRepositoryStructure(
-      repository.owner,
-      repository.name,
-      id
-    )
-
-    const client = await clientPromise
-    const db = client.db(DB_NAME)
-    const projectIdObj = new ObjectId(id)
-
-    await db.collection('analyses').updateOne(
-      { projectId: projectIdObj },
-      {
-        $set: {
-          projectId: projectIdObj,
-          repositoryAnalysis: analysis,
-          updatedAt: new Date(),
-        },
-      },
-      { upsert: true }
-    )
-
-    await db.collection('projects').updateOne(
-      { _id: projectIdObj },
-      {
-        $set: {
-          analysis,
-          updatedAt: new Date(),
-        },
-      }
-    )
-
+    const result = await analyzeProject(id, {
+      owner: repository.owner,
+      name: repository.name,
+    })
+    const totalTokens = (result as { totalTokens?: number })?.totalTokens ?? 0
     if (totalTokens > 0 && session.user?.id) {
       await addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('Project analyze: failed to record token usage', err)
       )
     }
+
+    await db.collection('analyses').updateOne(
+      { projectId: projectIdObj },
+      { $unset: { projectContextDocument: '' }, $set: { updatedAt: new Date() } }
+    )
 
     return NextResponse.json({ success: true })
   } catch (error) {
