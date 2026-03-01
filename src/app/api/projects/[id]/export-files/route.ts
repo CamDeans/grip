@@ -178,9 +178,62 @@ export async function GET(
             files['package.json'] = JSON.stringify(pkg, null, 2)
           }
         }
-      } catch {
-        // non-fatal
+    } catch {
+      // non-fatal
       }
+    }
+
+    // Next.js: ensure root route (/) exists so StackBlitz preview does not show "Compiling /_not-found" and GET / 404.
+    try {
+      const pkgRaw = files['package.json']
+      if (pkgRaw) {
+        const pkg = JSON.parse(pkgRaw) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+        const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }
+        if (deps.next) {
+          const keys = Object.keys(files)
+          const hasAppPage = keys.includes('app/page.tsx') || keys.includes('app/page.jsx') || keys.includes('src/app/page.tsx') || keys.includes('src/app/page.jsx')
+          const rootPageContent = hasAppPage
+            ? (files['app/page.tsx'] ?? files['app/page.jsx'] ?? files['src/app/page.tsx'] ?? files['src/app/page.jsx'] ?? '')
+            : ''
+          const hasValidRootPage =
+            hasAppPage &&
+            typeof rootPageContent === 'string' &&
+            rootPageContent.trim().length > 20 &&
+            /export\s+default\s+(function|const|class|\()/.test(rootPageContent)
+          if (!hasValidRootPage) {
+            const useSrcApp = keys.some((k) => k.startsWith('src/app/'))
+            const appDir = useSrcApp ? 'src/app' : 'app'
+            const layoutPath = `${appDir}/layout.tsx`
+            const pagePath = `${appDir}/page.tsx`
+            if (!files[layoutPath] || (files[layoutPath] as string).trim().length < 50) {
+              files[layoutPath] = `import type { Metadata } from 'next'
+import type { ReactNode } from 'react'
+
+export const metadata: Metadata = { title: 'App', description: 'GRIP project' }
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  )
+}
+`
+            }
+            files[pagePath] = `export default function Home() {
+  return (
+    <main style={{ padding: '2rem', fontFamily: 'system-ui' }}>
+      <h1>Welcome</h1>
+      <p>Your app is running. Edit this page in the editor.</p>
+    </main>
+  )
+}
+`
+          }
+        }
+      }
+    } catch {
+      // non-fatal
     }
 
     files['.stackblitzrc'] = JSON.stringify(

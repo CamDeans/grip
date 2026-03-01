@@ -321,7 +321,9 @@ function defaultTemplateForPath(pathOrName: string): string {
   if ((name === 'route.ts' || name === 'route.js') && /^app\/api\//.test(normalized)) return 'nextjs-app-api-route'
   if (ext === 'tsx' || ext === 'jsx') return 'react-component'
   // Config/schema/lib/hooks/types: use full-file so AI returns complete runnable code (ts-utility would render comment-only)
-  if (name === 'next.config.js' || name === 'tailwind.config.js' || name === 'postcss.config.js' || name === 'vercel.json') return 'full-file'
+  if (name === 'next.config.js' || name === 'next.config.ts' || name === 'vercel.json') return 'full-file'
+  if (name.startsWith('tailwind.config.') || name === 'tailwind.config.js') return 'full-file'
+  if (name.startsWith('postcss.config.') || name === 'postcss.config.js') return 'full-file'
   if (normalized === 'prisma/schema.prisma' || normalized.endsWith('/schema.prisma')) return 'full-file'
   if (normalized === 'middleware.ts' || normalized === 'middleware.js') return 'full-file'
   if (/^lib\/.+\.(ts|js)$/.test(normalized)) return 'full-file'

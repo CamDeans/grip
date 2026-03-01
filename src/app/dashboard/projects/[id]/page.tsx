@@ -500,14 +500,16 @@ export default function ProjectOverviewPage() {
         if (!buildData.success) {
           console.warn('[GRIP Overview] Stage 5 (build) failed: build did not succeed', buildData.errors)
           setSetupStep(null)
-          sonnerToast.error(
-            'Build failed',
-            {
-              description: buildData.errors?.length
-                ? `Build reported errors. Fix in Develop or use enhanced chat. ${(buildData.errors as string[]).slice(0, 2).join(' ')}`
-                : (fileCount > 0 ? `Phases and ${fileCount} file(s) created but build failed. Open Develop to fix or preview.` : 'Plan created but build failed. Open Develop to build with GRIP.'),
-            }
-          )
+          const errLines = (buildData.errors as string[] | undefined) ?? []
+          const errText = errLines.join('\n')
+          const isSandboxEnv = /sbx_user|ENOENT.*mkdir|\/home\/sbx_/i.test(errText)
+          let description = errLines.length
+            ? `Build reported errors. Fix in Develop or use enhanced chat. ${errLines.slice(0, 2).join(' ')}`
+            : (fileCount > 0 ? `Phases and ${fileCount} file(s) created but build failed. Open Develop to fix or preview.` : 'Plan created but build failed. Open Develop to build with GRIP.')
+          if (isSandboxEnv) {
+            description += ' If this is from StackBlitz or a sandbox, npm install can fail there—try Export to GitHub and run locally, or fix in Develop.'
+          }
+          sonnerToast.error('Build failed', { description })
           return
         }
         setSetupStep('done')

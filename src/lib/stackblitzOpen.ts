@@ -94,7 +94,7 @@ export async function openInStackBlitzLegalSandbox(
       },
       {
         newWindow,
-        view: 'default',
+        view: 'preview',
         ...(openFile ? { openFile } : {}),
       }
     )
@@ -152,7 +152,7 @@ export async function openInStackBlitz(
       },
       {
         newWindow,
-        view: 'default',
+        view: 'preview',
         ...(openFile ? { openFile } : {}),
       }
     )

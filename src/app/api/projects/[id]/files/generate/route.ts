@@ -32,6 +32,11 @@ function resolveTemplateForPath(
   framework: string | undefined
 ): string {
   const normalized = fullPath.replace(/^\/+/, '').replace(/\\/g, '/')
+  const baseName = normalized.split('/').pop() || ''
+  // Tailwind/PostCSS/Next config: always full-file so AI generates valid config (ts-utility would produce stubs and fail)
+  if (baseName.startsWith('tailwind.config.') || baseName.startsWith('postcss.config.') || baseName.startsWith('next.config.')) {
+    return 'full-file'
+  }
   const isNextAppApiRoute = /^app\/api\/.+\/route\.(ts|js)$/.test(normalized)
   if (isNextAppApiRoute) {
     return framework === 'next' ? 'nextjs-app-api-route' : 'generic-api-route'
