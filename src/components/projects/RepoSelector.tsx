@@ -114,7 +114,8 @@ export function RepoSelector({
       refreshTokenUsage()
     } catch (error) {
       console.error('Error generating keywords:', error)
-      alert('Failed to generate keywords. Please try again.')
+      const message = error instanceof Error ? error.message : 'Failed to generate keywords. Please try again.'
+      alert(message)
     } finally {
       setIsGeneratingKeywords(false)
     }

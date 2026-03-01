@@ -10,11 +10,19 @@ export type IdeationContext = {
   technicalRequirements?: string
 }
 
+const TITLE_MAX = 200
+const DESCRIPTION_MAX = 2000
+
 export async function generateKeywords(
   title: string,
   description: string,
   ideation?: IdeationContext
 ): Promise<string[]> {
+  if (title.length > TITLE_MAX || description.length > DESCRIPTION_MAX) {
+    throw new Error(
+      'Input too long: title must be under 200 characters and description under 2000 characters'
+    )
+  }
   const response = await fetch('/api/ai/generate-keywords', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

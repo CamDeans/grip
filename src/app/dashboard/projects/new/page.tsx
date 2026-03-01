@@ -205,10 +205,19 @@ export default function NewProjectPage() {
         credentials: 'include'
       })
 
-      const responseData = await projectResponse.json()
-
+      let responseData: { project?: { _id: string; title?: string }; error?: string; details?: string } = {}
+      try {
+        responseData = await projectResponse.json()
+      } catch {
+        // 504 or proxy errors often return HTML; avoid "Unexpected token" by not parsing as JSON
+      }
       if (!projectResponse.ok) {
-        throw new Error(responseData.error || responseData.details || 'Failed to create project')
+        const message =
+          responseData.error || responseData.details ||
+          (projectResponse.status === 504
+            ? 'The request took too long. Please try again.'
+            : projectResponse.statusText || 'Failed to create project')
+        throw new Error(message)
       }
 
       const { project } = responseData
@@ -322,7 +331,7 @@ export default function NewProjectPage() {
                       id="github-explanation-heading"
                       onClick={() => setGithubExplanationOpen((prev) => !prev)}
                       className="w-full px-4 pt-4 pb-3 flex items-center justify-between gap-2 text-left text-xs hover:bg-muted/50 transition-colors"
-                      aria-expanded={githubExplanationOpen ? 'true' : 'false'}
+                      {...(githubExplanationOpen ? { 'aria-expanded': 'true' as const } : { 'aria-expanded': 'false' as const })}
                       aria-controls="github-explanation-content"
                     >
                       <span className="font-medium text-text-primary">What is a GitHub repo and how do I find one?</span>
