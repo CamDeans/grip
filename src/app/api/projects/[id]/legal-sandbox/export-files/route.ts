@@ -67,6 +67,29 @@ export async function GET(
       }
     }
 
+    // Next.js: when app lives in src/app/, remove root app/ so Next uses src/app (concrete rule: stackblitz-no-root-app-when-src-app).
+    try {
+      const pkgRaw = files['package.json']
+      if (pkgRaw) {
+        const pkg = JSON.parse(pkgRaw) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+        const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }
+        if (deps.next) {
+          const keys = Object.keys(files)
+          const useSrcApp = keys.some((k) => k.startsWith('src/app/'))
+          if (useSrcApp) {
+            for (const key of keys) {
+              if (key === 'app/globals.css' && !files['src/app/globals.css']) {
+                files['src/app/globals.css'] = files[key] as string
+              }
+              if (key.startsWith('app/')) delete files[key]
+            }
+          }
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+
     // Next.js: always inject root layout + page so StackBlitz preview GET / returns 200 (same as main export-files).
     try {
       const pkgRaw = files['package.json']

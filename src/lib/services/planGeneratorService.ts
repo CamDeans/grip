@@ -4,7 +4,7 @@ import { Anthropic } from '@anthropic-ai/sdk'
 import { getOrCreateProjectStructure } from './structureGeneratorService'
 import { IProjectStructureData } from '@/lib/models/ProjectStructure'
 import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
-import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONE_STACK_ONLY, MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS, MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT, MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT, MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE, MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY, MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE, MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONE_STACK_ONLY, MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS, MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT, MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT, MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE, MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY, MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE, MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS, MANDATORY_GRIP_IDEATION_100_MATCH, MANDATORY_GRIP_PRODUCTION_STYLING_MIDDLE } from '@/lib/constants/buildQualityPlan'
 import { buildPlanContextFromAnalysis, type PlanContextFromAnalysis } from './planContextFromAnalysisService'
 
 /**
@@ -308,6 +308,11 @@ async function addTasksToPhases(
     const stackBlock = planContext.stackGuidance?.trim()
       ? `\n## Stack and reference guidance\n${planContext.stackGuidance}\n`
       : ''
+    // Mandatory concrete middle: styling requirements from middle so plan uses one high-quality design method (production/deployment readiness; consistent, complete code).
+    const stylingBlock =
+      planContext.stylingRequirements?.trim()
+        ? `\n## Styling (production-ready, high-quality design)\n${planContext.stylingRequirements}\n`
+        : ''
     const repoTypeBlock =
       planContext.repoTypeSummary?.trim()
         ? `\nDetected repo type (scope all phases and tasks to this stack):\n${planContext.repoTypeSummary}\n`
@@ -327,9 +332,11 @@ Project Description: ${project.description}
 ${buildReqsText ? `\nBuild requirements (use these for task scope and quality):\n${buildReqsText}\n` : ''}
 ${checklistBlock}
 ${layerBlock}
-${stackBlock}
+${stackBlock}${stylingBlock}
 ${repoTypeBlock}
 ${uploadsBlock}
+
+${MANDATORY_GRIP_PRODUCTION_STYLING_MIDDLE}
 
 ${MANDATORY_GRIP_APP_VS_USER_SETTINGS}
 
@@ -354,6 +361,8 @@ ${MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY}
 ${MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX}
 
 ${MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE}
+
+${buildReqsText ? MANDATORY_GRIP_IDEATION_100_MATCH : ''}
 
 ${MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT}
 

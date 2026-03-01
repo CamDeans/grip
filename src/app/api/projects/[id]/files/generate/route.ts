@@ -11,8 +11,12 @@ import { getProjectFilesForExport } from '@/lib/services/exportService'
 import { validatePackageJsonForStackBlitz } from '@/lib/services/packageJsonRequirementsService'
 import { gripLog, gripLogRunStart } from '@/lib/gripLogger'
 import { ObjectId } from 'mongodb'
+import clientPromise, { DB_NAME } from '@/lib/mongodb'
 
 const STREAM_HEADER = 'x-stream-progress'
+
+/** User ideation (goals, audience, features, technical requirements). Passed to file gen so code and design match 100%. */
+type IdeationForGen = { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string } | null
 
 /** Emit parent folder paths for a file path (e.g. "src/app/page.tsx" -> ["src", "src/app"]) */
 function parentFoldersForPath(fullPath: string): string[] {
@@ -160,6 +164,25 @@ export async function POST(
       console.warn('Could not load project context for high-level files, using defaults:', e)
     }
 
+    let projectIdeation: IdeationForGen = null
+    try {
+      const client = await clientPromise
+      const db = client.db(DB_NAME)
+      let proj = await db.collection('projects').findOne(
+        { _id: new ObjectId(id) },
+        { projection: { ideation: 1 } }
+      ) as { ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string } } | null
+      if (!proj) {
+        proj = await db.collection('sandboxProjects').findOne(
+          { _id: new ObjectId(id) },
+          { projection: { ideation: 1 } }
+        ) as { ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string } } | null
+      }
+      if (proj?.ideation) projectIdeation = proj.ideation
+    } catch (e) {
+      console.warn('Could not load project ideation for file generation:', e)
+    }
+
     if (streamProgress) {
       const encoder = new TextEncoder()
       const stream = new ReadableStream({
@@ -219,7 +242,8 @@ export async function POST(
                 framework,
                 repoCategory,
                 primaryLanguages,
-                mainLanguages
+                mainLanguages,
+                ideation: projectIdeation ?? undefined
               }
 
               try {
@@ -342,7 +366,8 @@ export async function POST(
           framework,
           repoCategory,
           primaryLanguages,
-          mainLanguages
+          mainLanguages,
+          ideation: projectIdeation ?? undefined
         }
 
         const result = await generateFile(genRequest)

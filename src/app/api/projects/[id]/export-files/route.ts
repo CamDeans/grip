@@ -183,8 +183,31 @@ export async function GET(
       }
     }
 
+    // Next.js: When the app lives in src/app/, remove root app/ so Next uses src/app (avoids 404: root app had only globals.css, no layout/page).
+    // Concrete rule: stackblitz-no-root-app-when-src-app — do not leave root app/ when real app is in src/app/.
+    try {
+      const pkgRaw = files['package.json']
+      if (pkgRaw) {
+        const pkg = JSON.parse(pkgRaw) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+        const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }
+        if (deps.next) {
+          const keys = Object.keys(files)
+          const useSrcApp = keys.some((k) => k.startsWith('src/app/'))
+          if (useSrcApp) {
+            for (const key of keys) {
+              if (key === 'app/globals.css' && !files['src/app/globals.css']) {
+                files['src/app/globals.css'] = files[key] as string
+              }
+              if (key.startsWith('app/')) delete files[key]
+            }
+          }
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+
     // Next.js: ALWAYS inject a known-good root layout + page for StackBlitz so GET / returns 200.
-    // Existing root page may be broken (syntax/runtime) or missing; overwriting guarantees "Compiling /_not-found" and 404 never happen.
     try {
       const pkgRaw = files['package.json']
       if (pkgRaw) {

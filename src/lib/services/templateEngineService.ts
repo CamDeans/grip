@@ -3,7 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { ObjectId } from 'mongodb'
 import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
-import { MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE, MANDATORY_GRIP_IDEATION_100_MATCH } from '@/lib/constants/buildQualityPlan'
 
 // Mock imports until we can properly access the project structure
 // These will be replaced with proper imports when integrating into the main codebase
@@ -793,6 +793,8 @@ export async function generateTemplateVariables(
     primaryLanguages?: string[];
     /** Language extension counts from tree-sitter (mainLanguages) */
     mainLanguages?: Record<string, number>;
+    /** User ideation (goals, audience, features, technical requirements); code and design must match 100% */
+    ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string };
   }
 ): Promise<{ variables: ITemplateVariables; totalTokens: number }> {
   try {
@@ -830,14 +832,28 @@ CRITICAL for package.json: Do NOT add "expo", "react-native", or any "@expo/*" /
 
 ${MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE}
 
-For this file (web UI): Apply full styling (Tailwind/shadcn/Headless UI patterns). No plain unstyled UI; no mock data. First build must be 100% deployable.`
+For this file (web UI): Use the same high-quality design styling method as the plan (Tailwind, shadcn-style components, Headless UI). Apply full styling so the app is production-ready and deployment-ready in one run. Code must be consistent and complete—no placeholder styles, no back-and-forth. No plain unstyled UI; no mock data.`
         : ''
+      const ideation = projectContext.ideation
+      const ideationBlock =
+        ideation &&
+        [ideation.goals, ideation.targetAudience, ideation.keyFeatures, ideation.technicalRequirements].some((v) => v && String(v).trim())
+          ? `
+
+User ideation (build code and design to match 100% — do not ignore or dilute):
+• Goals: ${(ideation.goals ?? '').trim() || 'Not specified'}
+• Target Audience: ${(ideation.targetAudience ?? '').trim() || 'Not specified'}
+• Key Features: ${(ideation.keyFeatures ?? '').trim() || 'Not specified'}
+• Technical Requirements: ${(ideation.technicalRequirements ?? '').trim() || 'Not specified'}
+
+${MANDATORY_GRIP_IDEATION_100_MATCH}`
+          : ''
       const fullFilePrompt = `
 Generate the COMPLETE, runnable source code for this file. No placeholders, no TODOs, no stub comments—only real code.
 
 File path: ${projectContext.filePath}
 Project description: ${projectContext.description || 'Not provided'}
-${stackBlock}${phaseBlock}
+${stackBlock}${phaseBlock}${ideationBlock}
 
 GRIP mandatory: the file must be full, valid, and runnable. Match the file type (e.g. next.config.js = Next.js config, tailwind.config.js = Tailwind config, prisma/schema.prisma = Prisma schema, lib/*.ts = real implementations). For next.config.js: always use ESM (const nextConfig = { ... }; export default nextConfig;). Never use require() or module.exports in next.config.js — it causes build failures when package.json has "type": "module".${esmNextConfigBlock}${appLayoutBlock}${appPageBlock}${packageJsonExpoBlock}${webUIFileBlock}
 

@@ -140,6 +140,34 @@ mobile_first_builds_and_preview:
   enforcement: "repoTypeDetection already has ios_swift, android_kotlin and PREVIEW_RUN_GUIDANCE. run-build route: when project repo category is ios_swift or android_kotlin (from repositoryAnalysis.structuredAnalysis.identity.project_type or detectRepoType), return 200 success without calling runMainProject. preflight route: for target=stackblitz, when category is ios_swift or android_kotlin, add error and return ok: false. Preview page: when project.repoCategory is ios_swift or android_kotlin, hide or disable Run in StackBlitz; show Export + Download with mobile-specific copy. GET /api/projects/[id] may add repoCategory from detectRepoType(analysis)."
   see_also: "docs/MOBILE-FIRST-BUILDS-AND-PREVIEW.md; docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 23."
 
+# StackBlitz preview: no root app when app lives in src/app (mandatory concrete rule — fixes 404)
+# Next.js uses root app/ when it exists; if root app/ only has globals.css and no layout/page, GET / returns 404.
+stackblitz_no_root_app_when_src_app:
+  rule: "When the app lives in src/app/, do NOT leave a root app/ directory. Next.js prefers root app/; if it only has globals.css and no layout.tsx or page.tsx, the App Router has no root layout or home page and returns 404 for /. Remove root app/ from StackBlitz export (move app/globals.css to src/app/globals.css) so Next uses src/app only. Code generation: when plan/structure uses src/app, do not create root app/ files (put globals in src/app/globals.css)."
+  enforcement: "GET /api/projects/[id]/export-files and GET /api/projects/[id]/legal-sandbox/export-files: when deps.next and any file key starts with src/app/, delete all keys starting with app/; set src/app/globals.css from app/globals.css first if present. Ensures StackBlitz preview loads the correct page."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 24."
+
+# Styling mandatory; production/deployment mode (mandatory concrete rule)
+# In-flight modal must not show done until build succeeds and code is production-ready (styled).
+styling_mandatory_production_ready:
+  rule: "Every build MUST produce a styled, production-ready UI. No plain, dull, or unstyled pages. GRIP writes all code in production-readiness and deployment mode for plan/build phases. The in-flight modal must NOT show 'done' until the build succeeds AND the generated code includes proper styling (Tailwind or project styling). Styling is mandatory—not optional or 'add later'."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE and MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX; templateEngineService injects styling mandate into full-file and web UI prompts for every app/page, layout, component, globals.css (isWebUIFilePath); planGeneratorService and enhanced-chat inject same. In-flight modal: done only when run-build returns success (dashboard/projects/[id]/page.tsx); enforcement is in prompts so generated code is always styled and deployable."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 25 and section 'Styling and first-build enforcement in the middle'."
+
+# Styling middle — high-quality design method (mandatory concrete)
+# All styling requirements flow through the middle to plan and build; one design method; code consistent and complete to avoid back-and-forth.
+production_styling_middle:
+  rule: "All styling requirements are sent through the middle to plan and build generation. The middle injects one high-quality design method (shadcn/ui, Headless UI, Tailwind) for production and deployment readiness. Code must be consistent and complete so the user does not need to go back and forth. Use the same design system across all pages and components; one run = complete, styled, runnable app."
+  enforcement: "planContextFromAnalysisService: when website or webApp layer is active, sets stylingRequirements to full STYLING_REQUIREMENTS_FOR_GRIP (not truncated by tier). planGeneratorService: injects ## Styling (production-ready, high-quality design) section from planContext.stylingRequirements and MANDATORY_GRIP_PRODUCTION_STYLING_MIDDLE. templateEngineService: for web UI files, mandates same high-quality design method as the plan; consistent, complete code—no placeholder styles, no back-and-forth. buildQualityPlan MANDATORY_GRIP_PRODUCTION_STYLING_MIDDLE."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md section 'Styling and first-build enforcement in the middle'."
+
+# User ideation — 100% match in code and design (mandatory concrete rule)
+# GRIP must identify and add the user's ideation (goals, audience, features, technical requirements) into the app; build at 100% match.
+ideation_100_match:
+  rule: "GRIP MUST identify and add the user's ideation (goals, target audience, key features, technical requirements) into the code and design of the app. Build the code around meeting the user's ideation at 100% match. Do not ignore or dilute the user's ideation; no generic or off-the-shelf content. Every plan, file, and design decision must reflect the user's Goals, Target Audience, Key Features, and Technical Requirements."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_IDEATION_100_MATCH; planGeneratorService injects it when build requirements exist (buildReqsText); templateEngineService full-file prompt receives ideation in projectContext and injects 'User ideation (build code and design to match 100%)' block + MANDATORY_GRIP_IDEATION_100_MATCH. files/generate route fetches project/sandbox ideation and passes it in every FileGenerationRequest; fileGeneratorService passes ideation to generateTemplateVariables. ideationEnhancementService and planContextFromAnalysisService use ideation for enhanced build requirements and layer prompts."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 26 and section 'User ideation — 100% match in code and design'."
+
 # Admin token reset and area of assurance (mandatory concrete rule)
 # Enables quick response when token/access errors affect admin or real users.
 admin_token_reset_and_assurance:

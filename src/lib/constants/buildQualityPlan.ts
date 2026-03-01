@@ -160,7 +160,7 @@ export const MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE = `
 - **One build, complete app.** The first automation build (in-flight modal: plan → file generation → build) MUST produce a **100% deployable** product. The user must get a complete app in one run: full functionality, full styling, and no mock data. Do not leave styling for "later"; do not ship placeholder or fake data; do not deliver a plain, unstyled UI.
 - **Styling is mandatory for web apps.** Every page and component must be styled (Tailwind or project styling): typography, spacing, colors, layout. The first open in StackBlitz or GRIP Preview must show a polished, modern UI—not a bare white page. Follow shadcn/Headless UI patterns where applicable.
 - **No mock data.** Use real env vars, real API contracts, and real data flow. Document required vars in .env.example. No hardcoded dummy data or fake APIs in the first build.
-- **In-flight modal gate.** GRIP does not exit the in-flight modal phase (does not show "done") until the build succeeds. The product must be deployable at that point: runnable, styled, and production-minded. If the build fails, the modal closes with an error; the user does not see "done" until success.
+- **In-flight modal gate.** GRIP does not exit the in-flight modal phase (does not show "done") until the build succeeds. The product must be deployable at that point: runnable, styled, and production-minded. Styling must be in place—no plain or dull pages. GRIP writes all code in production-readiness and deployment mode for plan/build phases. If the build fails, the modal closes with an error; the user does not see "done" until success.
 `.trim()
 
 /**
@@ -182,7 +182,28 @@ export const MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX = `
 
 - **Every web app must be styled.** Do not deliver a plain, unstyled app. Use Tailwind CSS (or the project's chosen styling) consistently: typography, spacing, colors, and layout. The first time the user opens GRIP Preview or StackBlitz, the app must look intentionally designed—not a bare white page with default browser styles.
 - **Clean, modern aesthetic.** Apply a cohesive look: consistent color palette, readable text, clear visual hierarchy, sensible spacing. Prefer a clean, modern feel so the first visit feels polished and professional. Avoid "developer default" unstyled UI.
-- **Layout and components must look finished.** Headers, nav, footers, cards, and forms must have visible styling (backgrounds, borders, padding) so the user sees a complete, eye-catching interface. Required for GRIP Preview and StackBlitz—the user's first impression must be a working, good-looking app.
+- **Layout and components must look finished.** Headers, nav, footers, cards, and forms must have visible styling (backgrounds, borders, padding) so the user sees a complete, eye-catching interface. Required for GRIP Preview and StackBlitz—the user's first impression must be a working, good-looking app. Never deliver a plain, dull, or unstyled UI; the in-flight modal does not show "done" until the build succeeds with proper styling in place.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: middle injects all styling requirements into plan/build; one high-quality design method; production and deployment readiness; consistent, complete code to avoid back-and-forth.
+ */
+export const MANDATORY_GRIP_PRODUCTION_STYLING_MIDDLE = `
+## MANDATORY: Styling middle — high-quality design method for production readiness
+
+- **All styling requirements are sent through the middle to plan and build generation.** The plan context (middle) injects a single, high-quality design styling method (shadcn/ui, Headless UI, Tailwind) into every plan and file-generation step. Use that method consistently—do not mix or dilute it. Every phase, task, and generated file must follow the same styling requirements so the app is production-ready and deployment-ready in one run.
+- **Code must be consistent and complete.** Write all code for production readiness so the user does not need to go back and forth. No "add styling later", no placeholder styles, no inconsistent design tokens. Apply the same design system (colors, spacing, typography, components) across all pages and components. One run = complete, styled, runnable app.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: identify and add the user's ideation (goals, audience, features, technical requirements) into the code and design; build at 100% match.
+ */
+export const MANDATORY_GRIP_IDEATION_100_MATCH = `
+## MANDATORY: User ideation — 100% match in code and design
+
+- **GRIP MUST identify and add the user's ideation in the app.** Every plan, file, and design decision must reflect the user's Goals, Target Audience, Key Features, and Technical Requirements. The generated code and UI must implement and embody these—not generic or off-the-shelf content.
+- **Build the code around meeting the user's ideation at 100% match.** Copy, flows, components, and features must align with the stated goals and key features; the design and UX must suit the target audience; technical choices must satisfy the stated technical requirements. No ignoring or diluting the user's ideation.
+- **Concrete:** When generating any file (pages, components, layout, lib, config), use the project's ideation as the source of truth. If the user specified "recipe app for home cooks", the app must look and behave like a recipe app for that audience—not a generic template. If they specified accessibility or mobile-first, the code must implement it.
 `.trim()
 
 /**

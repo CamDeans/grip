@@ -7,7 +7,7 @@
  */
 
 import { getPlanContextLimits } from '@/lib/constants/tokenLimitsByTier'
-import { STYLING_REFERENCE_REPOS } from '@/lib/constants/stylingReferenceRepos'
+import { STYLING_REFERENCE_REPOS, STYLING_REQUIREMENTS_FOR_GRIP } from '@/lib/constants/stylingReferenceRepos'
 import {
   DATA_REFERENCE_REPOS,
   getReferenceReposGuidanceLine,
@@ -26,6 +26,8 @@ export type PlanContextFromAnalysis = {
   checklistSummary: string
   layerPrompts: LayerPrompts
   stackGuidance: string
+  /** Mandatory styling requirements for plan/build (shadcn, Headless UI, Tailwind). Set when website or webApp layer is active so plan and file gen receive high-quality design method. */
+  stylingRequirements?: string
   /** Short line for plan phase: "Detected repo type: X. Expected commands: Y." */
   repoTypeSummary: string
   activeLayers: { website: boolean; webApp: boolean; data: boolean; media: boolean }
@@ -236,6 +238,10 @@ export function buildPlanContextFromAnalysis(input: {
   let stackGuidance = buildStackGuidance(activeLayers, hasRepo, sa, detected ?? undefined)
   const repoTypeSummary = detected ? getRepoTypeSummary(detected.category, detected.label) : ''
 
+  // Mandatory concrete middle: when website or webApp layer is active, always inject full styling requirements so plan and build use one high-quality design method (production/deployment readiness; consistent, complete code to avoid back-and-forth).
+  const stylingRequirements =
+    activeLayers.website || activeLayers.webApp ? STYLING_REQUIREMENTS_FOR_GRIP : undefined
+
   checklistSummary = checklistSummary.slice(0, limits.checklistSummary)
   layerPrompts = {
     website: layerPrompts.website?.slice(0, limits.layerPrompt),
@@ -249,6 +255,7 @@ export function buildPlanContextFromAnalysis(input: {
     checklistSummary,
     layerPrompts,
     stackGuidance,
+    stylingRequirements,
     repoTypeSummary,
     activeLayers,
   }

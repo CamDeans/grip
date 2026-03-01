@@ -49,6 +49,8 @@ export interface FileGenerationRequest {
   primaryLanguages?: string[];
   /** Language extension counts from tree-sitter (mainLanguages); used in AI context */
   mainLanguages?: Record<string, number>;
+  /** User ideation (goals, audience, features, technical requirements); code and design must match 100% */
+  ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string };
 }
 
 /**
@@ -267,7 +269,8 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
             framework: request.framework,
             repoCategory: request.repoCategory,
             primaryLanguages: request.primaryLanguages,
-            mainLanguages: request.mainLanguages
+            mainLanguages: request.mainLanguages,
+            ideation: request.ideation
           })
           variables = tvResult?.variables ?? { ...template.defaultValues } as ITemplateVariables
           templateTokens = tvResult?.totalTokens ?? 0
