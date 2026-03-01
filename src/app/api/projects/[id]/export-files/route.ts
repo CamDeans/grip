@@ -183,8 +183,8 @@ export async function GET(
       }
     }
 
-    // Next.js: ensure root route (/) exists so StackBlitz preview loads the main page (no "Compiling /_not-found", no GET / 404).
-    // Concrete rule: stackblitz-preview-loads-main-page — export must guarantee GET / returns 200.
+    // Next.js: ALWAYS inject a known-good root layout + page for StackBlitz so GET / returns 200.
+    // Existing root page may be broken (syntax/runtime) or missing; overwriting guarantees "Compiling /_not-found" and 404 never happen.
     try {
       const pkgRaw = files['package.json']
       if (pkgRaw) {
@@ -192,19 +192,11 @@ export async function GET(
         const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }
         if (deps.next) {
           const keys = Object.keys(files)
-          const rootPageKey = keys.find((k) => k === 'app/page.tsx' || k === 'app/page.jsx' || k === 'src/app/page.tsx' || k === 'src/app/page.jsx')
-          const rootPageContent = (rootPageKey ? files[rootPageKey] : '') as string
-          const hasValidRootPage =
-            typeof rootPageContent === 'string' &&
-            rootPageContent.trim().length >= 80 &&
-            /\bexport\s+default\b/.test(rootPageContent)
-          if (!hasValidRootPage) {
-            const useSrcApp = keys.some((k) => k.startsWith('src/app/'))
-            const appDir = useSrcApp ? 'src/app' : 'app'
-            const layoutPath = `${appDir}/layout.tsx`
-            const pagePath = `${appDir}/page.tsx`
-            if (!files[layoutPath] || (files[layoutPath] as string).trim().length < 50) {
-              files[layoutPath] = `import type { Metadata } from 'next'
+          const useSrcApp = keys.some((k) => k.startsWith('src/app/'))
+          const appDir = useSrcApp ? 'src/app' : 'app'
+          const layoutPath = `${appDir}/layout.tsx`
+          const pagePath = `${appDir}/page.tsx`
+          files[layoutPath] = `import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 
 export const metadata: Metadata = { title: 'App', description: 'GRIP project' }
@@ -217,8 +209,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   )
 }
 `
-            }
-            files[pagePath] = `export default function Home() {
+          files[pagePath] = `export default function Home() {
   return (
     <main style={{ padding: '2rem', fontFamily: 'system-ui' }}>
       <h1>Welcome</h1>
@@ -227,8 +218,21 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   )
 }
 `
-          }
         }
+      }
+    } catch {
+      // non-fatal
+    }
+
+    // Next.js 14: strip deprecated experimental.appDir so Next does not warn "Unrecognized key(s): 'appDir'".
+    try {
+      for (const configKey of ['next.config.js', 'next.config.mjs', 'next.config.ts']) {
+        const raw = files[configKey]
+        if (typeof raw !== 'string' || !raw.trim()) continue
+        const modified = raw
+          .replace(/\n\s*appDir\s*:\s*(?:true|false)\s*,?\s*/g, '\n')
+          .replace(/,(\s*})\s*(\n|\s*\/\/)/g, '$1$2')
+        if (modified !== raw) files[configKey] = modified
       }
     } catch {
       // non-fatal

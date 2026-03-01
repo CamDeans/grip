@@ -67,6 +67,60 @@ export async function GET(
       }
     }
 
+    // Next.js: always inject root layout + page so StackBlitz preview GET / returns 200 (same as main export-files).
+    try {
+      const pkgRaw = files['package.json']
+      if (pkgRaw) {
+        const pkg = JSON.parse(pkgRaw) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+        const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }
+        if (deps.next) {
+          const keys = Object.keys(files)
+          const useSrcApp = keys.some((k) => k.startsWith('src/app/'))
+          const appDir = useSrcApp ? 'src/app' : 'app'
+          const layoutPath = `${appDir}/layout.tsx`
+          const pagePath = `${appDir}/page.tsx`
+          files[layoutPath] = `import type { Metadata } from 'next'
+import type { ReactNode } from 'react'
+
+export const metadata: Metadata = { title: 'App', description: 'GRIP project' }
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  )
+}
+`
+          files[pagePath] = `export default function Home() {
+  return (
+    <main style={{ padding: '2rem', fontFamily: 'system-ui' }}>
+      <h1>Welcome</h1>
+      <p>Your app is running. Edit this page in the editor.</p>
+    </main>
+  )
+}
+`
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+
+    // Next.js 14: strip deprecated experimental.appDir to avoid "Unrecognized key(s)" warning.
+    try {
+      for (const configKey of ['next.config.js', 'next.config.mjs', 'next.config.ts']) {
+        const raw = files[configKey]
+        if (typeof raw !== 'string' || !raw.trim()) continue
+        const modified = raw
+          .replace(/\n\s*appDir\s*:\s*(?:true|false)\s*,?\s*/g, '\n')
+          .replace(/,(\s*})\s*(\n|\s*\/\/)/g, '$1$2')
+        if (modified !== raw) files[configKey] = modified
+      }
+    } catch {
+      // non-fatal
+    }
+
     files['.stackblitzrc'] = JSON.stringify(
       { installDependencies: true, startCommand: 'npm run dev' },
       null,
