@@ -7,11 +7,21 @@ export const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION })
   : null
 
-// Token economics: tier allowances per paid plan (45/55 split). Based on actual cost ~$4.30/1M (6.04M tokens, $25.95): 2.3M / 6M / 12M.
+/**
+ * Business-first revenue model (GRIP as the product; deployment-ready).
+ * - GRIP share (REVENUE_TO_GRIP_PCT): product sustainability — tokens, infra, margin, runway. Users first.
+ * - Admin share (REVENUE_TO_ADMIN_PCT): operator take on an ongoing basis, after GRIP is covered.
+ * - Token cost at 100% use is kept ≤ MAX_TOKEN_COST_PCT of revenue so GRIP always has margin.
+ */
+export const REVENUE_TO_GRIP_PCT = 0.75
+export const REVENUE_TO_ADMIN_PCT = 0.25
+export const MAX_TOKEN_COST_PCT = 0.5
+
+/** Tier allowances: sized so at ~$6.97/1M blended cost, token cost ≤ 50% of price (business-ready at 100% use). */
 export const TIERS = [
-  { id: 'starter', name: 'Starter', priceCents: 1900, tokensPerMonth: 2_300_000, stripePriceId: process.env.STRIPE_PRICE_ID_STARTER },
-  { id: 'pro', name: 'Pro', priceCents: 4900, tokensPerMonth: 6_000_000, stripePriceId: process.env.STRIPE_PRICE_ID_PRO },
-  { id: 'team', name: 'Team', priceCents: 9900, tokensPerMonth: 12_000_000, stripePriceId: process.env.STRIPE_PRICE_ID_TEAM },
+  { id: 'starter', name: 'Starter', priceCents: 1900, tokensPerMonth: 1_300_000, stripePriceId: process.env.STRIPE_PRICE_ID_STARTER },
+  { id: 'pro', name: 'Pro', priceCents: 4900, tokensPerMonth: 3_500_000, stripePriceId: process.env.STRIPE_PRICE_ID_PRO },
+  { id: 'team', name: 'Team', priceCents: 9900, tokensPerMonth: 7_000_000, stripePriceId: process.env.STRIPE_PRICE_ID_TEAM },
 ] as const
 
 export type TierId = typeof TIERS[number]['id']

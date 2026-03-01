@@ -38,7 +38,7 @@ This doc lists all Cursor rules in `.cursor/rules/` and where GRIP's code enforc
 | 20 | preview-ready-navigation-and-styling.mdc | All buttons/links must work and route correctly; web apps must be styled for clean, modern first-visit in GRIP Preview/StackBlitz (no dead links, no plain/unstyled UI) |
 | 21 | stackblitz-main-page-on-first-visit.mdc | **GRIP must enforce in generated code** that the user is always routed to the main page when previewing (StackBlitz/GRIP Preview); root `/` is the main page; no redirects away from it on first load |
 | 22 | first-build-complete-deployable | **First automation build = 100% deployable product:** full styling, full functionality, no mock data; in-flight modal does not exit until build succeeds and the product is deployable |
-| 23 | mobile-first-builds-and-preview | **Mobile-first (iOS/Android/Expo):** Native iOS/Android: no StackBlitz; run-build returns success without npm; preflight rejects stackblitz with clear message; Preview tab shows Export + Xcode/Android Studio. Expo: StackBlitz for web target; same flow as web. See docs/MOBILE-FIRST-BUILDS-AND-PREVIEW.md. |
+| 23 | mobile-first-builds-and-preview | **Mobile-first (iOS/Android/Expo):** Native iOS/Android: no StackBlitz; run-build returns success without npm; preflight rejects stackblitz with clear message; Preview tab shows Export + Xcode/Android Studio. Expo: StackBlitz for web target; same flow as web. |
 
 ---
 
@@ -68,7 +68,7 @@ This doc lists all Cursor rules in `.cursor/rules/` and where GRIP's code enforc
 | preview-ready-navigation-and-styling | **Navigation:** All buttons and links must work and route to the correct page; no dead links or placeholder onClick. **Styling:** Web apps must be styled (Tailwind/cohesive design) for a clean, modern first-visit in GRIP Preview/StackBlitz—not plain or unstyled. buildQualityPlan MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY and MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX; injected in planGeneratorService, enhanced-chat, and legal-sandbox chat. .cursor/rules/preview-ready-navigation-and-styling.mdc. |
 | stackblitz-main-page-on-first-visit | **Route to main page (enforce in generated code):** GRIP must generate code so the user is always routed to the main page when opening the app in StackBlitz or GRIP Preview. Root `/` is the main page; do not generate middleware or redirects that send first-time visitors away from `/`. buildQualityPlan MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT; injected in planGeneratorService, enhanced-chat, and legal-sandbox chat; templateEngineService full-file prompt includes CRITICAL block when generating app/page.tsx or src/app/page.tsx (main landing page). stackblitzOpen.inferOpenFile prefers app/page.tsx for Next.js so editor opens main page. .cursor/rules/stackblitz-main-page-on-first-visit.mdc. |
 | first-build-complete-deployable | **First build = 100% deployable (styling + full functionality + no mock data):** buildQualityPlan MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE; injected in planGeneratorService, enhanced-chat, and legal-sandbox chat. **Template engine (Stage 4):** For every web UI file (app/*, components/*, globals.css), templateEngineService injects this mandate + styling into the full-file prompt and the generic variable prompt so generated code is styled and deployable. In-flight modal: done only when run-build returns success (dashboard/projects/[id]/page.tsx). |
-| mobile-first-builds-and-preview | **Expo:** Inferred from package.json (inferStackFromDepsAndPaths); run-build uses npm + Expo scripts; preflight allows StackBlitz when Expo has web deps; Preview shows "Run in StackBlitz (Expo web)". **Native iOS/Android:** repoTypeDetection category ios_swift / android_kotlin from identity.project_type or paths. run-build: when category is ios_swift or android_kotlin, return success without running npm (no Xcode/Gradle on server). preflight: for target=stackblitz, when native mobile, return ok: false with message to use Export + Xcode/Android Studio. Preview tab: when repoCategory is ios_swift or android_kotlin, hide or disable "Run in StackBlitz"; emphasize Export to GitHub and "Open in Xcode/Android Studio". GET /api/projects/[id] may add repoCategory from analysis. See docs/MOBILE-FIRST-BUILDS-AND-PREVIEW.md. |
+| mobile-first-builds-and-preview | **Expo:** Inferred from package.json (inferStackFromDepsAndPaths); run-build uses npm + Expo scripts; preflight allows StackBlitz when Expo has web deps; Preview shows "Run in StackBlitz (Expo web)". **Native iOS/Android:** repoTypeDetection category ios_swift / android_kotlin from identity.project_type or paths. run-build: when category is ios_swift or android_kotlin, return success without running npm (no Xcode/Gradle on server). preflight: for target=stackblitz, when native mobile, return ok: false with message to use Export + Xcode/Android Studio. Preview tab: when repoCategory is ios_swift or android_kotlin, hide or disable "Run in StackBlitz"; emphasize Export to GitHub and "Open in Xcode/Android Studio". GET /api/projects/[id] adds repoCategory from analysis. Code: `run-build/route.ts`, `preflight/route.ts`, `repoTypeDetection.getNativeMobileRepoCategory`, `projects/[id]/route.ts` (repoCategory), `preview/page.tsx` (isNativeMobile). |
 
 ---
 
@@ -176,20 +176,33 @@ Use this checklist to get ready for testing in production (and to keep GRIP app 
 
 ---
 
-## Mobile-first builds and preview
+## Mobile-first builds and preview (concrete)
 
-**Plan:** See `docs/MOBILE-FIRST-BUILDS-AND-PREVIEW.md` for the full strategy.
+**Expo (React Native):** Inferred from package.json; run-build uses npm + Expo scripts. Preview: StackBlitz runs Expo web (`expo start --web`). Preflight allows stackblitz when Expo has web deps. One stack only; Expo only for 100% Expo apps (rules 17, 18).
 
-- **Expo (React Native):** Treated as Node-based; run-build uses npm + Expo scripts. Preview: StackBlitz runs Expo web (`expo start --web`). Preflight ensures Expo projects have web deps when target=stackblitz.
-- **Native iOS (Swift/SwiftUI):** Repo type `ios_swift`. Run-build does not run npm; returns success with message "Export and open in Xcode." Preflight for stackblitz fails with clear message. Preview tab: emphasize Export + "Open in Xcode"; do not offer Run in StackBlitz.
-- **Native Android (Kotlin):** Repo type `android_kotlin`. Same as iOS: run-build returns success without npm; preflight rejects stackblitz; Preview tab emphasizes Export + "Open in Android Studio."
+**Native iOS (Swift/SwiftUI):** Repo type `ios_swift` (repoTypeDetection). Run-build returns success without running npm; preflight for target=stackblitz returns ok: false with message to use Export + Xcode. Preview tab: when repoCategory is ios_swift, show native-iOS card (Export / Download, open in Xcode); do not offer Run in StackBlitz.
+
+**Native Android (Kotlin):** Repo type `android_kotlin`. Same as iOS: run-build returns success without npm; preflight rejects stackblitz; Preview tab shows Export + "Open in Android Studio" when repoCategory is android_kotlin.
+
+**Enforcement:** `getNativeMobileRepoCategory` (repoTypeDetection); run-build and preflight read repositoryAnalysis.structuredAnalysis.identity; GET /api/projects/[id] adds repoCategory; preview page uses isNativeMobile to switch UI. Detailed strategy and tables: `docs/archive/MOBILE-FIRST-BUILDS-AND-PREVIEW.md`.
+
+---
+
+## Pricing and Stripe (business-first, concrete)
+
+**Revenue model:** GRIP first; admin share on an ongoing basis. **75% GRIP** (tokens, infra, margin, runway); **25% admin** (operator take). Token cost at 100% use is kept **≤ 50% of revenue** so GRIP has non-token margin. Source: `src/lib/stripe.ts` — `REVENUE_TO_GRIP_PCT`, `REVENUE_TO_ADMIN_PCT`, `MAX_TOKEN_COST_PCT`.
+
+**Tiers (business-ready at ~$6.97/1M):** Starter 1.3M / Pro 3.5M / Team 7M tokens per month at $19 / $49 / $99. Stripe Price IDs: `STRIPE_PRICE_ID_STARTER`, `STRIPE_PRICE_ID_PRO`, `STRIPE_PRICE_ID_TEAM`. Webhook and plan/access use `TIERS` from stripe.ts for tokensPerMonth.
+
+**Token add-ons (one-time):** 500K and 1M packs. Env: `STRIPE_PRICE_ID_ADD_TOKENS_500K`, `STRIPE_PRICE_ID_ADD_TOKENS_1M`. Checkout metadata `type: 'add_tokens'`, `tokens: string`; webhook adds to `user.tokenAllowance`. Price add-ons so token cost ≤ 50% of sale (e.g. 500K ≈ $6.99, 1M ≈ $13.99 at $6.97/1M). Detailed tables and Stripe setup: `docs/archive/PRICING-AND-STRIPE-ADDONS.md`.
 
 ---
 
 ## References
 
 - All rule files: `.cursor/rules/*.mdc`
-- Mobile-first plan: `docs/MOBILE-FIRST-BUILDS-AND-PREVIEW.md`
 - Constants: `src/lib/constants/buildQualityPlan.ts` (comment lists rules)
+- Tiers and revenue: `src/lib/stripe.ts` (TIERS, REVENUE_TO_GRIP_PCT, REVENUE_TO_ADMIN_PCT, MAX_TOKEN_COST_PCT, TOKEN_ADD_ONS)
 - Parity: `docs/GRIP_SANDBOX_PARITY.md`
 - Full build: `docs/FULL-BUILD-REQUIREMENTS.md`
+- Archived detail: `docs/archive/` (e.g. MOBILE-FIRST-BUILDS-AND-PREVIEW.md, PRICING-AND-STRIPE-ADDONS.md)

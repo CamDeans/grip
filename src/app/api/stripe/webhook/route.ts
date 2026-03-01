@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
 
       const subscription = await stripe.subscriptions.retrieve(subId)
       const priceId = subscription.items.data[0]?.price?.id
-      const tierConfig = getTierByPriceId(priceId || '') || { id: tier, tokensPerMonth: 2_300_000 }
-      const tokensPerMonth = tierConfig.tokensPerMonth ?? 2_300_000
+      const tierConfig = getTierByPriceId(priceId || '') || { id: tier, tokensPerMonth: 1_300_000 }
+      const tokensPerMonth = tierConfig.tokensPerMonth ?? 1_300_000
 
       await db.collection('users').updateOne(
         { _id: new ObjectId(userId) },
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       } else {
         const priceId = subscription.items.data[0]?.price?.id
         const tierConfig = getTierByPriceId(priceId || '')
-        const tokensPerMonth = tierConfig?.tokensPerMonth ?? 2_300_000
+        const tokensPerMonth = tierConfig?.tokensPerMonth ?? 1_300_000
         await db.collection('users').updateOne(
           { _id: new ObjectId(userId) },
           {
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
       // On renewal, reset token usage for the new period (no rollover; allowance is per period only)
       const priceId = subscription.items.data[0]?.price?.id
       const tierConfig = getTierByPriceId(priceId || '')
-      const tokensPerMonth = tierConfig?.tokensPerMonth ?? 2_300_000
+      const tokensPerMonth = tierConfig?.tokensPerMonth ?? 1_300_000
       await db.collection('users').updateOne(
         { _id: new ObjectId(userId) },
         {

@@ -8,9 +8,9 @@ import { Coins, Zap } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
 
 const TIERS = [
-  { id: 'starter', name: 'Starter', price: '$19', priceLabel: '/month', tokens: '2.3M tokens/month', description: 'Light use, side projects. Enough for regular chat and code generation without worrying about limits.', popular: false },
-  { id: 'pro', name: 'Pro', price: '$49', priceLabel: '/month', tokens: '6M tokens/month', description: 'Serious builders, daily use. Heavy development and multiple projects with plenty of headroom.', popular: true },
-  { id: 'team', name: 'Team', price: '$99', priceLabel: '/month', tokens: '12M tokens/month', description: 'Small teams, heavy usage. Maximum allowance for shipping multiple apps and experiments.', popular: false },
+  { id: 'starter', name: 'Starter', price: '$19', priceLabel: '/month', tokens: '1.3M tokens/month', description: 'Light use, side projects. Enough for regular chat and code generation without worrying about limits.', popular: false },
+  { id: 'pro', name: 'Pro', price: '$49', priceLabel: '/month', tokens: '3.5M tokens/month', description: 'Serious builders, daily use. Heavy development and multiple projects with plenty of headroom.', popular: true },
+  { id: 'team', name: 'Team', price: '$99', priceLabel: '/month', tokens: '7M tokens/month', description: 'Small teams, heavy usage. Maximum allowance for shipping multiple apps and experiments.', popular: false },
 ] as const
 
 const ADD_TOKEN_PACKS = [

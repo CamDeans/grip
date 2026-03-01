@@ -312,7 +312,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How do I choose a plan?',
-    a: 'Create your account and sign in first; then you\'ll choose a plan and pay via Stripe. Starter ($19/mo, 2.3M tokens), Pro ($49/mo, 6M tokens), or Team ($99/mo, 12M tokens). Your token allowance covers all AI usage so you can ship without surprises.',
+    a: 'Create your account and sign in first; then you\'ll choose a plan and pay via Stripe. Starter ($19/mo, 1.3M tokens), Pro ($49/mo, 3.5M tokens), or Team ($99/mo, 7M tokens). Your token allowance covers all AI usage so you can ship without surprises.',
   },
   {
     q: 'What happens when I run out of tokens?',
@@ -482,7 +482,7 @@ export function LandingPage() {
                   <h3 className="font-semibold text-lg text-text-primary">Starter</h3>
                 </div>
                 <p className="text-2xl font-bold text-primary mb-1">$19<span className="text-sm font-normal text-text-muted">/month</span></p>
-                <p className="text-sm text-text-secondary mb-4">2.3M tokens/month</p>
+                <p className="text-sm text-text-secondary mb-4">1.3M tokens/month</p>
                 <p className="text-sm text-text-muted">
                   Light use, side projects. Enough for regular chat and code generation without worrying about limits.
                 </p>
@@ -494,7 +494,7 @@ export function LandingPage() {
                   <h3 className="font-semibold text-lg text-text-primary">Pro</h3>
                 </div>
                 <p className="text-2xl font-bold text-primary mb-1">$49<span className="text-sm font-normal text-text-muted">/month</span></p>
-                <p className="text-sm text-text-secondary mb-4">6M tokens/month</p>
+                <p className="text-sm text-text-secondary mb-4">3.5M tokens/month</p>
                 <p className="text-sm text-text-muted">
                   Serious builders, daily use. Heavy development and multiple projects with plenty of headroom.
                 </p>
@@ -505,7 +505,7 @@ export function LandingPage() {
                   <h3 className="font-semibold text-lg text-text-primary">Team</h3>
                 </div>
                 <p className="text-2xl font-bold text-primary mb-1">$99<span className="text-sm font-normal text-text-muted">/month</span></p>
-                <p className="text-sm text-text-secondary mb-4">12M tokens/month</p>
+                <p className="text-sm text-text-secondary mb-4">7M tokens/month</p>
                 <p className="text-sm text-text-muted">
                   Small teams, heavy usage. Maximum allowance for shipping multiple apps and experiments.
                 </p>

@@ -41,7 +41,7 @@ export function buildTokenBudgetPromptFragment(
   context: TokenBudgetContext
 ): string {
   const tierLower = (tier || 'starter').toLowerCase()
-  const allowance = TIERS.find((t) => t.id === tierLower)?.tokensPerMonth ?? 2_300_000
+  const allowance = TIERS.find((t) => t.id === tierLower)?.tokensPerMonth ?? 1_300_000
   const isStarter = tierLower === 'starter'
   const isPro = tierLower === 'pro'
   const isTeam = tierLower === 'team'

@@ -239,11 +239,11 @@ export async function requireTokenBalance(
   const tier = (access.tier ?? 'starter').toLowerCase()
   const upgradeSuggestions: { action: 'upgrade' | 'add_tokens'; targetTier?: string; label: string }[] = []
   if (!access.isAdmin && tier === 'starter') {
-    upgradeSuggestions.push({ action: 'upgrade', targetTier: 'pro', label: 'Upgrade to Pro (6M tokens/month)' })
-    upgradeSuggestions.push({ action: 'upgrade', targetTier: 'team', label: 'Upgrade to Team (12M tokens/month)' })
+    upgradeSuggestions.push({ action: 'upgrade', targetTier: 'pro', label: 'Upgrade to Pro (3.5M tokens/month)' })
+    upgradeSuggestions.push({ action: 'upgrade', targetTier: 'team', label: 'Upgrade to Team (7M tokens/month)' })
     upgradeSuggestions.push({ action: 'add_tokens', label: 'Add more tokens to this period' })
   } else if (!access.isAdmin && tier === 'pro') {
-    upgradeSuggestions.push({ action: 'upgrade', targetTier: 'team', label: 'Upgrade to Team (12M tokens/month)' })
+    upgradeSuggestions.push({ action: 'upgrade', targetTier: 'team', label: 'Upgrade to Team (7M tokens/month)' })
     upgradeSuggestions.push({ action: 'add_tokens', label: 'Add more tokens to this period' })
   } else if (!access.isAdmin && tier === 'team') {
     upgradeSuggestions.push({ action: 'add_tokens', label: 'Add more tokens to this period' })
