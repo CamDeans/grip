@@ -1,10 +1,7 @@
 import { getServerAuthSession } from '@/lib/auth'
 import { requireAppAccess, requireTokenBalance } from '@/lib/access'
-import { addTokenUsage } from '@/lib/tokenUsage'
 import { NextResponse } from 'next/server'
 import { ObjectId } from 'mongodb'
-import { getOrCloneRepository } from '@/lib/repository'
-import { analyzeProject } from '@/lib/services/analysisService'
 import { Project } from '@/lib/models/Project'
 import { connectToDatabase } from '@/lib/mongodb'
 import type { IProject } from '@/lib/models/Project'
@@ -70,23 +67,8 @@ export async function POST(req: Request) {
       const savedProject = await project.save()
       console.log('Project saved successfully:', JSON.stringify(savedProject, null, 2))
 
-      // If repository is provided, analyze it
-      if (projectToCreate.repository) {
-        console.log('Starting repository analysis:', projectToCreate.repository)
-        try {
-          const analysisResult = await analyzeProject(savedProject._id, projectToCreate.repository)
-          const totalTokens = analysisResult?.totalTokens ?? 0
-          if (totalTokens > 0 && session.user?.id) {
-            await addTokenUsage(session.user.id, totalTokens).catch((err) =>
-              console.warn('Project create (analyze): failed to record token usage', err)
-            )
-          }
-          console.log('Repository analysis completed')
-        } catch (error) {
-          console.error('Repository analysis failed:', error)
-          // Don't fail the whole request if analysis fails
-        }
-      }
+      // Do not run analysis here — it can take 60s+ (clone + tree-sitter + LLM) and causes 504 on Vercel.
+      // Analysis runs when the user lands on the project Overview (POST analysis/refresh in the pipeline).
 
       if (session?.user?.email) {
         const { createNotification } = await import('@/lib/notifications')
