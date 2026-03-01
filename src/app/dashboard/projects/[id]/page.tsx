@@ -384,8 +384,9 @@ export default function ProjectOverviewPage() {
             setSetupStep(null)
             return
           }
+          const analysisPollSeconds = 150 // run route maxDuration is 120s; poll long enough for it to finish
           let analysisDone = false
-          for (let i = 0; i < 90 && !analysisDone; i++) {
+          for (let i = 0; i < analysisPollSeconds && !analysisDone; i++) {
             const r = await fetch(`/api/projects/${projectId}/analysis/status`)
             const d = r.ok ? await r.json().catch(() => ({})) : {}
             if (d?.hasAnalysis ?? d?.analysisCompleted) {
@@ -396,9 +397,9 @@ export default function ProjectOverviewPage() {
             }
           }
           if (!analysisDone) {
-            console.warn('[GRIP Overview] Stage 2 (analysis) did not complete within 90s. Stopping; do not advance to plan.')
-            sonnerToast.warning('Analysis status not updated', {
-              description: 'Analysis may still be running. Refresh the page or run analysis from the Repo tab.',
+            console.warn(`[GRIP Overview] Stage 2 (analysis) did not complete within ${analysisPollSeconds}s. Stopping; do not advance to plan.`)
+            sonnerToast.warning('Analysis did not finish in time', {
+              description: `No result after ${analysisPollSeconds}s. Refresh the page to check status, or run analysis from the Repo tab.`,
             })
             setSetupStep(null)
             return
