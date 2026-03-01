@@ -15,6 +15,9 @@
 # production
 /build
 
+# GRIP run log — use: tail -f logs/grip.log
+/logs/
+
 # misc
 .DS_Store
 *.pem

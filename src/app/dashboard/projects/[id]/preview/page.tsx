@@ -22,6 +22,7 @@ export default function ProjectPreviewPage() {
     exportedRepoUrl?: string
     deployedUrl?: string
     mongodbCollectionName?: string | null
+    repoCategory?: 'ios_swift' | 'android_kotlin'
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [collections, setCollections] = useState<string[]>([])
@@ -171,6 +172,7 @@ export default function ProjectPreviewPage() {
   }
 
   const hasRepo = !!(project?.repository?.owner && project?.repository?.name) || !!project?.exportedRepoUrl
+  const isNativeMobile = project?.repoCategory === 'ios_swift' || project?.repoCategory === 'android_kotlin'
 
   return (
     <div className="space-y-4">
@@ -188,7 +190,22 @@ export default function ProjectPreviewPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {/* 1. Run in browser (StackBlitz in new tab so GRIP stays open here) */}
+          {/* 1. Run in browser (StackBlitz) — hidden for native iOS/Android */}
+          {isNativeMobile ? (
+            <Card className="border-amber-500/20 bg-amber-500/5">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  {project?.repoCategory === 'ios_swift' ? 'Native iOS project' : 'Native Android project'}
+                </CardTitle>
+                <CardDescription>
+                  StackBlitz cannot run native {project?.repoCategory === 'ios_swift' ? 'iOS' : 'Android'} apps. Export to GitHub or download the project, then open it in {project?.repoCategory === 'ios_swift' ? 'Xcode' : 'Android Studio'} to build and run on simulator or device.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-text-secondary">Use <strong>Export to GitHub</strong> or <strong>Download project</strong> below, then open the repo in {project?.repoCategory === 'ios_swift' ? 'Xcode' : 'Android Studio'}.</p>
+              </CardContent>
+            </Card>
+          ) : (
           <Card className="border-primary/20 bg-primary/5">
             <CardHeader>
               <CardTitle className="text-base">Run in browser</CardTitle>
@@ -289,6 +306,7 @@ export default function ProjectPreviewPage() {
               )}
             </CardContent>
           </Card>
+          )}
 
           {/* 2. Download project */}
           <Card>

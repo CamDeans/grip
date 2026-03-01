@@ -1,0 +1,37 @@
+---
+description: GRIP must ensure all buttons/links work and route correctly, and web apps must be styled for a clean modern first-visit in Preview/StackBlitz
+alwaysApply: true
+---
+
+# Preview-Ready: Navigation and Styling (Concrete Rule)
+
+**Mandate:** Before the build is considered done (and before the user uses the project in GRIP Preview or StackBlitz), GRIP must deliver (1) working navigation—every button and link routes to the correct page—and (2) styled, clean, modern UI—not plain or unstyled. The first visit must be usable and eye-catching.
+
+## 1. All buttons and links must work (navigation and interactivity)
+
+- **Every button and link must do something real.** Navigation links must use the correct `href` or router (e.g. Next.js `Link` or `useRouter().push`) to the real route. Buttons that should navigate must have `onClick` (or equivalent) that goes to the correct page.
+- **No dead links or placeholder handlers.** No `href="#"`, no empty `onClick={() => {}}`, no "TODO" or stub handlers. Every nav item, CTA, header/footer link must point to the actual route so the user can click through the app in Preview/StackBlitz.
+- **Match the plan and routes.** If the app has pages (e.g. /dashboard, /settings, /about), every reference to those pages in the UI must use the real path. Do not ship with non-functional navigation; the user must be able to use every visible link and button.
+
+## 2. Styling and first-visit experience (clean, modern look)
+
+- **Every web app must be styled.** Do not deliver a plain, unstyled app. Use Tailwind CSS (or the project's chosen styling) consistently: typography, spacing, colors, and layout. The first time the user opens GRIP Preview or StackBlitz, the app must look intentionally designed—not a bare white page with default browser styles.
+- **Clean, modern aesthetic.** Apply a cohesive look: consistent color palette, readable text, clear visual hierarchy, sensible spacing. Prefer a clean, modern feel so the first visit feels polished and professional. Avoid "developer default" unstyled UI.
+- **Layout and components must look finished.** Headers, nav, footers, cards, and forms must have visible styling (backgrounds, borders, padding) so the user sees a complete, eye-catching interface. The user's first impression in GRIP Preview/StackBlitz must be a working, good-looking app.
+
+## Do NOT
+
+- Ship links or buttons that do nothing or go to the wrong page.
+- Deliver an app that looks plain, unstyled, or "default browser" in Preview/StackBlitz.
+- Exit the in-flight automation (or mark build "done") with placeholder interactivity or no styling.
+
+## Do
+
+- Implement working `Link`/`href` and button handlers for every nav item and CTA.
+- Apply Tailwind (or project styling) so the app has a clear visual design from the first load.
+- Ensure the first run in GRIP Preview/StackBlitz is both usable (navigation works) and visually polished.
+
+## Where this is enforced
+
+- **buildQualityPlan.ts:** `MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY` and `MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX` injected in planGeneratorService, enhanced-chat, and legal-sandbox chat.
+- **CONCRETE-RULES-AND-ALIGNMENT.md** and **.cursorrules** document these rules. The in-flight modal only advances to "done" when the build succeeds; these rules ensure the generated code includes working navigation and styling so that when the user opens Preview, the app is usable and looks good.

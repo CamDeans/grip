@@ -56,24 +56,99 @@ full_grip_build:
     - "Remove or replace mock data and placeholder responses with real DB and real integrations so production readiness is maintained."
     - "Verify each capability: export creates a real repo with content; deploy returns a real Vercel URL; preview loads a URL or StackBlitz; Repo shows full tree; chat can save code to projectFiles."
 
-# Overview in-flight modal: sequential stages (no advance until success)
-# The build automation modal must NOT move to the next stage until the current stage returns success. This keeps us on the same page and prevents partial runs.
+# Overview in-flight modal: start on trigger, sequential stages (no advance until success)
+# The build automation modal must OPEN IMMEDIATELY when the user triggers the run (button press or auto-run) so the user sees GRIP is working and does not leave the app. It must NOT move to the next stage until the current stage returns success.
 overview_in_flight_stages:
   rule: "GRIP does not advance from one modal stage to the next until the current stage has a successful return."
+  start_on_trigger: "Show the in-flight modal (e.g. Stage 1 Preparing) as soon as the run starts—set setupStep to 'preparing' at the very start of run() before any await, and on 'Rerun plan and build' button click—so the user never sits with no feedback."
   stages:
     - "Stage 1 (preparing): delay only; then Stage 2."
     - "Stage 2 (analysis): advance only when POST analysis/refresh returns 200 and analysis/status reports completion within 90s."
     - "Stage 3 (plan): advance only when POST plan and POST plan/sync-state both return 200."
     - "Stage 4 (files): advance only when POST files/generate returns 200 and the NDJSON stream sends a 'done' event."
-    - "Stage 5 (build): advance only when POST run-build returns 200."
-  on_failure: "On any stage failure, clear the modal (setSetupStep null) and stop automation; do not advance."
+    - "Stage 5 (build): advance to done ONLY when POST run-build returns 200 AND response body success === true (build actually succeeded). If success is false, clear modal and show error toast; do not show done."
+  on_failure: "On any stage failure, clear the modal (setSetupStep null) and stop automation; do not advance. Build failure (success: false) must close modal and show build-failed toast, not done."
 
 # Build automation logging (Vercel / server-side)
 # Required so we can find where errors occur when full file creation or a stage fails.
 build_automation_logging:
-  rule: "Server-side logs for build automation use the prefix [GRIP Stage N] (N = 2, 3, 4, 5) so Vercel logs can be filtered."
-  locations: "analysis/refresh, plan, plan/sync-state, files/generate, run-build; fileGeneratorService when content is rejected as placeholder/empty."
+  rule: "Server-side logs for build automation use the prefix [GRIP Stage N] (N = 2, 3, 4, 5) so Vercel logs can be filtered. Same events are written to logs/grip.log via gripLogger; use tail -f logs/grip.log to track GRIP in the terminal."
+  locations: "analysis/refresh, plan, plan/sync-state, files/generate, run-build; fileGeneratorService when content is rejected as placeholder/empty; src/lib/gripLogger.ts writes to logs/grip.log."
   do_not: "Do not remove or weaken these logs; they are required for diagnosing why GRIP is not writing full code for each file."
+
+# File generation templates (full code for every file)
+# Config/schema/lib/hooks/types and similar paths must use the full-file template so the AI returns complete runnable content (single FileContent variable). ts-utility is for utility modules where the functions array is populated; do not use ts-utility for paths that need full file body. Enforced: projectPlanningService.defaultTemplateForPath, templateEngineService full-file prompt.
+file_generation_templates:
+  full_file_paths: "next.config.js, tailwind.config.js, postcss.config.js, vercel.json, prisma/schema.prisma, lib/*.ts|js, hooks/*.ts|js, types/index.ts|js, middleware.ts|js, public/manifest.json, public/sw.js, docs/*.md|mdx → full-file template"
+  static_asset_paths: "public/**/*.png|ico|jpg|jpeg|gif|webp → static-asset (no AI; minimal placeholder binary as base64; export/run/download decode when writing)"
+  deduplication: "getFilesToGenerate deduplicates by path so each file is generated at most once per run (saves tokens; displayed total = unique files)."
+  ts_utility: "Only when template functions array can be populated; otherwise use full-file so content is not comment-only."
+
+# npm and build environment errors (mandatory concrete rule)
+# GRIP must prevent or recover from ERESOLVE, EBADENGINE, and ESM/CommonJS errors so npm install and dev/build succeed.
+npm_build_environment_errors:
+  rule: "Handle npm/build environment errors so install and run succeed. (1) ERESOLVE: retry npm install with --legacy-peer-deps when first attempt fails with ERESOLVE; prefer compatible dependency versions in package.json. (2) EBADENGINE: set engines.node in package.json for the stack (e.g. >=20.19.4 for Expo/Metro 0.83). (3) ESM: when package.json has type module, use import/export in .js configs (e.g. next.config.mjs or next.config.js with ESM), never require() or module.exports."
+  enforcement: "runMainProject.ts and runSandboxProject.ts retry with --legacy-peer-deps on ERESOLVE; buildQualityPlan MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT in plan and enhanced-chat and legal-sandbox; .cursor/rules/npm-build-environment-errors.mdc."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md requirement 10 (Full automation concrete requirements)."
+
+# One stack only per project (mandatory concrete rule)
+# Prevents Next.js + Expo mix that causes npm ERESOLVE and StackBlitz not knowing which stack to run.
+one_stack_only:
+  rule: "GRIP MUST choose exactly one stack per project before planning and before writing any code. Never mix Next.js (web) with Expo/React Native (mobile) in the same project. package.json must list only dependencies and scripts for that one stack; scripts must match (e.g. next dev OR expo start --web, not both)."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_ONE_STACK_ONLY injected in planGeneratorService, enhanced-chat, and legal-sandbox chat; plan prompt includes 'CRITICAL — One stack only'; exportService normalizePackageJsonForExport infers stack and stripOtherStackDeps() so export/StackBlitz get single-stack package.json."
+  see_also: ".cursor/rules/one-stack-only.mdc; docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 17."
+
+# Expo only for 100% Expo/React Native apps (mandatory concrete rule)
+# Prevents adding expo to web package.json which corrupts npm install and StackBlitz.
+expo_only_for_expo_apps:
+  rule: "Never add expo, react-native, or @expo/* to package.json for web (Next.js, Vite, CRA) projects. Only include them when the project is explicitly a 100% Expo/React Native app. Adding 'expo': '*' to a web project corrupts installs and StackBlitz."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS injected in planGeneratorService, enhanced-chat, and legal-sandbox chat; templateEngineService full-file prompt CRITICAL block when generating package.json; packageJsonRequirementsService inferStackFromDepsAndPaths prefers path-based inference (next.config, app/, vite.config) so stray expo in deps does not override web stack; exportService stripOtherStackDeps removes expo/react-native/@expo/* for web stacks."
+  see_also: ".cursor/rules/expo-only-for-expo-apps.mdc; docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 18."
+
+# Next.js App Router root layout (mandatory concrete rule)
+# Prevents "children is not defined" and "next/head inside app directory" when generating app/layout.tsx.
+nextjs_app_router_layout:
+  rule: "When generating or editing app/layout.tsx or src/app/layout.tsx: (1) Define children in the function signature: export default function RootLayout({ children }: { children: React.ReactNode }). (2) Do NOT use next/head or <Head> in app directory — use export const metadata = { title, description }. (3) Return only <html><body>{children}</body></html>; do not wrap in fragment or <main>."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT injected in planGeneratorService, enhanced-chat, and legal-sandbox chat; templateEngineService full-file prompt includes CRITICAL block when file path is app/layout.tsx or src/app/layout.tsx."
+  see_also: ".cursor/rules/nextjs-app-router-layout.mdc; docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 19."
+
+# Preview-ready: navigation and styling (mandatory concrete rule)
+# Ensures all buttons/links work and app is styled so user can use project in StackBlitz and first visit looks clean/modern.
+preview_ready_navigation_and_styling:
+  rule: "(1) All buttons and links must work: real href or router/Link to correct page; no dead links, no href='#', no empty onClick. (2) Web apps must be styled for clean, modern first-visit: use Tailwind (or project styling) consistently so GRIP Preview/StackBlitz does not show a plain, unstyled page; layout and components must look finished and eye-catching."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY and MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX injected in planGeneratorService, enhanced-chat, and legal-sandbox chat. In-flight modal only advances to done when build succeeds; these rules ensure generated code includes working navigation and styling."
+  see_also: ".cursor/rules/preview-ready-navigation-and-styling.mdc; docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 20."
+
+# StackBlitz/preview: route to main page (mandatory concrete rule — enforce in generated code)
+# GRIP must generate code so the user is always routed to the main page when previewing in StackBlitz or GRIP Preview.
+stackblitz_main_page_on_first_visit:
+  rule: "GRIP MUST enforce in the code it generates that the user is routed to the main page when the app is opened (StackBlitz or GRIP Preview). Root path (/) is the main page. Do not generate middleware, redirects, or router logic that send first-time visitors away from /. Next.js: app/page.tsx (or src/app/page.tsx) is the main landing content for /; do not redirect / elsewhere. Vite/SPA: index.html and root component must render the main view at /."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT injected in planGeneratorService, enhanced-chat, and legal-sandbox chat; templateEngineService full-file prompt includes CRITICAL block when generating app/page.tsx or src/app/page.tsx; stackblitzOpen.inferOpenFile prefers app/page.tsx for Next.js."
+  see_also: ".cursor/rules/stackblitz-main-page-on-first-visit.mdc; docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 21."
+
+# First build = 100% deployable product (mandatory concrete rule)
+# Styling + full functionality + no mock data; in-flight modal does not exit until build succeeds.
+first_build_complete_deployable:
+  rule: "The first automation build (in-flight modal: plan → file generation → build) MUST produce a 100% deployable product. Full styling (Tailwind/shadcn/Headless UI), full functionality, no mock data. GRIP does not exit the in-flight modal (does not show 'done') until the build succeeds; the product must be deployable at that point."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE injected in planGeneratorService, enhanced-chat, and legal-sandbox chat. templateEngineService: for every web UI file (app/*, components/*, globals.css), injects this mandate + styling into full-file and generic variable prompts so generated code is styled and production-ready (isWebUIFilePath). In-flight modal: done only when run-build returns success (dashboard/projects/[id]/page.tsx)."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 22 and section 'Styling and first-build enforcement in the middle'."
+
+# Mobile-first builds and preview (mandatory concrete rule)
+# 100% iOS, 100% Android, and Expo: how GRIP handles them and how preview aligns with web (StackBlitz).
+mobile_first_builds_and_preview:
+  rule: "GRIP MUST handle mobile-first builds and preview consistently. (1) Expo (React Native): Same as web—npm run build; StackBlitz can run Expo web (expo start --web). Preflight allows StackBlitz when Expo has web deps. (2) Native iOS (Swift/SwiftUI): Repo type ios_swift. Do NOT run npm build (no Xcode on server). run-build returns success with message to Export and open in Xcode. Preflight for target=stackblitz MUST fail with clear message: StackBlitz cannot run native iOS; use Export to GitHub and open in Xcode. Preview tab: do not offer Run in StackBlitz; show Export and 'Open in Xcode'. (3) Native Android (Kotlin): Repo type android_kotlin. Same as iOS—run-build returns success without npm; preflight rejects stackblitz; Preview tab emphasizes Export and 'Open in Android Studio'."
+  enforcement: "repoTypeDetection already has ios_swift, android_kotlin and PREVIEW_RUN_GUIDANCE. run-build route: when project repo category is ios_swift or android_kotlin (from repositoryAnalysis.structuredAnalysis.identity.project_type or detectRepoType), return 200 success without calling runMainProject. preflight route: for target=stackblitz, when category is ios_swift or android_kotlin, add error and return ok: false. Preview page: when project.repoCategory is ios_swift or android_kotlin, hide or disable Run in StackBlitz; show Export + Download with mobile-specific copy. GET /api/projects/[id] may add repoCategory from detectRepoType(analysis)."
+  see_also: "docs/MOBILE-FIRST-BUILDS-AND-PREVIEW.md; docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 23."
+
+# Admin token reset and area of assurance (mandatory concrete rule)
+# Enables quick response when token/access errors affect admin or real users.
+admin_token_reset_and_assurance:
+  rule: "GRIP MUST provide a dedicated area of assurance where admin can reset tokens to zero (for self and for other users) and respond quickly to token/access errors for real users."
+  reset_tokens: "Admin MUST be able to reset tokensUsedThisPeriod to 0 for their own account and for any user (by userId or email) without changing allowances."
+  reconcile_tokens: "Admin MUST be able to reconcile token usage so GRIP tracking matches actual usage (e.g. from Claude console). Set a user's tokensUsedThisPeriod by providing either 'remaining' or 'tokensUsedThisPeriod'. Use when tracking is out of sync (e.g. undercount from concurrent requests) so real users see correct remaining = allowance − used."
+  area_of_assurance: "Token limits admin page MUST include a 'Quick response: token reset (area of assurance)' section with: (1) Reset my tokens to zero (admin self), (2) Reset tokens for another user by email or user ID; and a 'Reconcile token usage' section to set recorded usage (by remaining or used) so tracking matches Claude/real usage."
+  locations: "POST /api/admin/reset-tokens (body {} for self, { userId } or { email } for another user); POST /api/admin/reconcile-tokens (body { userId|email, remaining?|tokensUsedThisPeriod? }); dashboard/admin/token-limits page with the area-of-assurance card and reconcile card."
+  do_not: "Do not remove the reset-tokens API, the reconcile-tokens API, or the area-of-assurance/reconcile UI; they are required for rapid response and accurate tracking for real users."
 
 # Mandatory StackBlitz preview files (GRIP must always include so user can preview upon completion)
 stackblitz_preview_mandate:

@@ -1,7 +1,7 @@
 import { ObjectId } from 'mongodb'
 import clientPromise, { DB_NAME } from '@/lib/db'
 import { getOrCloneRepository } from '@/lib/repository'
-import { inferStackFromDepsAndPaths, getScriptsForStack } from '@/lib/services/packageJsonRequirementsService'
+import { inferStackFromDepsAndPaths, getScriptsForStack, type InferredStack } from '@/lib/services/packageJsonRequirementsService'
 
 interface PackageJsonShape {
   name?: string
@@ -51,8 +51,9 @@ function normalizePackageJsonForExport(content: string, filePaths?: string[]): s
   if (!pkg.scripts) pkg.scripts = {}
   const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }
 
+  let stack: InferredStack = 'generic'
   if (filePaths && filePaths.length > 0) {
-    const stack = inferStackFromDepsAndPaths(deps, filePaths)
+    stack = inferStackFromDepsAndPaths(deps, filePaths)
     const scripts = getScriptsForStack(stack)
     pkg.scripts.dev = scripts.dev
     pkg.scripts.build = scripts.build
@@ -83,6 +84,12 @@ function normalizePackageJsonForExport(content: string, filePaths?: string[]): s
     }
   }
 
+  if (!filePaths || filePaths.length === 0) {
+    const allDeps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }
+    stack = inferStackFromDepsAndPaths(allDeps, [])
+  }
+  stripOtherStackDeps(pkg, stack)
+
   if (!pkg.stackblitz || typeof pkg.stackblitz !== 'object') {
     pkg.stackblitz = {}
   }
@@ -92,6 +99,29 @@ function normalizePackageJsonForExport(content: string, filePaths?: string[]): s
   }
 
   return JSON.stringify(pkg, null, 2)
+}
+
+/**
+ * Remove dependencies that belong to a different stack so package.json has exactly one stack (prevents Next+Expo collision and ERESOLVE).
+ * For web stacks we strip expo, react-native, and all @expo/ and @react-native/ scoped deps so expo never corrupts web projects in StackBlitz.
+ */
+function stripOtherStackDeps(pkg: PackageJsonShape, stack: InferredStack): void {
+  const remove = (obj: Record<string, string> | undefined, keys: string[]) => {
+    if (!obj) return
+    keys.forEach((k) => delete obj[k])
+  }
+  const depKeys = (obj: Record<string, string> | undefined) => Object.keys(obj ?? {})
+  if (stack === 'next' || stack === 'vite' || stack === 'cra' || stack === 'generic') {
+    const toRemove: string[] = ['expo', 'react-native']
+    ;[pkg.dependencies, pkg.devDependencies].forEach((obj) => {
+      depKeys(obj).filter((k) => k.startsWith('@expo/') || k.startsWith('@react-native/')).forEach((k) => toRemove.push(k))
+    })
+    remove(pkg.dependencies, [...new Set(toRemove)])
+    remove(pkg.devDependencies, [...new Set(toRemove)])
+  } else if (stack === 'expo') {
+    remove(pkg.dependencies, ['next'])
+    remove(pkg.devDependencies, ['next'])
+  }
 }
 
 /**

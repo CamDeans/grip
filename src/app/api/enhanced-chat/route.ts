@@ -16,7 +16,7 @@ import { getProjectState, updateProjectState, recordFileSaveAndAdvanceStep } fro
 import { createProjectFolder, saveProjectFile } from '@/lib/services/gripProjectActions'
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 import { runMainProject } from '@/lib/runMainProject'
-import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONE_STACK_ONLY, MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS, MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT, MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT, MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE, MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY, MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE, MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
 import { STYLING_REQUIREMENTS_FOR_GRIP } from '@/lib/constants/stylingReferenceRepos'
 import { detectRepoType, getMandatoryRepoTypeRules } from '@/lib/repoTypeDetection'
 import { getReferenceReposGuidanceLine } from '@/lib/constants/referenceRepos'
@@ -245,17 +245,24 @@ ${userUploadsSummary}
   // Mandatory: GRIP creates all code for all file creations — no matter what
   prompt += `\n${MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES}\n\n`
   // Mandatory: only include what is required; do not default to Vite for every project
+  prompt += `\n${MANDATORY_GRIP_ONE_STACK_ONLY}\n\n`
+  prompt += `\n${MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS}\n\n`
   prompt += `\n${MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD}\n\n`
   // Mandatory: no blank files in build phases; every file must have code; project must run in StackBlitz
   prompt += `\n${MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD}\n\n`
   // Mandatory project-specific scaffolding: package.json/tsconfig/README project-specific; scripts match stack
   prompt += `\n${MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING}\n\n`
+  prompt += `\n${MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT}\n\n`
+  prompt += `\n${MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT}\n\n`
+  prompt += `\n${MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY}\n\n`
+  prompt += `\n${MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX}\n\n`
+  prompt += `\n${MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE}\n\n`
   // Mandatory production readiness: real implementations, valid Route Handlers/App Router, no stubs or blank files
   prompt += `\n${MANDATORY_GRIP_PRODUCTION_READINESS}\n\n`
   // Mandatory package.json and runnable StackBlitz: never blank, never incorrect; deps match code
   prompt += `\n${MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE}\n\n`
   // Mandatory build artifacts align with code: package.json/tsconfig/.env match the code written in build phases
-  prompt += `\n${MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE}\n\n`
+  prompt += `\n${MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE}\n\n${MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT}\n\n`
   // Mandatory .env files and production setup: build .env.example, use GRIP Settings, inform user how to set up and test for production
   prompt += `\n${MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP}\n\n`
 
@@ -351,6 +358,7 @@ ${userUploadsSummary}
             ? 'Deploy/Vercel'
             : String(lastRunErrors.source ?? 'run')
     prompt += `\n## Build/run errors (treat as high priority — fix before suggesting StackBlitz)\n`
+    prompt += `**The user has just submitted build errors and opened Develop. Your first response MUST fix these errors** — output corrected file(s) in code blocks with exact paths. Do not ask what to fix or list options; apply fixes immediately.\n\n`
     if (lastAttemptSummary && lastAttemptSummary.trim()) {
       prompt += `In your previous response you provided: ${lastAttemptSummary.slice(0, 600)}${lastAttemptSummary.length > 600 ? '...' : ''}\n\nThe build still failed with the errors below. You MUST:\n`
     } else {
@@ -600,6 +608,7 @@ Based on the repository analysis, you can help with:
 - When the last run reported errors (e.g. "We ran the build; it reported errors"): fix the code in your response (output full files in code blocks). We will apply them and run the build again. Do NOT tell the user to test in StackBlitz until you see or we report "We ran the build; it succeeded."
 - Only after "We ran the build; it succeeded" should you say to use StackBlitz (e.g. "Use **Run in StackBlitz** in the Preview tab to see the app, or paste any errors here."). Keep it to one short line; do not repeat the "Applied" or build line—the system adds it.
 - If the user pastes build or runtime errors (e.g. from StackBlitz): fix the code (output full files in code blocks). Say one line: "The file(s) above will be applied and we'll run the build again. Use **Run in StackBlitz** to preview or paste errors back." Do not suggest npm install or terminal commands first.
+- **npm environment errors (mandatory):** If errors mention **ERESOLVE**, **Conflicting peer dependency**, or **--legacy-peer-deps**: fix package.json dependency versions to be compatible (e.g. @types/react to match react-native/expo), or the system will retry with --legacy-peer-deps. If errors mention **EBADENGINE** or **Unsupported engine** / **required: { node: '>= X.Y.Z' }**: add or set \`"engines": { "node": ">=X.Y.Z" }\` in package.json and output the full package.json. If errors mention **require is not defined in ES module scope** or **next.config.js** with \`"type": "module"\`: rewrite next.config to use ESM (\`import\` / \`export default\`) or use next.config.mjs; output the full config file.
 - Only suggest terminal commands (npm install, npm run dev, Run & Debug) when the user explicitly says they want to run locally, export to GitHub, or run in an IDE. For normal flow, direct to **Preview → Run in StackBlitz** only after the build succeeds.
  - When the repo contains both a **frontend** and a **backend/API** (for example: separate folders named "frontend"/"backend" or "client"/"server", directories like "api" or "server", or multiple package.json files), you MUST make sure there is a **single dev/start script from the project root** that starts everything needed (both frontend and backend) so **Run in StackBlitz** spins up the whole stack at once. Prefer tools like concurrently, npm-run-all, workspaces, or a custom dev script that orchestrates both servers. Do **not** leave this for the user to request later—always add and/or update the scripts so StackBlitz runs real frontend + backend using the repo code and data.
 

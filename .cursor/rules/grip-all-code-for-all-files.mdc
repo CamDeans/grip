@@ -25,6 +25,7 @@ alwaysApply: true
 
 - **Plan generation:** `MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES` in AI prompts; plans and "files" arrays assume every listed file gets full code.
 - **deriveSuggestedFilesFromPlan:** Prompt states every file in the list will be generated with full code.
+- **Template choice:** Paths that need full file content (config, schema, lib/*, hooks/*, types, middleware, public/manifest.json, public/sw.js, docs/*.md, docs/*.mdx) use the **full-file** template (single `FileContent` variable); **ts-utility** is used only where the template’s `functions` array can be populated. Enforced: `projectPlanningService.defaultTemplateForPath` → `full-file` for those paths; `templateEngineService.generateTemplateVariables` full-file branch returns complete runnable code.
 - **Template variable generation:** Variable values must produce complete content—never placeholder or empty.
 - **File generation:** `isPlaceholderOrEmpty()` rejects empty/placeholder content; file is not saved; generation returns failure with mandatory-rule message.
 - **files/generate route:** On any file failure, response/stream includes `mandatoryRuleMessage` so the client can show the error.

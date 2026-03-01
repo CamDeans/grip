@@ -72,22 +72,24 @@ export async function getAppAccess(session: Session | null): Promise<AppAccess> 
   const limits = await getTokenLimits()
 
   // 1. Admin: full access with configurable tokens/month (default 500k) for app usage and testing
-  // When syncing allowance from admin limits, never overwrite tokensUsedThisPeriod except on period reset,
-  // so that usage recorded by addTokenUsage is never lost (remaining = allowance - tokensUsedThisPeriod).
+  // When syncing allowance from admin limits, never overwrite tokensUsedThisPeriod except when the
+  // period has actually expired (so remaining = allowance - tokensUsedThisPeriod uses real amounts, not percentage).
+  // Do NOT reset usage when subscriptionPeriodEnd is missing (first time or legacy); only reset when period end is in the past.
   if (isAdminUser(session)) {
     const allowance = limits.adminTokenAllowance
     const now = new Date()
     const currentPeriodEnd = user?.subscriptionPeriodEnd ? new Date(user.subscriptionPeriodEnd) : null
-    const needReset = !currentPeriodEnd || currentPeriodEnd < now
+    const periodExpired = currentPeriodEnd !== null && currentPeriodEnd < now
     const allowanceMismatch = (user?.tokenAllowance ?? 0) !== allowance
-    if (user && (needReset || !user.tokenAllowance || allowanceMismatch)) {
+    const needSync = !user?.tokenAllowance || allowanceMismatch || periodExpired
+    if (user && needSync) {
       const newEnd = endOfCurrentMonth()
       await db.collection('users').updateOne(
         { _id: oid },
         {
           $set: {
             tokenAllowance: allowance,
-            ...(needReset ? { tokensUsedThisPeriod: 0 } : {}),
+            ...(periodExpired ? { tokensUsedThisPeriod: 0 } : {}),
             subscriptionPeriodEnd: newEnd,
             updatedAt: new Date(),
           },

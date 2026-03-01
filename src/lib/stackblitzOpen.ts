@@ -13,8 +13,17 @@ export function inferStackBlitzTemplate(files: Record<string, string>): string {
   return 'node'
 }
 
+/**
+ * Infer which file to open in the StackBlitz editor so the user sees the main page.
+ * For Next.js: prefer app/page.tsx or src/app/page.tsx (root route = main page on first visit).
+ */
 export function inferOpenFile(files: Record<string, string>): string | undefined {
   const keys = Object.keys(files)
+  // Next.js App Router: root page is the main page; open it so preview and editor align.
+  if (keys.includes('app/page.tsx')) return 'app/page.tsx'
+  if (keys.includes('app/page.jsx')) return 'app/page.jsx'
+  if (keys.includes('src/app/page.tsx')) return 'src/app/page.tsx'
+  if (keys.includes('src/app/page.jsx')) return 'src/app/page.jsx'
   if (keys.includes('index.html')) return 'index.html'
   if (keys.includes('src/App.tsx')) return 'src/App.tsx'
   if (keys.includes('src/App.jsx')) return 'src/App.jsx'

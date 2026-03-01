@@ -1,0 +1,81 @@
+---
+description: Next.js App Router root layout — children in signature, Metadata API not next/head, return only html/body/children (prevents "children is not defined" and next/head warning)
+alwaysApply: true
+---
+
+# Next.js App Router Root Layout (Concrete Rule)
+
+**Mandate:** When generating or editing `app/layout.tsx` or `src/app/layout.tsx`, GRIP MUST follow the Next.js App Router layout rules exactly. Violations cause `ReferenceError: children is not defined` and "You're using next/head inside the app directory" warnings.
+
+## Rules
+
+1. **Define `children` in the function signature.**  
+   The root layout MUST receive `children` as a prop. Write:
+   ```ts
+   export default function RootLayout({ children }: { children: React.ReactNode }) {
+     return (
+       <html lang="en">
+         <body>{children}</body>
+       </html>
+     )
+   }
+   ```
+   Do NOT use `{children}` in JSX without defining it in the function parameters.
+
+2. **Do NOT use `next/head` or `<Head>` in the app directory.**  
+   The App Router does not allow it. Use the **Metadata API** instead:
+   ```ts
+   import type { Metadata } from "next"
+   export const metadata: Metadata = {
+     title: "App Title",
+     description: "App description",
+   }
+   ```
+   Never `import Head from 'next/head'` in files under `app/` or `src/app/`.
+
+3. **Return only `<html>` and `<body>`; do not wrap in fragment or `<main>`.**  
+   The root layout must return exactly:
+   ```tsx
+   return (
+     <html lang="en">
+       <body>{children}</body>
+     </html>
+   )
+   ```
+   Do NOT return `<><Head /><main><html>...</html></main></>` or any structure that wraps `<html>` inside `<main>` or a React fragment.
+
+## Correct example
+
+```tsx
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "App Title",
+  description: "App description",
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en">
+      <body className="min-h-screen">{children}</body>
+    </html>
+  )
+}
+```
+
+## Do NOT
+
+- Use `{children}` without defining `children` in the function parameters.
+- Import or use `next/head` or `<Head>` in app/layout.tsx or any file under app/.
+- Return a fragment (`<>...</>`) or wrap `<html>` inside `<main>` in the root layout.
+
+## Where this is enforced
+
+- **buildQualityPlan.ts:** `MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT` injected in planGeneratorService, enhanced-chat, and legal-sandbox chat.
+- **templateEngineService:** When generating full-file for `app/layout.tsx` or `src/app/layout.tsx`, the full-file prompt includes a CRITICAL block with these layout rules.
+- **MANDATORY_GRIP_PRODUCTION_READINESS** references this rule for Next.js App Router.
+- **CONCRETE-RULES-AND-ALIGNMENT.md** and **.cursorrules** document this rule.

@@ -12,6 +12,7 @@ import path from 'path'
 import os from 'os'
 import { spawnSync } from 'child_process'
 import { getLegalSandboxFilesForExport } from '@/lib/services/legalSandboxService'
+import { isBinaryAssetPath } from '@/lib/services/fileGeneratorService'
 import {
   getDepsHash,
   hasCache,
@@ -66,7 +67,8 @@ export async function runSandboxProject(projectId: string): Promise<SandboxRunRe
       } else {
         fs.mkdirSync(dir, { recursive: true })
       }
-      fs.writeFileSync(fullPath, content ?? '', 'utf8')
+      const isBinary = isBinaryAssetPath(normalized)
+      fs.writeFileSync(fullPath, isBinary ? Buffer.from(content ?? '', 'base64') : (content ?? ''), isBinary ? undefined : 'utf8')
     }
 
     const pkgPath = path.join(tmpDir, 'package.json')
@@ -105,19 +107,39 @@ export async function runSandboxProject(projectId: string): Promise<SandboxRunRe
       copyFromCache(depsHash, tmpDir)
       fullOutput = '(node_modules restored from cache)\n'
     } else {
-      const installResult = spawnSync('npm', ['install', '--no-audit', '--no-fund'], {
+      const installArgs: string[] = ['install', '--no-audit', '--no-fund']
+      let installResult = spawnSync('npm', installArgs, {
         cwd: tmpDir,
         encoding: 'utf8',
         timeout: INSTALL_TIMEOUT_MS,
         shell: true,
       })
-      const installOut = (installResult.stdout ?? '').trim()
-      const installErr = (installResult.stderr ?? '').trim()
+      let installOut = (installResult.stdout ?? '').trim()
+      let installErr = (installResult.stderr ?? '').trim()
       fullOutput = installOut + '\n' + installErr
+
+      // Mandatory: on ERESOLVE (peer dependency conflict), retry with --legacy-peer-deps (concrete rule npm-build-environment-errors)
       if (installResult.status !== 0) {
         const combined = (installOut + '\n' + installErr).trim()
-        if (combined) errors.push(`npm install failed:\n${combined.slice(-2000)}`)
-        return { success: false, errors, output: fullOutput, buildCommand: 'npm install' }
+        const isEresolve =
+          /ERESOLVE could not resolve|Conflicting peer dependency|retry with --force or --legacy-peer-deps/i.test(combined)
+        if (isEresolve) {
+          fullOutput = fullOutput + '\n(retrying npm install with --legacy-peer-deps)\n'
+          installResult = spawnSync('npm', [...installArgs, '--legacy-peer-deps'], {
+            cwd: tmpDir,
+            encoding: 'utf8',
+            timeout: INSTALL_TIMEOUT_MS,
+            shell: true,
+          })
+          installOut = (installResult.stdout ?? '').trim()
+          installErr = (installResult.stderr ?? '').trim()
+          fullOutput = fullOutput + installOut + '\n' + installErr
+        }
+        if (installResult.status !== 0) {
+          const finalCombined = (installOut + '\n' + installErr).trim()
+          if (finalCombined) errors.push(`npm install failed:\n${finalCombined.slice(-2000)}`)
+          return { success: false, errors, output: fullOutput, buildCommand: 'npm install' }
+        }
       }
       copyToCache(tmpDir, depsHash)
       pruneCache()

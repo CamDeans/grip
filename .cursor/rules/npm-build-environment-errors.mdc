@@ -1,0 +1,45 @@
+---
+description: Mandatory handling of npm/build environment errors (ERESOLVE, EBADENGINE, ESM/CommonJS) so install and dev/build succeed
+alwaysApply: true
+---
+
+# npm and Build Environment Errors (Concrete Rule)
+
+**Mandate:** GRIP MUST prevent or recover from npm/build environment errors so `npm install` and `npm run dev` (or `build`) succeed. When these errors appear, fix package.json, config files, or retry with the correct flags.
+
+## 1. ERESOLVE / peer dependency conflicts
+
+- **Symptoms:** `npm error code ERESOLVE`, `ERESOLVE could not resolve`, `Conflicting peer dependency`, or message suggesting `--force` or `--legacy-peer-deps`.
+- **Prevention:** When generating package.json, use dependency versions that satisfy peer requirements (e.g. for Expo/React Native use @types/react and React versions compatible with the Expo SDK and react-native; avoid mixing @types/react@18 with packages that require @types/react@^19).
+- **Recovery:** The run pipeline (runMainProject, run-build) MUST retry `npm install` with `--legacy-peer-deps` when the first install fails and the output contains ERESOLVE. Do not leave the user with "npm install failed" when a retry with --legacy-peer-deps would succeed.
+- **Documentation:** If the stack (e.g. Expo) commonly needs --legacy-peer-deps, README or .env.example comments may state that users can run `npm install --legacy-peer-deps` if they hit peer conflicts.
+
+## 2. EBADENGINE / Node version
+
+- **Symptoms:** `npm warn EBADENGINE`, `Unsupported engine`, `required: { node: '>= 20.19.4' }`, `current: { node: 'v20.19.1' }`.
+- **Prevention:** When generating package.json for a stack that has a known Node requirement, set `"engines": { "node": ">=X.Y.Z" }` (e.g. Expo 55 / Metro 0.83 → `>=20.19.4`; Next 14 → `>=18.17`). This aligns the project with the environment and avoids EBADENGINE when the runner meets the requirement.
+- **Recovery:** If build/run fails with EBADENGINE, add or update `engines.node` in package.json to the required range and tell the user to upgrade Node (or run in an environment that satisfies it).
+
+## 3. ESM vs CommonJS (require is not defined in ES module scope)
+
+- **Symptoms:** `ReferenceError: require is not defined in ES module scope`, `you can use import instead`, `This file is being treated as an ES module because ... package.json contains "type": "module"`.
+- **Prevention:** When package.json has `"type": "module"`, do NOT generate `.js` config files that use `require()` or `module.exports`. Use ESM only: `import` and `export default` (or `export`). For Next.js: generate `next.config.mjs` with ESM, or `next.config.js` with ESM syntax when `"type": "module"` is set.
+- **Recovery:** If the error points to e.g. `next.config.js`, rewrite that file to use ESM (`import` / `export default`) or rename to `next.config.mjs` and use ESM. Remove any `require()` or `module.exports` from files that are loaded as ES modules.
+
+## Do NOT
+
+- Leave npm install failing with ERESOLVE without retrying with --legacy-peer-deps where the pipeline runs install.
+- Generate next.config.js with `require()` or `module.exports` when the project's package.json has `"type": "module"`.
+- Ignore EBADENGINE; add engines.node so the required Node version is explicit.
+
+## Do
+
+- Retry npm install with `--legacy-peer-deps` when the first attempt fails with ERESOLVE (in runMainProject and any other place that runs npm install for the project).
+- Set `engines.node` in package.json for the stack (Expo, Next, etc.) so install and run environments match.
+- Generate config files (next.config, etc.) in ESM when package.json has `"type": "module"`.
+
+## Where this is enforced in code
+
+- **buildQualityPlan.ts:** `MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT` injected in plan and enhanced-chat context so generated package.json and configs avoid these errors.
+- **runMainProject.ts:** On `npm install` failure, detect ERESOLVE in stderr/stdout and retry with `npm install --no-audit --no-fund --legacy-peer-deps`; use the same for cache key so cached node_modules are consistent.
+- **Enhanced chat / file generation:** When user pastes ERESOLVE, EBADENGINE, or "require is not defined" errors, fix package.json (versions, engines) or config (ESM) and output full corrected files.

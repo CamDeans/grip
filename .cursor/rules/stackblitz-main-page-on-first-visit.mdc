@@ -1,0 +1,41 @@
+---
+description: GRIP must enforce in generated code that the user is always routed to the main page when previewing in StackBlitz or GRIP Preview
+alwaysApply: true
+---
+
+# StackBlitz/Preview: Route to Main Page (Concrete Rule)
+
+**Mandate:** GRIP MUST enforce this in the **code it generates**. When a user opens a GRIP project in StackBlitz or GRIP Preview, the app must show the main/landing page. The generated app code itself must implement this—root `/` is the main page; do not generate redirects or logic that send first-time visitors away from it.
+
+## 1. Enforce in generated code
+
+- **The code GRIP writes must route the user to the main page.** Do not rely on the host (StackBlitz, preview iframe) to fix routing. Generate layout, pages, and any middleware so that opening the app at `/` always shows the main page.
+- **Root path (`/`) is the main page.** Generate code so that the root route is the app's main/landing page. Do not generate middleware or client-side redirects that send first-time visitors from `/` to a different path (e.g. `/login` or `/dashboard`) unless that path is the intended main experience. Do not require a hash or query parameter to see the main content.
+
+## 2. Next.js
+
+- **`app/page.tsx` (or `src/app/page.tsx`) is the main landing page for `/`.** Generate full, styled content there. The root layout wraps it; do not add middleware that redirects `/` elsewhere on first load. If you add a redirect anywhere, it must be *to* `/` (main), not *from* `/` to an internal path.
+- **Do not leave the root page empty or redirect away.** The first thing the user sees when opening the project in StackBlitz or Preview must be the main page.
+
+## 3. Vite / SPA
+
+- **`index.html` and the root component must render the main view at `/`.** If using a client-side router, set `/` as the default route that shows the main page. The code you generate must ensure the initial load displays the main page.
+
+## Do NOT
+
+- Generate middleware or redirects that send users from `/` to a non-main route on first load.
+- Generate an empty or placeholder root page so the user sees a blank or wrong screen in StackBlitz/Preview.
+- Rely on the host to fix routing; the generated code must enforce it.
+
+## Do
+
+- Generate code so that `/` always renders the main/landing page.
+- Make `app/page.tsx` (Next.js) or the root route (Vite/SPA) the intended main page with full content.
+- Ensure that when someone opens the project in StackBlitz or GRIP Preview, they always see the main page—not a blank screen, 404, or a non-landing route.
+
+## Where this is enforced
+
+- `buildQualityPlan.ts` — `MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT` (injected in plan, enhanced-chat, legal-sandbox chat).
+- `templateEngineService.ts` — CRITICAL block when generating `app/page.tsx` or `src/app/page.tsx`.
+- `stackblitzOpen.ts` — `inferOpenFile` prefers `app/page.tsx` for Next.js so the editor opens the main page file.
+- See `docs/CONCRETE-RULES-AND-ALIGNMENT.md` rule 21 and `.cursorrules` `stackblitz_main_page_on_first_visit`.

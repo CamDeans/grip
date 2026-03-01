@@ -316,6 +316,9 @@ export default function ProjectOverviewPage() {
 
     const run = async () => {
       try {
+        // Show in-flight modal immediately so user sees GRIP is working (concrete: start on trigger, don't wait for API)
+        setSetupStep('preparing')
+
         // If not a forced rerun, check whether plan and build phases are already complete — skip to save tokens
         if (rerunTrigger === 0) {
           const [stateRes, planRes] = await Promise.all([
@@ -332,14 +335,14 @@ export default function ProjectOverviewPage() {
             autoPlanRanRef.current = projectId
             setHasPlan(true)
             setProjectState(stateRes && (stateRes.phases?.length || stateRes.currentPhase) ? stateRes : null)
+            setSetupStep(null)
             return
           }
         }
         autoPlanRanRef.current = projectId
         if (rerunTrigger > 0) setRerunTrigger(0)
 
-        // Stage 1: preparing — do not advance until delay complete
-        setSetupStep('preparing')
+        // Stage 1: preparing — brief delay (modal already shown at start of run())
         await new Promise((resolve) => setTimeout(resolve, 1800))
 
         // Stage 2: analysis — do not advance to plan until analysis has completed successfully
@@ -390,6 +393,14 @@ export default function ProjectOverviewPage() {
         setSetupStep('files')
         setBuildPreviewItems([])
         setBuildPreviewTotal(0)
+        // Set total from same source as files/generate so the modal shows the real count (e.g. 98 not a lower number)
+        try {
+          const countRes = await fetch(`/api/projects/${projectId}/files/to-generate-count`, { credentials: 'include' })
+          if (countRes.ok) {
+            const { count } = await countRes.json().catch(() => ({}))
+            if (typeof count === 'number' && count > 0) setBuildPreviewTotal(count)
+          }
+        } catch (_) { /* ignore */ }
         const filesRes = await fetch(`/api/projects/${projectId}/files/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Stream-Progress': 'true' },
@@ -432,7 +443,7 @@ export default function ProjectOverviewPage() {
                     buildArtifactAlignment?: { ok: boolean; errors?: string[]; suggestions?: string[]; missingDeps?: string[] }
                   }
                   if (event.type === 'start' && typeof event.total === 'number') {
-                    setBuildPreviewTotal(event.total)
+                    setBuildPreviewTotal((prev) => Math.max(prev, event.total!))
                   } else if (event.type === 'folder' && event.path) {
                     setBuildPreviewItems((prev) => [...prev, { type: 'folder', path: event.path! }])
                   } else if (event.type === 'file' && event.path) {
@@ -485,7 +496,20 @@ export default function ProjectOverviewPage() {
         }
         const buildData = await buildRes.json().catch(() => ({ success: false, errors: ['Build response invalid'] }))
 
-        // Stage 6: done — only reached when all previous stages succeeded
+        // Stage 6: done — only when build actually succeeded; otherwise keep modal closed and show failure
+        if (!buildData.success) {
+          console.warn('[GRIP Overview] Stage 5 (build) failed: build did not succeed', buildData.errors)
+          setSetupStep(null)
+          sonnerToast.error(
+            'Build failed',
+            {
+              description: buildData.errors?.length
+                ? `Build reported errors. Fix in Develop or use enhanced chat. ${(buildData.errors as string[]).slice(0, 2).join(' ')}`
+                : (fileCount > 0 ? `Phases and ${fileCount} file(s) created but build failed. Open Develop to fix or preview.` : 'Plan created but build failed. Open Develop to build with GRIP.'),
+            }
+          )
+          return
+        }
         setSetupStep('done')
         refetchPhaseStatus()
         refreshGeneratedFiles()
@@ -493,9 +517,7 @@ export default function ProjectOverviewPage() {
         sonnerToast.success(
           'Automation complete',
           {
-            description: buildData.success
-              ? (fileCount > 0 ? `Phases, ${fileCount} file(s), and build finished. Go to Develop or Preview.` : 'Plan and build finished. Go to Develop or Preview.')
-              : (fileCount > 0 ? `Phases and ${fileCount} file(s) created. Build reported errors; open Develop to fix or preview.` : 'Plan created. Go to Develop to build with GRIP.'),
+            description: fileCount > 0 ? `Phases, ${fileCount} file(s), and build finished. Go to Develop or Preview.` : 'Plan and build finished. Go to Develop or Preview.',
           }
         )
       } catch {
@@ -1144,7 +1166,10 @@ export default function ProjectOverviewPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setRerunTrigger((t) => t + 1)}
+                onClick={() => {
+                  setSetupStep('preparing')
+                  setRerunTrigger((t) => t + 1)
+                }}
                 className="gap-2"
               >
                 <RefreshCw className="w-4 h-4" />

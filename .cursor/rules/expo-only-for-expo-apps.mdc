@@ -1,0 +1,40 @@
+---
+description: Never add expo/react-native/@expo/* to package.json for web (Next.js/Vite/CRA) projects — only for 100% Expo/React Native apps; prevents corrupted installs and StackBlitz
+alwaysApply: true
+---
+
+# Expo Only for 100% Expo/React Native Apps (Concrete Rule)
+
+**Mandate:** GRIP MUST NOT add expo, react-native, or any @expo/* / @react-native/* dependency to package.json when the project is a web project (Next.js, Vite, CRA). Only include those when the project is explicitly a 100% Expo/React Native mobile app.
+
+## Why
+
+- Adding "expo": "*" (or any expo) to a **web** project corrupts **npm install** and **StackBlitz**: ERESOLVE, wrong scripts, broken preview.
+- Web and mobile stacks use different runtimes and peer deps; mixing them in one package.json breaks dependency resolution and prevents the user from running the project.
+
+## Rule
+
+1. **Infer stack from the project.** Use plan, repo structure (app/, next.config, vite.config), and user intent. For web: Next.js, Vite, or CRA. For mobile: Expo/React Native only.
+2. **For web projects:** package.json must NOT contain "expo", "react-native", or any "@expo/*" / "@react-native/*". List only next, react, react-dom, and web-only deps (or Vite/CRA equivalents).
+3. **For Expo/React Native projects only:** Include expo, react-native, and mobile deps. Never list both web stack and Expo in the same package.json.
+4. **When generating or editing package.json:** Match the chosen stack. Never add expo "just in case" or as a generic dependency to a Next.js or Vite app.
+
+## Do NOT
+
+- Add "expo": "*" or "expo": "^..." to package.json for a Next.js, Vite, or CRA web app.
+- Add react-native or @expo/* to package.json when the project has app/, next.config.js, or vite.config (web indicators).
+- Suggest or output package.json that mixes web framework (next, vite) with expo/react-native.
+
+## Do
+
+- When generating package.json via full-file or package-json template: include only dependencies for the project's single stack (web OR Expo, not both).
+- In plan and chat: state that expo is only for 100% Expo apps; for web, never add expo.
+- Rely on path-based stack inference (next.config, app/, vite.config) so that if expo somehow appears in deps, export/run still treat the project as web and strip expo.
+
+## Where this is enforced
+
+- **buildQualityPlan.ts:** `MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS` injected in planGeneratorService, enhanced-chat, and legal-sandbox chat.
+- **templateEngineService:** Full-file prompt includes CRITICAL block when generating package.json: do not add expo for web projects.
+- **packageJsonRequirementsService:** `inferStackFromDepsAndPaths` prefers path-based inference (next.config, app/, vite.config) over deps, so stray "expo" in package.json does not make a web project infer as Expo.
+- **exportService:** `stripOtherStackDeps` removes expo, react-native, and @expo/*/@react-native/* when stack is next/vite/cra/generic so export and StackBlitz get clean web package.json.
+- **CONCRETE-RULES-AND-ALIGNMENT.md** and **.cursorrules:** expo-only-for-expo-apps documented in rule index and enforcement table.

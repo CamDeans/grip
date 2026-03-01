@@ -320,10 +320,36 @@ function defaultTemplateForPath(pathOrName: string): string {
   // Next.js App Router API routes (app/api/**/route.ts or route.js)
   if ((name === 'route.ts' || name === 'route.js') && /^app\/api\//.test(normalized)) return 'nextjs-app-api-route'
   if (ext === 'tsx' || ext === 'jsx') return 'react-component'
+  // Config/schema/lib/hooks/types: use full-file so AI returns complete runnable code (ts-utility would render comment-only)
+  if (name === 'next.config.js' || name === 'tailwind.config.js' || name === 'postcss.config.js' || name === 'vercel.json') return 'full-file'
+  if (normalized === 'prisma/schema.prisma' || normalized.endsWith('/schema.prisma')) return 'full-file'
+  if (normalized === 'middleware.ts' || normalized === 'middleware.js') return 'full-file'
+  if (/^lib\/.+\.(ts|js)$/.test(normalized)) return 'full-file'
+  if (/^hooks\/.+\.(ts|js)$/.test(normalized)) return 'full-file'
+  if (normalized === 'types/index.ts' || normalized === 'types/index.js') return 'full-file'
+  if (normalized === 'public/manifest.json' || normalized === 'public/sw.js') return 'full-file'
+  // public image/binary assets: use static-asset (minimal placeholder), not ts-utility (AI returns text and fails)
+  if (/^public\/.+/i.test(normalized) && ['png', 'ico', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return 'static-asset'
+  // docs/*.md and docs/*.mdx: full-file so AI returns full markdown (ts-utility would render comment-only)
+  if (/^docs\/.+\.(md|mdx)$/.test(normalized)) return 'full-file'
   if (ext === 'ts' || ext === 'js') return 'ts-utility'
   if (ext === 'css') return 'globals-css'
   if (ext === 'md' || ext === 'mdx') return 'ts-utility'
   return 'ts-utility'
+}
+
+/** Keep first occurrence of each file by normalized path so we never generate the same file twice in one run (saves tokens). */
+function deduplicateByPath(
+  list: Array<IFileNode & { generationMetadata: any }>
+): Array<IFileNode & { generationMetadata: any }> {
+  const seen = new Set<string>()
+  return list.filter((f) => {
+    const path = (f.path || '').replace(/^\/+/, '').replace(/\\/g, '/')
+    const key = path || (f.name || '').replace(/^\/+/, '')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 /** Ensure package.json, tsconfig.json, and entry (src/index.tsx) are in the list so the user can preview in StackBlitz. */
@@ -404,8 +430,12 @@ export async function getFilesToGenerate(projectId: string): Promise<Array<IFile
         }
       })
       filesToGenerate.sort((a, b) => (b.generationMetadata.priority ?? 0) - (a.generationMetadata.priority ?? 0))
-      console.log(`Using plan suggestedFiles (${filesToGenerate.length} files) for full build in one run`)
-      let result = ensureMandatoryStackBlitzFiles(filesToGenerate)
+      let deduped = deduplicateByPath(filesToGenerate)
+      if (deduped.length < filesToGenerate.length) {
+        console.log(`getFilesToGenerate: deduplicated ${filesToGenerate.length} -> ${deduped.length} unique paths`)
+      }
+      console.log(`Using plan suggestedFiles (${deduped.length} files) for full build in one run`)
+      let result = ensureMandatoryStackBlitzFiles(deduped)
       if (result.length < MANDATORY_STACKBLITZ_FILES.length) {
         console.warn(`getFilesToGenerate: plan had ${result.length} files; re-merged mandatory to ensure full set`)
         result = ensureMandatoryStackBlitzFiles(result)
@@ -476,7 +506,11 @@ export async function getFilesToGenerate(projectId: string): Promise<Array<IFile
     filesToGenerate.sort((a, b) =>
       (b.generationMetadata?.priority ?? 0) - (a.generationMetadata?.priority ?? 0)
     )
-    let result = ensureMandatoryStackBlitzFiles(filesToGenerate)
+    let deduped = deduplicateByPath(filesToGenerate)
+    if (deduped.length < filesToGenerate.length) {
+      console.log(`getFilesToGenerate: deduplicated ${filesToGenerate.length} -> ${deduped.length} unique paths`)
+    }
+    let result = ensureMandatoryStackBlitzFiles(deduped)
     // Safeguard: never return fewer than mandatory files so we never generate only one file (e.g. just globals.css)
     if (result.length < MANDATORY_STACKBLITZ_FILES.length) {
       console.warn(`getFilesToGenerate: list had ${result.length} files; re-merged mandatory to ensure full set`)

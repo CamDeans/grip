@@ -4,7 +4,7 @@ import { Anthropic } from '@anthropic-ai/sdk'
 import { getOrCreateProjectStructure } from './structureGeneratorService'
 import { IProjectStructureData } from '@/lib/models/ProjectStructure'
 import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
-import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONE_STACK_ONLY, MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS, MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT, MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT, MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE, MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY, MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE, MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
 import { buildPlanContextFromAnalysis, type PlanContextFromAnalysis } from './planContextFromAnalysisService'
 
 /**
@@ -337,13 +337,29 @@ ${MANDATORY_GRIP_BUILD_QUALITY}
 
 ${MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES}
 
+${MANDATORY_GRIP_ONE_STACK_ONLY}
+
+${MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS}
+
 ${MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD}
 
 ${MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD}
 
 ${MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING}
 
+${MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT}
+
+${MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY}
+
+${MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX}
+
+${MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE}
+
+${MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT}
+
 ${MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE}
+
+${MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT}
 
 ${MANDATORY_GRIP_PRODUCTION_READINESS}
 ${tokenBudgetHint ? `\n${tokenBudgetHint}\n` : ''}
@@ -359,7 +375,9 @@ For each phase, I need a list of specific tasks. Each task should include:
 - Dependencies (IDs of tasks that must be completed before this one)
 - Tags (relevant categories or technologies)
 
-Also output a "files" array listing every file path that should be created to implement this plan in one run. Each item: "path" (e.g. package.json, tsconfig.json, .env.example, README.md, src/app/layout.tsx), "phaseId" (e.g. "1"), "taskId" (e.g. "1.1", optional), "description" (short purpose). You MUST include: package.json (full dependencies and scripts matching the stack), tsconfig.json (project-specific), .env.example (variables this app uses), README.md (project-specific: name, description, getting started, tech stack—never generic or .env copy), plus all app/layout/pages, API routes, lib, and components. Include all config, entry, and feature files needed for the complete build—not just a few placeholders.
+CRITICAL — One stack only: Choose exactly ONE stack for this project (Next.js web OR Expo/React Native mobile OR Vite, etc.) before listing any files. Do NOT mix Next.js with Expo in the same project (that causes npm ERESOLVE and StackBlitz cannot run). package.json must list only dependencies and scripts for that one stack. If the repo or goals indicate a web app, use only Next.js (or Vite)—do not add expo or react-native. If a mobile app, use only Expo—do not add next.
+
+Also output a "files" array listing every file path that should be created to implement this plan in one run. Each item: "path" (e.g. package.json, tsconfig.json, .env.example, README.md, src/app/layout.tsx), "phaseId" (e.g. "1"), "taskId" (e.g. "1.1", optional), "description" (short purpose). You MUST include: package.json (full dependencies and scripts matching the ONE chosen stack only), tsconfig.json (project-specific), .env.example (variables this app uses), README.md (project-specific: name, description, getting started, tech stack—never generic or .env copy), plus all app/layout/pages, API routes, lib, and components. Include all config, entry, and feature files needed for the complete build—not just a few placeholders.
 
 Please output your response as a JSON object with this structure:
 {

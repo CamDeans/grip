@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { getProjectPlan } from '@/lib/services/projectPlanningService'
 import { syncProjectStateFromPlan } from '@/lib/services/projectStateService'
 import { ObjectId } from 'mongodb'
+import { gripLog } from '@/lib/gripLogger'
 
 /**
  * POST /api/projects/[id]/plan/sync-state
@@ -29,6 +30,7 @@ export async function POST(
     console.info('[GRIP Stage 3] plan/sync-state start', { projectId: id })
     const planResult = await getProjectPlan(id)
     if (!planResult?.plan) {
+      gripLog(3, 'plan/sync-state no plan found', { projectId: id })
       console.warn('[GRIP Stage 3] plan/sync-state no plan found', { projectId: id })
       return NextResponse.json(
         { error: 'No plan found. Generate a plan first from the Planning tab.' },
@@ -38,6 +40,7 @@ export async function POST(
 
     const ok = await syncProjectStateFromPlan(id, planResult.plan)
     if (!ok) {
+      gripLog(3, 'plan/sync-state syncProjectStateFromPlan returned false', { projectId: id })
       console.error('[GRIP Stage 3] plan/sync-state syncProjectStateFromPlan returned false', { projectId: id })
       return NextResponse.json(
         { error: 'Failed to sync project state from plan' },
@@ -46,11 +49,13 @@ export async function POST(
     }
 
     console.info('[GRIP Stage 3] plan/sync-state complete', { projectId: id })
+    gripLog(3, 'plan/sync-state complete', { projectId: id })
     return NextResponse.json({
       success: true,
       message: 'Build steps synced from plan. Chat and project state now use the same phases.',
     })
   } catch (error) {
+    gripLog(3, 'plan/sync-state error', { error: error instanceof Error ? error.message : String(error) })
     console.error('[GRIP Stage 3] plan/sync-state error:', error)
     return NextResponse.json(
       { error: 'Failed to sync project state' },

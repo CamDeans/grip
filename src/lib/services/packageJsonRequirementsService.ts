@@ -16,7 +16,8 @@ export const SCRIPTS_BY_STACK: Record<InferredStack, { dev: string; build: strin
 
 /**
  * Infer stack from package.json dependencies and file paths (single source of truth).
- * Dependencies take precedence so scripts match what the project actually has.
+ * When file paths clearly indicate a web stack (Next.js, Vite), we prefer that over
+ * deps so that stray "expo" in package.json does not corrupt web projects in StackBlitz.
  */
 export function inferStackFromDepsAndPaths(
   deps: Record<string, string>,
@@ -25,14 +26,16 @@ export function inferStackFromDepsAndPaths(
   const paths = filePaths.map((p) => String(p).toLowerCase().replace(/\\/g, '/'))
   const hasDep = (name: string) => Object.prototype.hasOwnProperty.call(deps, name)
 
+  // Path-based inference first: if the project has web stack files, treat as web (never Expo).
+  // Prevents "expo": "*" added by mistake from making a Next.js app infer as Expo and breaking install.
+  if (paths.some((p) => p.includes('next.config'))) return 'next'
+  if (paths.some((p) => p.includes('app/') || p.includes('src/app/'))) return 'next'
+  if (paths.some((p) => p.includes('vite.config'))) return 'vite'
+
   if (hasDep('next')) return 'next'
   if (hasDep('expo') || hasDep('react-native')) return 'expo'
   if (hasDep('vite') || hasDep('@vitejs/plugin-react')) return 'vite'
   if (hasDep('react-scripts')) return 'cra'
-
-  if (paths.some((p) => p.includes('next.config'))) return 'next'
-  if (paths.some((p) => p.includes('vite.config'))) return 'vite'
-  if (paths.some((p) => p.includes('app/') || p.includes('src/app/'))) return 'next'
 
   return 'generic'
 }

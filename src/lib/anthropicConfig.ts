@@ -40,8 +40,8 @@ export function requireAnthropicApiKey(): string {
  * @see https://docs.anthropic.com/en/api/models
  */
 
-/** Fast model for health checks and validation pings (low cost). claude-3-5-haiku-20241022 was retired Feb 2026; use -latest or set ANTHROPIC_MODEL_FAST. */
-export const ANTHROPIC_MODEL_FAST = process.env.ANTHROPIC_MODEL_FAST || 'claude-3-5-haiku-latest'
+/** Fast model for health checks and validation pings (low cost). Use current Haiku 4.5; override with ANTHROPIC_MODEL_FAST if needed. */
+export const ANTHROPIC_MODEL_FAST = process.env.ANTHROPIC_MODEL_FAST || 'claude-haiku-4-5-20251001'
 
 /** Default model for chat, planning, and general assistant (Sonnet 4). */
 export const ANTHROPIC_MODEL_CHAT = process.env.ANTHROPIC_MODEL_CHAT || 'claude-sonnet-4-20250514'

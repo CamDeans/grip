@@ -216,16 +216,16 @@ export default function NewProjectPage() {
 
       toast({
         title: "Project created successfully",
-        description: `'${project.title}' has been created.`,
+        description: `'${project.title}' has been created. Opening Overview…`,
       })
 
-      if (project && formData.repository) {
-        toast({
-          title: "Analysis started",
-          description: "Repository analysis is running in the background.",
-        })
+      // Redirect immediately so the user sees the Overview and in-flight modal right away.
+      // Analysis and uploads are handled by the Overview pipeline (or fired in background).
+      router.push(`/dashboard/projects/${project._id}`)
 
-        const analysisResponse = await fetch(`/api/projects/${project._id}/analyze`, {
+      // Fire analysis and upload in background so user is already on Overview (no await).
+      if (project && formData.repository) {
+        fetch(`/api/projects/${project._id}/analyze`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -233,45 +233,24 @@ export default function NewProjectPage() {
             ideation: formData.ideation
           }),
           credentials: 'include'
-        })
-
-        if (!analysisResponse.ok) {
-          toast({
-            title: "Analysis warning",
-            description: "Repository analysis encountered some issues, but your project was created.",
-            variant: "destructive"
-          })
-        } else {
-          refreshTokenUsage()
-        }
+        }).catch(() => {})
       }
-
       if (pendingUploadFiles.length > 0) {
         const formDataUpload = new FormData()
         pendingUploadFiles.forEach((file) => formDataUpload.append('files', file))
-        try {
-          const uploadRes = await fetch(`/api/projects/${project._id}/uploads`, {
-            method: 'POST',
-            body: formDataUpload,
-            credentials: 'include'
+        fetch(`/api/projects/${project._id}/uploads`, {
+          method: 'POST',
+          body: formDataUpload,
+          credentials: 'include'
+        })
+          .then((uploadRes) => {
+            if (uploadRes.ok) {
+              toast({ title: 'Uploads added', description: `${pendingUploadFiles.length} file(s) will be used by GRIP in the plan and build.` })
+            }
           })
-          if (uploadRes.ok) {
-            toast({
-              title: 'Uploads added',
-              description: `${pendingUploadFiles.length} file(s) will be used by GRIP in the plan and build.`,
-            })
-          }
-          setPendingUploadFiles([])
-        } catch {
-          toast({
-            title: 'Uploads could not be added',
-            description: 'You can add logos and docs later on the project Overview.',
-            variant: 'destructive'
-          })
-        }
+          .catch(() => {})
+        setPendingUploadFiles([])
       }
-
-      router.push(`/dashboard/projects/${project._id}`)
     } catch (error) {
       console.error('Error creating project:', error)
       toast({
@@ -368,8 +347,7 @@ export default function NewProjectPage() {
                     </div>
                   </div>
                   <div className="mt-2 p-3 rounded-md bg-primary/10 border border-primary/20 text-sm text-text-primary">
-                    <strong>Full automation:</strong> After you create the project, open its <strong>Overview</strong> tab—G.R.I.P. runs analysis (when a repo is linked), then generates the plan and writes code for each file in one run there. Do that before using Develop so you don’t waste tokens. In Develop, code from chat is applied and the build runs automatically. Progress (phases and steps) syncs on Overview.
-                  </div>
+                    <strong>Full automation:</strong> After you create the project, you land on the project <strong>Overview</strong>. An <strong>in-flight modal</strong> opens right away and runs the full pipeline: Preparing → Analysis (when a repo is linked) → Plan → File generation (code for every file) → Build. Stay on the Overview so you can see each stage; the modal only closes when the build succeeds or if something fails. Run this before using Develop so you don’t waste tokens. In Develop, code from chat is applied and the build runs automatically.                   </div>
                   <div className="mt-5">
                     <RepoSelector
                       projectTitle={formData.title}

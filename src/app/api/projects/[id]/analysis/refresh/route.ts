@@ -10,6 +10,7 @@ import { getSandboxProject } from '@/lib/services/sandboxProjectService'
 import { getOrCloneRepository } from '@/lib/repository'
 import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/treeSitter/treeSitterAnalysis'
 import { buildTechnicalAnalysisPromptFromIdeation } from '@/lib/sandbox/ideationToTechnicalPrompt'
+import { gripLog } from '@/lib/gripLogger'
 
 const SANDBOX_ANALYSES_COLLECTION = 'sandboxAnalyses'
 
@@ -41,6 +42,7 @@ export async function POST(
 
     const isSandbox = new URL(request.url).searchParams.get('sandbox') === 'true'
     console.info('[GRIP Stage 2] analysis/refresh start', { projectId, isSandbox })
+    gripLog(2, 'analysis/refresh start', { projectId, isSandbox })
     const client = await clientPromise
     const db = client.db(DB_NAME)
 
@@ -94,6 +96,7 @@ export async function POST(
         { upsert: true }
       )
       console.info('[GRIP Stage 2] analysis/refresh sandbox complete', { projectId })
+      gripLog(2, 'analysis/refresh sandbox complete', { projectId })
     } else {
       const projectDoc = await db.collection('projects').findOne(
         { _id: new ObjectId(projectId) },
@@ -123,10 +126,12 @@ export async function POST(
         { $unset: { projectContextDocument: '' }, $set: { updatedAt: new Date() } }
       )
       console.info('[GRIP Stage 2] analysis/refresh main complete', { projectId })
+      gripLog(2, 'analysis/refresh main complete', { projectId })
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    gripLog(2, 'analysis/refresh error', { error: error instanceof Error ? error.message : String(error) })
     console.error('[GRIP Stage 2] analysis/refresh error:', error)
     const message = error instanceof Error ? error.message : 'Failed to refresh analysis'
     return NextResponse.json({ error: message }, { status: 500 })

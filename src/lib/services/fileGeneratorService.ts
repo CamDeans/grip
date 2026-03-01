@@ -16,6 +16,7 @@ import {
 import crypto from 'crypto'
 import { connectToDatabase } from '@/lib/mongodb'
 import { getFileDependencies } from '@/lib/services/dependencyResolverService'
+import { gripLog } from '@/lib/gripLogger'
 
 /**
  * File Generator Service - Creates service to generate code based on templates and context
@@ -76,9 +77,10 @@ export interface FileGenerationResult {
 function isPlaceholderOrEmpty(content: string, filename: string): boolean {
   const trimmed = (content || '').trim()
   if (trimmed.length < 10) return true
-  if (/^export\s*\{\}\s*;?\s*$/m.test(trimmed)) return true
-  if (/^\/\*\*?[\s\S]*\*\/\s*$/m.test(trimmed)) return true
-  if (/^\/\/\s*TODO[\s\S]*$/m.test(trimmed)) return true
+  if (/^export\s*\{\}\s*;?\s*$/.test(trimmed)) return true
+  // Use $ without /m so "entire content" means end-of-string; with /m, $ matches end-of-line and a leading block comment + newlines would wrongly match (e.g. lib/nfc.ts).
+  if (/^\/\*\*?[\s\S]*\*\/\s*$/.test(trimmed)) return true
+  if (/^\/\/\s*TODO[\s\S]*$/.test(trimmed)) return true
   const ext = filename.split('.').pop()?.toLowerCase()
   if (ext === 'css') {
     if (/^@tailwind\s/m.test(trimmed) || /:root\s*\{/.test(trimmed) || /body\s*\{/.test(trimmed)) return false
@@ -86,10 +88,98 @@ function isPlaceholderOrEmpty(content: string, filename: string): boolean {
     return false
   }
   if (ext === 'tsx' || ext === 'jsx' || ext === 'ts' || ext === 'js') {
-    if (/^import\s+.*\s+from\s+['"][^'"]+['"]\s*;?\s*$/m.test(trimmed)) return true
+    // Only treat as placeholder if the ENTIRE content is a single import line (no other code).
+    if (/^import\s+.*\s+from\s+['"][^'"]+['"]\s*;?\s*$/.test(trimmed)) return true
     if (/export\s+(const|function|default)\s+\w+/.test(trimmed)) return false
+    // export { x, y } or export interface/type (type-only files)
+    if (/\bexport\s+(\{|interface|type\s+\w)/.test(trimmed)) return false
+    // Entry points (e.g. src/index.tsx) may have no export but call createRoot/render
+    if (/createRoot\s*\(|\.render\s*\(|ReactDOM\.render\s*\(/.test(trimmed)) return false
+    // Substantial content with any export is real code (e.g. lib/utils.ts with export { cn, ... })
+    if (trimmed.length > 500 && /\bexport\b/.test(trimmed)) return false
+    // CommonJS config (next.config.js, tailwind.config.js, etc.)
+    if (/\bmodule\.exports\b|require\s*\(/.test(trimmed)) return false
   }
+  // .sql and other non-ts/js: allow if substantial and not only comments
+  if (trimmed.length > 200 && !/^[\s\-]*$/.test(trimmed) && !/^\/\*\*?[\s\S]*\*\/\s*$/.test(trimmed)) return false
   return false
+}
+
+/** Binary asset extensions that we store as base64 and write as binary on export/run. */
+const BINARY_ASSET_EXTS = new Set(['png', 'ico', 'jpg', 'jpeg', 'gif', 'webp'])
+
+/** True if path is a public binary asset (e.g. public/icons/icon-192.png). Used when writing files to decode base64. */
+export function isBinaryAssetPath(filePath: string): boolean {
+  const normalized = (filePath || '').replace(/^\/+/, '').replace(/\\/g, '/')
+  if (!/^public\//i.test(normalized)) return false
+  const ext = normalized.split('.').pop()?.toLowerCase()
+  return !!ext && BINARY_ASSET_EXTS.has(ext)
+}
+
+/** Minimal 1x1 transparent PNG as base64 (for static-asset placeholder so AI is not called for .png/.ico etc). */
+const MINIMAL_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+
+function getMinimalAssetBase64(filename: string): string {
+  const ext = (filename || '').split('.').pop()?.toLowerCase() || ''
+  return MINIMAL_PNG_BASE64
+}
+
+/**
+ * Generate a static binary asset file (no AI). Content is stored as base64; export/run decode when writing.
+ */
+async function generateStaticAssetFile(request: FileGenerationRequest): Promise<FileGenerationResult> {
+  const filename = request.filename || request.filePath?.split('/').pop() || 'icon.png'
+  const content = getMinimalAssetBase64(filename)
+  const pathDirRaw = request.filePath?.includes('/') ? request.filePath.slice(0, request.filePath.lastIndexOf('/')) : ''
+  const pathDir = pathDirRaw || '/'
+  await connectToDatabase()
+  const hash = crypto.createHash('md5').update(content).digest('hex')
+  const existingFile = await ProjectFile.findOne({
+    projectId: new ObjectId(request.projectId),
+    path: pathDir,
+    filename
+  })
+  if (existingFile) {
+    existingFile.content = content
+    existingFile.size = Buffer.byteLength(content, 'utf8')
+    existingFile.hash = hash
+    await existingFile.save()
+    return {
+      fileId: existingFile._id?.toString() || '',
+      projectId: request.projectId,
+      path: existingFile.path,
+      filename: existingFile.filename,
+      content: existingFile.content,
+      size: existingFile.size,
+      language: 'binary',
+      success: true,
+      totalTokens: 0
+    }
+  }
+  const file = new ProjectFile({
+    projectId: new ObjectId(request.projectId),
+    path: pathDir,
+    filename,
+    content,
+    language: 'binary',
+    size: Buffer.byteLength(content, 'utf8'),
+    version: 1,
+    hash,
+    metadata: { generatedBy: 'static-asset', purpose: 'Placeholder image for PWA/icons', dependencies: [], imports: [] },
+    history: []
+  })
+  await file.save()
+  return {
+    fileId: file._id?.toString() || '',
+    projectId: request.projectId,
+    path: file.path,
+    filename: file.filename,
+    content: file.content,
+    size: file.size,
+    language: 'binary',
+    success: true,
+    totalTokens: 0
+  }
 }
 
 /**
@@ -99,6 +189,9 @@ function isPlaceholderOrEmpty(content: string, filename: string): boolean {
  */
 export async function generateFile(request: FileGenerationRequest): Promise<FileGenerationResult> {
   try {
+    if (request.templateId === 'static-asset') {
+      return await generateStaticAssetFile(request)
+    }
     console.log(`Generating file for project ${request.projectId} using template ${request.templateId}`)
     
     // Get project structure
@@ -204,6 +297,10 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
       })
       variables = merged
     }
+    // Expo/Metro 0.83+ requires Node >=20.19.4; set engines.node so install and run succeed (EBADENGINE)
+    if (request.templateId === 'package-json' && request.framework === 'expo') {
+      (variables as Record<string, unknown>).NodeEngineVersion = '>=20.19.4'
+    }
 
     // Generate filename if not provided
     const filename = request.filename || generateFileName(template, variables)
@@ -213,6 +310,7 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
     if (isPlaceholderOrEmpty(content, filename)) {
       const msg = `Generated content for ${request.filePath || filename} is empty or placeholder. GRIP mandatory rule: create all code for all file creations — every file must have real, runnable code.`
       console.warn('[GRIP Stage 4] file rejected as placeholder/empty', { path: request.filePath, filename, templateId: request.templateId, contentLength: content?.length ?? 0, contentPreview: (content || '').slice(0, 120) })
+      gripLog(4, 'file rejected as placeholder/empty', { path: request.filePath, filename, templateId: request.templateId, contentLength: content?.length ?? 0 })
       return {
         fileId: '',
         projectId: request.projectId,

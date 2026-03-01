@@ -9,6 +9,7 @@ import { getProjectState } from '@/lib/services/projectStateService'
 import { getProjectContextForHighLevelFiles } from '@/lib/services/highLevelFileContextService'
 import { getProjectFilesForExport } from '@/lib/services/exportService'
 import { validatePackageJsonForStackBlitz } from '@/lib/services/packageJsonRequirementsService'
+import { gripLog, gripLogRunStart } from '@/lib/gripLogger'
 import { ObjectId } from 'mongodb'
 
 const STREAM_HEADER = 'x-stream-progress'
@@ -77,6 +78,7 @@ export async function POST(
 
     if (!filesToGenerate || filesToGenerate.length === 0) {
       console.info('[GRIP Stage 4] files/generate no files to generate', { projectId: id })
+      gripLog(4, 'files/generate no files to generate', { projectId: id })
       return NextResponse.json({
         message: 'No files to generate',
         fileCount: 0,
@@ -84,7 +86,9 @@ export async function POST(
       })
     }
 
+    gripLogRunStart('files/generate', id)
     console.info('[GRIP Stage 4] files/generate start', { projectId: id, fileCount: filesToGenerate.length, streamProgress })
+    gripLog(4, 'files/generate start', { projectId: id, fileCount: filesToGenerate.length, streamProgress })
     console.info('[GRIP Files] POST /files/generate: generating', filesToGenerate.length, 'files. Anthropic will be called for templates that need AI (e.g. nextjs-page, react-component). Ensure ANTHROPIC_API_KEY is set.')
     // Ensure project structure exists so generateFile() can run (plan may have suggestedFiles but structure not yet stored)
     let structure = await getProjectStructure(id)
@@ -208,18 +212,21 @@ export async function POST(
 
               try {
                 console.info('[GRIP Stage 4] file start', { path: fullPath, templateId })
+                gripLog(4, 'file start', { path: fullPath, templateId })
                 const result = await generateFile(genRequest)
                 if (result.success) {
                   streamTotalTokens += result.totalTokens ?? 0
                   generatedFiles.push({ id: result.fileId, name: file.name, path: file.path, success: true })
                   emit({ type: 'file', path: fullPath, name: fileName, success: true })
                   console.info('[GRIP Stage 4] file success', { path: fullPath })
+                  gripLog(4, 'file success', { path: fullPath })
                 } else {
                   throw new Error(result.error || 'Unknown error generating file')
                 }
               } catch (error) {
                 const errMsg = error instanceof Error ? error.message : 'Unknown error'
                 console.error('[GRIP Stage 4] file failed', { path: fullPath, name: fileName, templateId, error: errMsg }, error)
+                gripLog(4, 'file failed', { path: fullPath, name: fileName, templateId, error: errMsg })
                 generatedFiles.push({ name: file.name, path: file.path, success: false, error: errMsg })
                 emit({ type: 'file', path: fullPath, name: fileName, success: false, error: errMsg })
               }
@@ -233,8 +240,10 @@ export async function POST(
             const errorCount = generatedFiles.filter((f) => !f.success).length
             const successCount = generatedFiles.filter((f) => f.success).length
             console.info('[GRIP Stage 4] files/generate stream complete', { projectId: id, successCount, errorCount, total: filesToGenerate.length })
+            gripLog(4, 'files/generate stream complete', { projectId: id, successCount, errorCount, total: filesToGenerate.length })
             if (errorCount > 0) {
               console.warn('[GRIP Stage 4] GRIP mandatory: every file must have code.', { failedPaths: generatedFiles.filter((f) => !f.success).map((f) => f.path), errorCount })
+              gripLog(4, 'GRIP mandatory: every file must have code', { failedPaths: generatedFiles.filter((f) => !f.success).map((f) => f.path), errorCount })
             }
             let buildArtifactAlignment: { ok: boolean; errors: string[]; suggestions: string[]; missingDeps?: string[] } | undefined
             try {
@@ -271,8 +280,10 @@ export async function POST(
               buildArtifactAlignment
             })
           } catch (err) {
-            console.error('[GRIP Stage 4] files/generate stream error', { projectId: id, error: err instanceof Error ? err.message : String(err) }, err)
-            emit({ type: 'error', error: err instanceof Error ? err.message : 'Stream error' })
+            const errMsg = err instanceof Error ? err.message : String(err)
+            console.error('[GRIP Stage 4] files/generate stream error', { projectId: id, error: errMsg }, err)
+            gripLog(4, 'files/generate stream error', { projectId: id, error: errMsg })
+            emit({ type: 'error', error: errMsg })
           } finally {
             controller.close()
           }
@@ -350,8 +361,10 @@ export async function POST(
     const errorCount = generatedFiles.filter((f) => !f.success).length
     const successCountNonStream = generatedFiles.filter((f) => f.success).length
     console.info('[GRIP Stage 4] files/generate (non-stream) complete', { projectId: id, successCount: successCountNonStream, errorCount, total: filesToGenerate.length })
+    gripLog(4, 'files/generate (non-stream) complete', { projectId: id, successCount: successCountNonStream, errorCount, total: filesToGenerate.length })
     if (errorCount > 0) {
       console.warn('[GRIP Stage 4] GRIP mandatory: every file must have code.', { failedPaths: generatedFiles.filter((f) => !f.success).map((f) => f.path), errorCount })
+      gripLog(4, 'GRIP mandatory: every file must have code', { failedPaths: generatedFiles.filter((f) => !f.success).map((f) => f.path), errorCount })
     }
     let buildArtifactAlignment: { ok: boolean; errors: string[]; suggestions: string[]; missingDeps?: string[] } | undefined
     try {
@@ -389,7 +402,9 @@ export async function POST(
       buildArtifactAlignment
     })
   } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error)
     console.error('[GRIP Stage 4] files/generate route error:', error)
+    gripLog(4, 'files/generate route error', { error: errMsg })
     return NextResponse.json(
       { error: 'Failed to generate files' },
       { status: 500 }

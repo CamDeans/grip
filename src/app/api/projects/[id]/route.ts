@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId, type Db } from 'mongodb'
 import type { Session } from 'next-auth'
+import { getNativeMobileRepoCategory } from '@/lib/repoTypeDetection'
 
 type AuthAndProject = { session: Session; id: string; db: Db }
 
@@ -35,7 +36,9 @@ export async function GET(
     // Try main projects first
     let project = await db.collection('projects').findOne({ _id: new ObjectId(id) })
     if (project) {
-      return NextResponse.json({ ...project, isSandbox: false })
+      const ra = (project as { repositoryAnalysis?: { structuredAnalysis?: { identity?: unknown } } }).repositoryAnalysis
+      const repoCategory = getNativeMobileRepoCategory({ identity: ra?.structuredAnalysis?.identity as { project_type?: string } }) ?? undefined
+      return NextResponse.json({ ...project, isSandbox: false, repoCategory })
     }
 
     // Try sandbox projects

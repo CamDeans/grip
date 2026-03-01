@@ -360,3 +360,12 @@ export function getRepoTypeSummary(category: RepoTypeCategory, label: string): s
   const commands = EXPECTED_COMMANDS[category]
   return `Detected repo type: ${label}. ${commands}`
 }
+
+/**
+ * Return native mobile category when the project is 100% iOS or Android (no in-browser preview).
+ * Used by run-build (skip npm), preflight (reject stackblitz), and preview tab (hide StackBlitz CTA).
+ */
+export function getNativeMobileRepoCategory(input: RepoTypeInput): 'ios_swift' | 'android_kotlin' | null {
+  const { category } = detectRepoType(input)
+  return category === 'ios_swift' || category === 'android_kotlin' ? category : null
+}

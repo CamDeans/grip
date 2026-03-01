@@ -5,6 +5,7 @@ import clientPromise from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import { Octokit } from '@octokit/rest'
 import { getProjectFilesForExport } from '@/lib/services/exportService'
+import { isBinaryAssetPath } from '@/lib/services/fileGeneratorService'
 
 /** Max size per file for GitHub blob (100MB limit; use safe base64 size). */
 const GITHUB_BLOB_SIZE_LIMIT = 95 * 1024 * 1024
@@ -192,11 +193,13 @@ export async function POST(
         console.warn(`Export: skipping large file ${sanitizedPath} (${sizeBytes} bytes)`)
         continue
       }
+      const isBinary = isBinaryAssetPath(sanitizedPath)
+      const blobContentBase64 = isBinary ? content : Buffer.from(content, 'utf8').toString('base64')
       try {
         const { data: blob } = await octokit.git.createBlob({
           owner,
           repo: newRepo.name,
-          content: Buffer.from(content, 'utf8').toString('base64'),
+          content: blobContentBase64,
           encoding: 'base64',
         })
         treeItems.push({ path: sanitizedPath, mode: '100644', type: 'blob', sha: blob.sha })

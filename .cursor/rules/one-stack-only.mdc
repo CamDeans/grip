@@ -1,0 +1,40 @@
+---
+description: One stack only per project; never mix Next.js (web) with Expo/React Native (mobile) — prevents npm ERESOLVE and StackBlitz stack collision
+alwaysApply: true
+---
+
+# One Stack Only Per Project (Concrete Rule)
+
+**Mandate:** GRIP MUST choose exactly one stack per project before planning and before writing any code. Never mix Next.js (web) with Expo/React Native (mobile) in the same project.
+
+## Why
+
+- Mixing Next.js and Expo causes **npm ERESOLVE** (react vs react-native peer conflicts, @types/react version clashes).
+- StackBlitz (and the user) cannot know which command to run: `next dev` vs `expo start`.
+- Installing packages (e.g. next-auth) then triggers re-resolution and breaks the tree.
+
+## Rule
+
+1. **Choose one stack before planning.** Infer from repo structure and user intent: web app → Next.js (or Vite); mobile app → Expo. Commit to that stack for the entire plan and all generated files.
+2. **Never combine Next.js with Expo in package.json.** For a web app: use only next, react, react-dom, and web-only deps (e.g. next-auth). Do NOT add expo, react-native, or @expo/*. For a mobile app: use only expo, react-native, and mobile deps. Do NOT add next.
+3. **Scripts must match the one stack.** One dev script (e.g. "next dev" OR "expo start --web"). Never scripts for two frameworks.
+4. **Export/run:** When normalizing package.json for export or run, infer the single stack (from scripts or deps) and strip the other stack's dependencies so the output is single-stack.
+
+## Do NOT
+
+- Add both `next` and `expo` (or `react-native`) to the same package.json.
+- List files or phases that assume both a Next.js app and an Expo app in the same project.
+- Suggest "add next-auth" to an Expo-only project or "add expo" to a Next.js-only project without switching stack.
+
+## Do
+
+- In plan generation: state or infer the one chosen stack; list only package.json deps and files for that stack.
+- In enhanced chat and legal-sandbox: when generating or editing package.json, include only dependencies for the project's single stack.
+- In export: after merging repo + projectFiles package.json, strip the other stack's deps (expo/@expo/react-native when stack is next; next when stack is expo) so npm install and run succeed.
+
+## Where this is enforced
+
+- **buildQualityPlan.ts:** `MANDATORY_GRIP_ONE_STACK_ONLY` injected in planGeneratorService, enhanced-chat, and legal-sandbox chat.
+- **planGeneratorService:** Plan prompt includes one-stack-only and "CRITICAL — One stack only" before the files array instruction.
+- **exportService:** `normalizePackageJsonForExport` infers stack and calls `stripOtherStackDeps` so exported/StackBlitz package.json has exactly one stack.
+- **CONCRETE-RULES-AND-ALIGNMENT.md** and **.cursorrules:** one-stack-only documented in rule index and enforcement table.

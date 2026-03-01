@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { Anthropic } from '@anthropic-ai/sdk'
-import { getAnthropicApiKey, ANTHROPIC_MODEL_FAST } from '@/lib/anthropicConfig'
+import { getAnthropicApiKey, ANTHROPIC_MODEL_FAST, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
 
 /**
  * Test Anthropic API connection.
@@ -22,14 +22,30 @@ export async function GET() {
   }
 
   const start = Date.now()
+  const anthropic = new Anthropic({ apiKey })
+  const payload = { max_tokens: 10, messages: [{ role: 'user', content: 'Say OK in one word.' }] as const }
+
   try {
-    const anthropic = new Anthropic({ apiKey })
-    // Minimal request to validate key and connectivity (1 token response)
-    await anthropic.messages.create({
-      model: ANTHROPIC_MODEL_FAST,
-      max_tokens: 10,
-      messages: [{ role: 'user', content: 'Say OK in one word.' }],
-    })
+    // Try fast model first (low cost); if 404 (model retired), fall back to chat model
+    try {
+      await anthropic.messages.create({
+        model: ANTHROPIC_MODEL_FAST,
+        ...payload,
+      })
+    } catch (fastErr: unknown) {
+      const msg = fastErr instanceof Error ? fastErr.message : String(fastErr)
+      const is404 =
+        (fastErr && typeof fastErr === 'object' && 'status' in fastErr && (fastErr as { status?: number }).status === 404) ||
+        /404|not_found|model:.*not found/i.test(msg)
+      if (is404) {
+        await anthropic.messages.create({
+          model: ANTHROPIC_MODEL_CHAT,
+          ...payload,
+        })
+      } else {
+        throw fastErr
+      }
+    }
     const latency = Date.now() - start
     return NextResponse.json(
       {

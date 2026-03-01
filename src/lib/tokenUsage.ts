@@ -46,21 +46,36 @@ export async function setTokenLimits(limits: Partial<TokenLimits>): Promise<void
  * Caps at allowance so we never record an overage (tokensUsedThisPeriod never exceeds tokenAllowance).
  * Allowance = fixed monthly cap (set by admin or plan). Remaining = allowance - tokensUsedThisPeriod;
  * as usage goes up, remaining goes down (allowance does not go down).
+ *
+ * Uses a single atomic update (aggregation pipeline) so concurrent requests never overwrite each other.
+ * Previously a read-then-write could undercount when multiple AI calls completed at once (e.g. ~550k
+ * discrepancy between GRIP remaining and Claude console usage).
  */
 export async function addTokenUsage(userId: string, amount: number): Promise<void> {
   if (amount <= 0) return
   const client = await clientPromise
   const db = client.db(process.env.MONGODB_DB_NAME || 'test')
-  const user = await db.collection('users').findOne(
-    { _id: new ObjectId(userId) },
-    { projection: { tokenAllowance: 1, tokensUsedThisPeriod: 1 } }
-  ) as { tokenAllowance?: number; tokensUsedThisPeriod?: number } | null
-  const allowance = user?.tokenAllowance ?? 0
-  const used = user?.tokensUsedThisPeriod ?? 0
-  const capped = allowance > 0 ? Math.min(used + amount, allowance) : used + amount
   await db.collection('users').updateOne(
     { _id: new ObjectId(userId) },
-    { $set: { tokensUsedThisPeriod: capped, updatedAt: new Date() } }
+    [
+      {
+        $set: {
+          tokensUsedThisPeriod: {
+            $cond: {
+              if: { $gt: [{ $ifNull: ['$tokenAllowance', 0] }, 0] },
+              then: {
+                $min: [
+                  { $add: [{ $ifNull: ['$tokensUsedThisPeriod', 0] }, amount] },
+                  '$tokenAllowance',
+                ],
+              },
+              else: { $add: [{ $ifNull: ['$tokensUsedThisPeriod', 0] }, amount] },
+            },
+          },
+          updatedAt: new Date(),
+        },
+      },
+    ]
   )
 }
 

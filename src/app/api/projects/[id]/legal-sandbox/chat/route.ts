@@ -19,10 +19,18 @@ import {
   MANDATORY_GRIP_BUILD_QUALITY,
   MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES,
   MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD,
+  MANDATORY_GRIP_ONE_STACK_ONLY,
+  MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS,
   MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD,
   MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE,
   MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE,
+  MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT,
   MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP,
+  MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT,
+  MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT,
+  MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE,
+  MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY,
+  MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX,
   MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING,
   MANDATORY_GRIP_PRODUCTION_READINESS,
 } from '@/lib/constants/buildQualityPlan'
@@ -128,11 +136,32 @@ ${MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP}
 For web and UI projects, follow these styling requirements (shadcn-ui/ui, tailwindlabs/headlessui):
 ${STYLING_REQUIREMENTS_FOR_GRIP}
 
+## MANDATORY: One stack only per project (no Next.js + Expo mix)
+${MANDATORY_GRIP_ONE_STACK_ONLY}
+
+## MANDATORY: Expo only for 100% Expo/React Native apps (never add expo to web package.json)
+${MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS}
+
 ## MANDATORY: Only include what is required (package.json and build files)
 ${MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD}
 
 ## MANDATORY: No blank files — write code for every file in build phases
 ${MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD}
+
+## MANDATORY: Next.js App Router root layout (app/layout.tsx)
+${MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT}
+
+## MANDATORY: Route user to main page (enforce in generated code — StackBlitz/preview)
+${MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT}
+
+## MANDATORY: First build = 100% deployable (styling + full functionality + no mock data)
+${MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE}
+
+## MANDATORY: All buttons and links must work (navigation)
+${MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY}
+
+## MANDATORY: Styling and first-visit experience (clean, modern look)
+${MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX}
 
 ## MANDATORY: Project-specific scaffolding
 ${MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING}
@@ -145,6 +174,8 @@ ${MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE}
 
 ## MANDATORY: Build artifacts must align with the code (concrete rule)
 ${MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE}
+
+${MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT}
 
 ## Full-stack sandbox: single root script (MANDATORY)
 - When the project has both **frontend and backend** (e.g. \`api/\` and \`app/\`, or \`client/\` and \`server/\`, or \`src/frontend\` and \`src/backend\`), you MUST add a **single root script** in package.json (e.g. using \`concurrently\` or \`npm-run-all\`) so **Run in StackBlitz** starts both at once. Do NOT leave this for the user—always provide the complete package.json with a root \`dev\` script that runs both client and server so the user gets a runnable full-stack app in one click.

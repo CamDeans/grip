@@ -5,6 +5,7 @@ import clientPromise, { DB_NAME } from '@/lib/db'
 import { ObjectId } from 'mongodb'
 import archiver from 'archiver'
 import { getProjectFilesForExport } from '@/lib/services/exportService'
+import { isBinaryAssetPath } from '@/lib/services/fileGeneratorService'
 
 /**
  * GET /api/projects/[id]/download
@@ -79,7 +80,8 @@ export async function GET(
       archive.on('end', () => resolve(Buffer.concat(chunks)))
       archive.on('error', reject)
       for (const { path, content } of filesArray) {
-        archive.append(Buffer.from(content, 'utf8'), { name: path })
+        const buf = isBinaryAssetPath(path) ? Buffer.from(content ?? '', 'base64') : Buffer.from(content ?? '', 'utf8')
+        archive.append(buf, { name: path })
       }
       archive.finalize()
     })

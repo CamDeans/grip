@@ -10,6 +10,7 @@
  * - user-uploads-must-use.mdc, no-mock-data-production-ready.mdc, project-specific-scaffolding.mdc
  * - repo-separation.mdc, sandbox-parity.mdc, likely-remaining-preference.mdc, phase-completion-revert.mdc
  * - build-artifacts-align-with-code.mdc
+ * - npm-build-environment-errors.mdc
  */
 
 /** MANDATORY: GRIP uses only env; Settings vars are for the user's app build only. */
@@ -36,6 +37,31 @@ export const MANDATORY_GRIP_BUILD_QUALITY = `
 `.trim()
 
 /**
+ * Mandatory GRIP rule: one stack only per project. Never mix Next.js (web) with Expo/React Native (mobile).
+ * Prevents npm ERESOLVE and StackBlitz "which stack to run" failures.
+ */
+export const MANDATORY_GRIP_ONE_STACK_ONLY = `
+## MANDATORY: One stack only per project (no stack collision)
+
+- **Choose exactly ONE stack before planning and before writing any code.** Each project has exactly one of: Next.js (web), Expo/React Native (mobile), Vite (web), CRA, or other. Never combine two stacks in the same project.
+- **Never mix Next.js with Expo/React Native.** These are different ecosystems (web vs mobile). Mixing them causes: npm ERESOLVE (react vs react-native peer conflicts), StackBlitz not knowing which command to run (next dev vs expo start), and broken installs. If the project is a web app, use only Next.js (or Vite)—do NOT add expo, react-native, or @expo/*. If the project is a mobile app, use only Expo—do NOT add next or next-auth.
+- **package.json must list only dependencies for the chosen stack.** For Next.js web: next, react, react-dom, and web-only deps (e.g. next-auth). For Expo mobile: expo, react-native, and mobile deps. Do not list both next and expo in the same package.json.
+- **Scripts must match the one chosen stack.** One dev script (e.g. "next dev" OR "expo start --web"), one build script—never scripts for two frameworks. Infer the stack from repo structure and user intent; then commit to that stack for the entire plan and all generated files.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: expo only for 100% Expo/React Native apps.
+ * Adding expo to web (Next.js/Vite) package.json corrupts installs and StackBlitz.
+ */
+export const MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS = `
+## MANDATORY: Expo only for 100% Expo/React Native apps
+
+- **Never add expo, react-native, or @expo/* to package.json for web projects.** For Next.js, Vite, or CRA web apps, package.json must NOT contain "expo", "react-native", or any "@expo/*" / "@react-native/*" dependency. Adding "expo": "*" (or any expo) to a web project corrupts npm install and StackBlitz (ERESOLVE, wrong scripts, broken preview).
+- **Expo only when the project is explicitly a 100% Expo/React Native app.** Only then include expo, react-native, and mobile-only deps. If the repo has app/, next.config, or the plan says "Next.js web app", do NOT add expo to package.json.
+- **When generating or editing package.json:** Infer stack from the project (plan, repo structure, app/ directory). For web: list only next, react, react-dom, and web deps. For Expo mobile: list only expo, react-native, and mobile deps. Never list both.
+`.trim()
+
+/**
  * Mandatory GRIP rule: only include what is required in package.json and build files.
  * Prevents adding Vite (or any stack) to every project; must stay project-specific.
  */
@@ -44,7 +70,7 @@ export const MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD = `
 
 - **Only required:** In create-project, plan, and build steps, package.json and build/config files (tsconfig, vite.config, next.config, etc.) MUST contain **only** what **this project** actually needs. Include only dependencies the code uses, only scripts for the **project's chosen stack**, and only config files for that stack.
 - **Stay project-specific — do NOT default to Vite:** Do NOT add Vite (or vite.config, or Vite scripts) unless this project's repo, plan, or ideation **explicitly** uses Vite. Do NOT add Vite to Next.js projects, CRA projects, or "generic" projects. Infer the stack from: (1) linked repo structure (e.g. app/, next.config → Next; vite.config, index.html + src/main → Vite), (2) plan and ideation (e.g. "Next.js app", "Vite + React"), (3) any "Detected repo type" or stack guidance from the system. Use **that** stack only. Never assume every project is Vite.
-- **One stack per project:** Each project has one build tool (Next, Vite, CRA, Expo, etc.). Do not mix (e.g. Next.js app with Vite scripts). If the repo or plan says Next.js, use Next.js scripts and next.config only; do not add Vite.
+- **One stack per project:** Each project has one build tool (Next, Vite, CRA, Expo, etc.). Do not mix (e.g. Next.js app with Vite scripts; Next.js with Expo). If the repo or plan says Next.js, use Next.js scripts and next.config only; do not add Vite or Expo. See MANDATORY_GRIP_ONE_STACK_ONLY.
 `.trim()
 
 /**
@@ -66,6 +92,97 @@ export const MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING = `
 **For every project (all stacks):**
 - **README.md MUST be project-specific:** Describe **this project** by name and purpose. Include: (1) project name and short description, (2) getting started using **this project's** install/run commands (npm/pip/go/cargo/etc.), (3) main features or usage relevant to this app, (4) tech stack used. NEVER a copy of .env.example, generic "GRIP" text, or a template with no project-specific content.
 - **Env/config MUST be project-specific:** List only variables **this app** actually uses (e.g. NextAuth → NEXTAUTH_SECRET, NEXTAUTH_URL; Prisma → DATABASE_URL; Python → API_KEY, DATABASE_URL). Do not paste GRIP Dashboard variables unless the generated app needs them. Document each variable briefly. For non-Node projects, use that stack's config (e.g. .env, config.yaml, environment in README).
+`.trim()
+
+/**
+ * Mandatory GRIP rule: Next.js App Router root layout must be valid — no next/head, children must be in signature, correct structure only.
+ * Prevents "children is not defined" and "next/head inside app directory" errors.
+ */
+export const MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT = `
+## MANDATORY: Next.js App Router — root layout (app/layout.tsx or src/app/layout.tsx)
+
+When generating or editing \`app/layout.tsx\` or \`src/app/layout.tsx\`, you MUST follow these rules exactly. Violations cause \`ReferenceError: children is not defined\` and "next/head inside app directory" warnings.
+
+1. **Define \`children\` in the function signature.** The root layout MUST receive \`children\` as a prop. Write:
+   \`export default function RootLayout({ children }: { children: React.ReactNode }) { ... }\`
+   Do NOT use \`{children}\` in JSX without defining it in the function parameters—that causes "children is not defined".
+
+2. **Do NOT use \`next/head\` or \`<Head>\` in the app directory.** The App Router does not allow it. Use the **Metadata API** instead:
+   \`export const metadata = { title: '...', description: '...' }\`
+   at the top of the file. Never \`import Head from 'next/head'\` in app/ or src/app/.
+
+3. **Return only \`<html>\` and \`<body>\`; do not wrap in fragment or \`<main>\`.** The root layout must return exactly:
+   \`return (\\n  <html lang="en">\\n    <body>{children}</body>\\n  </html>\\n)\`
+   Do NOT return \`<><Head /> <main><html>...</html></main></>\` or any structure that wraps \`<html>\` inside \`<main>\` or a fragment. The root layout returns only \`<html><body>{children}</body></html>\`.
+
+4. **Correct example (copy this pattern):**
+\`\`\`
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "App Title",
+  description: "App description",
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en">
+      <body className="min-h-screen">{children}</body>
+    </html>
+  )
+}
+\`\`\`
+`.trim()
+
+/**
+ * Mandatory GRIP rule: GRIP must enforce in the generated code that the user is always routed to the main page when previewing (StackBlitz or GRIP Preview).
+ */
+export const MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT = `
+## MANDATORY: Route user to main page — enforce in generated code
+
+- **Enforce in the code you generate.** GRIP MUST generate app code that routes the user to the main page at all times when the app is opened (e.g. in StackBlitz or GRIP Preview). The generated code itself must implement this; do not rely on the host to fix routing.
+- **Root path (/) is the main page.** The root route \`/\` MUST be the app's main/landing page. Generate layout and page code so that \`/\` always renders the main page. Do not generate middleware, redirects, or router logic that send first-time visitors away from \`/\` to a non-main route. Do not require a hash or query to see the main content.
+- **Next.js:** Generate \`app/page.tsx\` (or \`src/app/page.tsx\`) as the main landing content for \`/\`. Do not add middleware that redirects \`/\` elsewhere on first load. The root layout must render \`{children}\` so the root page is shown. If you add a redirect, it must be to \`/\` (main), not from \`/\` to an internal path.
+- **Vite / SPA:** Generate \`index.html\` and root component so the main view renders at \`/\`. If using a client router, set \`/\` as the default route that shows the main page.
+- **Outcome:** The code GRIP writes must ensure that when someone opens the project in StackBlitz or preview, they always see the main page—not a blank screen, 404, or a non-landing route.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: first automation build must deliver a 100% deployable product with full styling and no mock data; in-flight modal does not exit until build succeeds.
+ */
+export const MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE = `
+## MANDATORY: First build = 100% deployable product (styling + full functionality + no mock data)
+
+- **One build, complete app.** The first automation build (in-flight modal: plan → file generation → build) MUST produce a **100% deployable** product. The user must get a complete app in one run: full functionality, full styling, and no mock data. Do not leave styling for "later"; do not ship placeholder or fake data; do not deliver a plain, unstyled UI.
+- **Styling is mandatory for web apps.** Every page and component must be styled (Tailwind or project styling): typography, spacing, colors, layout. The first open in StackBlitz or GRIP Preview must show a polished, modern UI—not a bare white page. Follow shadcn/Headless UI patterns where applicable.
+- **No mock data.** Use real env vars, real API contracts, and real data flow. Document required vars in .env.example. No hardcoded dummy data or fake APIs in the first build.
+- **In-flight modal gate.** GRIP does not exit the in-flight modal phase (does not show "done") until the build succeeds. The product must be deployable at that point: runnable, styled, and production-minded. If the build fails, the modal closes with an error; the user does not see "done" until success.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: all buttons and links must work and route to the correct page before the build is considered done.
+ */
+export const MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY = `
+## MANDATORY: All buttons and links must work (navigation and interactivity)
+
+- **Every button and link must do something real.** Every interactive element MUST work: navigation links must use the correct \`href\` or router (e.g. Next.js \`Link\` or \`useRouter().push\`) to the real route; buttons that should navigate must have \`onClick\` (or equivalent) that goes to the correct page. No dead links, no \`href="#"\` or empty \`onClick={() => {}}\`, no "TODO" handlers.
+- **Match the plan and routes.** If the app has pages (e.g. /dashboard, /settings, /about), every nav item, CTA, and link MUST point to the actual path. Header/footer/nav must use real routes so the user can click through the app in GRIP Preview/StackBlitz.
+- **Do not ship placeholder interactivity.** When writing layout, header, nav, and page components: implement working \`Link\`/\`href\` and button handlers so the first run in StackBlitz/Preview is usable. The user must be able to click every visible link/button and reach the correct page.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: web apps must be styled for a clean, modern first-visit experience in GRIP Preview / StackBlitz.
+ */
+export const MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX = `
+## MANDATORY: Styling and first-visit experience (clean, modern look)
+
+- **Every web app must be styled.** Do not deliver a plain, unstyled app. Use Tailwind CSS (or the project's chosen styling) consistently: typography, spacing, colors, and layout. The first time the user opens GRIP Preview or StackBlitz, the app must look intentionally designed—not a bare white page with default browser styles.
+- **Clean, modern aesthetic.** Apply a cohesive look: consistent color palette, readable text, clear visual hierarchy, sensible spacing. Prefer a clean, modern feel so the first visit feels polished and professional. Avoid "developer default" unstyled UI.
+- **Layout and components must look finished.** Headers, nav, footers, cards, and forms must have visible styling (backgrounds, borders, padding) so the user sees a complete, eye-catching interface. Required for GRIP Preview and StackBlitz—the user's first impression must be a working, good-looking app.
 `.trim()
 
 /**
@@ -108,7 +225,7 @@ export const MANDATORY_GRIP_PRODUCTION_READINESS = `
 - **Outcome:** When you complete a phase or the build, the user must get a project that **runs locally** (and in StackBlitz) with the **appropriate commands for that stack** (e.g. npm run dev, pip install && python main.py, go run ., cargo run)—without "command not found," missing modules, blank files, or scaffolding errors. Aim for production readiness: runnable, deployable, maintainable.
 
 **When the project is JS/TS web (Next.js, Vite, etc.):**
-- **Next.js App Router:** If the project uses Next.js: (1) \`app/layout.tsx\` (or \`src/app/layout.tsx\`) must be a default-exported function that accepts \`{ children }\` and returns \`<html><body>{children}</body></html>\`; use \`metadata\` export—never \`next/head\` or raw object literals in JSX. (2) API routes under \`app/api/**/route.ts\` must export \`GET\`, \`POST\`, etc. returning \`NextResponse.json(...)\`—never a default React page component. (3) Pages and layouts must be default-exported functions with valid JSX; layouts must render \`children\`.
+- **Next.js App Router:** If the project uses Next.js: (1) \`app/layout.tsx\` (or \`src/app/layout.tsx\`) must follow the exact App Router layout rules—see MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT. (2) API routes under \`app/api/**/route.ts\` must export \`GET\`, \`POST\`, etc. returning \`NextResponse.json(...)\`—never a default React page component. (3) Pages and layouts must be default-exported functions with valid JSX; layouts must render \`children\`.
 - **Middleware:** If \`middleware.ts\` (or \`src/middleware.ts\`) exists, it MUST export a \`middleware\` function (or \`export default\`) returning \`NextResponse.next()\` or a redirect—never comment-only.
 - **Global CSS:** \`globals.css\` (or \`app/globals.css\`) must contain only CSS (e.g. Tailwind directives, \`:root\`/\`body\`). Never React/JSX inside a .css file.
 - **Components:** Valid exports and props (no empty \`interface Props { : ; }\`); logic in the component body—never implementation pasted as literal text inside a \`<div>\`. All referenced components must exist and export correctly.
@@ -150,6 +267,27 @@ export const MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE = `
 - **.env.example:** List only variables the generated app code actually uses. No GRIP app config; no unused variables.
 - **Other config (next.config, vite.config):** Match the stack and entry/structure of the generated code.
 - When generating package.json or any build artifact, derive it from the same plan, analysis, and file set as the code—so artifacts and code stay aligned. If build errors show missing modules, add those packages to package.json and output the complete file.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: handle npm/build environment errors so install and dev/build succeed.
+ * Covers ERESOLVE (peer deps), EBADENGINE (Node version), and ESM/CommonJS (require in .js when type:module).
+ * See .cursor/rules/npm-build-environment-errors.mdc
+ */
+export const MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT = `
+## MANDATORY: npm and build environment errors (concrete rule)
+
+GRIP MUST prevent or recover from these so \`npm install\` and \`npm run dev\` (or \`build\`) succeed:
+
+1. **ERESOLVE / peer dependency conflicts**
+   - When npm reports \`ERESOLVE could not resolve\`, \`Conflicting peer dependency\`, or \`Fix the upstream dependency conflict, or retry with --force or --legacy-peer-deps\`: either (a) align dependency versions so peer requirements are satisfied (e.g. use compatible @types/react with react-native/expo), or (b) ensure install can succeed with \`--legacy-peer-deps\`. The system may retry \`npm install --legacy-peer-deps\` when ERESOLVE is detected; package.json and generated code should prefer compatible version ranges so that is not required when possible.
+   - When generating package.json for Expo/React Native: use React and @types/react versions that match the Expo SDK (e.g. Expo 55 often expects @types/react ^19 for react-native 0.80+); or document that users may need \`npm install --legacy-peer-deps\` and the run pipeline will retry with that when ERESOLVE occurs.
+
+2. **EBADENGINE / Node version**
+   - When npm reports \`EBADENGINE\`, \`Unsupported engine\`, or \`required: { node: '>= X.Y.Z' }\`: add \`"engines": { "node": ">=X.Y.Z" }\` to package.json (or the version the stack requires, e.g. \`>=20.19.4\` for Expo/Metro 0.83) so docs and CI match. Prefer generating package.json with \`engines.node\` set for the stack (e.g. Next 14 → \`>=18.17\`; Expo 55 / Metro 0.83 → \`>=20.19.4\`) so install and run succeed in the environment GRIP uses.
+
+3. **ESM vs CommonJS (require is not defined in ES module scope)**
+   - When \`package.json\` contains \`"type": "module"\`, all \`.js\` files are treated as ES modules. Do NOT use \`require()\` or \`module.exports\` in \`.js\` files in that case—use \`import\` and \`export\` only. For Next.js: GRIP-generated projects use \`"type": "module"\`, so always generate \`next.config.js\` in ESM: \`const nextConfig = { ... }; export default nextConfig;\` — never \`module.exports\`. This prevents \`ReferenceError: module is not defined in ES module scope\` when running \`next dev\` or \`next build\`.
 `.trim()
 
 /**

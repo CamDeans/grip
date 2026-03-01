@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { ObjectId } from 'mongodb'
 import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
+import { MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE } from '@/lib/constants/buildQualityPlan'
 
 // Mock imports until we can properly access the project structure
 // These will be replaced with proper imports when integrating into the main codebase
@@ -221,6 +222,21 @@ export function {{name}}({{#params}}{{name}}: {{type}}{{^last}}, {{/last}}{{/par
       },
       isBuiltIn: true
     })
+
+    // Full-file — single FileContent variable for config/schema/lib/hooks so AI returns complete runnable code (not comment-only)
+    templates.push({
+      id: 'full-file',
+      name: 'Full file content',
+      description: 'Complete file content from AI (config, schema, lib, hooks, etc.)',
+      language: 'typescript',
+      fileType: 'ts',
+      template: `{{FileContent}}`,
+      variables: ['FileContent'],
+      defaultValues: {
+        FileContent: 'export function noop(): void {\n  // Replace with real implementation\n}\n'
+      },
+      isBuiltIn: true
+    })
     
     // package.json — mandatory for StackBlitz preview (GRIP must always include; never empty deps so Run in StackBlitz works)
     templates.push({
@@ -240,6 +256,9 @@ export function {{name}}({{#params}}{{name}}: {{type}}{{^last}}, {{/last}}{{/par
     "start": "{{StartScript}}",
     "lint": "{{LintScript}}"
   },
+  "engines": {
+    "node": "{{NodeEngineVersion}}"
+  },
   "dependencies": {
     "next": "{{NextVersion}}",
     "react": "{{ReactVersion}}",
@@ -252,13 +271,14 @@ export function {{name}}({{#params}}{{name}}: {{type}}{{^last}}, {{/last}}{{/par
     "@types/react-dom": "{{TypesReactDomVersion}}"
   }
 }`,
-      variables: ['ProjectName', 'DevScript', 'BuildScript', 'StartScript', 'LintScript', 'NextVersion', 'ReactVersion', 'ReactDomVersion', 'TypescriptVersion', 'TypesNodeVersion', 'TypesReactVersion', 'TypesReactDomVersion'],
+      variables: ['ProjectName', 'DevScript', 'BuildScript', 'StartScript', 'LintScript', 'NodeEngineVersion', 'NextVersion', 'ReactVersion', 'ReactDomVersion', 'TypescriptVersion', 'TypesNodeVersion', 'TypesReactVersion', 'TypesReactDomVersion'],
       defaultValues: {
         ProjectName: 'my-app',
         DevScript: 'next dev',
         BuildScript: 'next build',
         StartScript: 'next start',
         LintScript: 'next lint',
+        NodeEngineVersion: '>=18.17.0',
         NextVersion: '^14.0.0',
         ReactVersion: '^18.2.0',
         ReactDomVersion: '^18.2.0',
@@ -740,6 +760,16 @@ function componentNameFromPath(filePath: string): string {
   return base.split(/[-_]/).map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('')
 }
 
+/** True if this path is a web UI file (page, component, layout, globals.css) so we inject styling and first-build-complete mandate. */
+function isWebUIFilePath(filePath: string): boolean {
+  const n = (filePath || '').replace(/\\/g, '/').toLowerCase()
+  if (/\.(tsx|jsx)$/.test(n) && (n.includes('/app/') || n.includes('src/app/') || n.includes('/components/') || n.includes('src/components/'))) return true
+  if (/globals\.css$/i.test(n) || n.endsWith('app/globals.css') || n.endsWith('src/app/globals.css')) return true
+  if (n.includes('layout.') && (n.includes('/app/') || n.includes('src/app/'))) return true
+  if (n.includes('page.') && (n.includes('/app/') || n.includes('src/app/'))) return true
+  return false
+}
+
 /**
  * Generate template variables using AI
  * @param template Template to use
@@ -766,6 +796,80 @@ export async function generateTemplateVariables(
   }
 ): Promise<{ variables: ITemplateVariables; totalTokens: number }> {
   try {
+    // Full-file template: AI returns complete runnable file content (no 200-char limit)
+    if (template.id === 'full-file' && template.variables?.includes('FileContent')) {
+      const phaseBlock = projectContext.phaseContext?.stepTitles?.length
+        ? `\nCurrent build phase: "${projectContext.phaseContext.currentPhase}". Steps: ${projectContext.phaseContext.stepTitles.join('; ')}.\n`
+        : ''
+      const stackBlock =
+        projectContext.framework || projectContext.repoCategory
+          ? `\nProject stack: ${projectContext.framework ?? 'not specified'}; Repo type: ${projectContext.repoCategory ?? 'not specified'}.\n`
+          : ''
+      const isNextConfig = /next\.config\.(js|mjs|cjs)$/i.test(projectContext.filePath || '')
+      const esmNextConfigBlock = isNextConfig
+        ? `
+CRITICAL for next.config.js: This project uses "type": "module" in package.json, so all .js files are ES modules. You MUST write next.config.js in ESM only: use "const nextConfig = { ... }; export default nextConfig;" — do NOT use module.exports or require(). Using module.exports will cause "ReferenceError: module is not defined in ES module scope" when running next dev or next build.`
+        : ''
+      const isAppLayout = /(^|\/)app\/layout\.tsx$/i.test((projectContext.filePath || '').replace(/\\/g, '/'))
+      const appLayoutBlock = isAppLayout
+        ? `
+CRITICAL for app/layout.tsx (Next.js App Router root layout): (1) You MUST define children in the function signature: export default function RootLayout({ children }: { children: React.ReactNode }) { ... }. Using {children} in JSX without defining it in the parameters causes "ReferenceError: children is not defined". (2) Do NOT use next/head or <Head> in the app directory — use the Metadata API: export const metadata = { title: '...', description: '...' }. (3) Return ONLY <html><body>{children}</body></html>. Do NOT wrap in <><Head /><main><html>...</html></main></> or any fragment/main wrapper. The root layout must return exactly <html lang="en"><body>{children}</body></html>.`
+        : ''
+      const isAppPage = /(^|\/)(app|src\/app)\/page\.(tsx|jsx)$/i.test((projectContext.filePath || '').replace(/\\/g, '/'))
+      const appPageBlock = isAppPage
+        ? `
+CRITICAL for app/page.tsx (root route): This file is the MAIN LANDING PAGE for the app at "/". When the user opens the project in StackBlitz or GRIP Preview, they must see this page. Generate full, styled content for the main page here — do not redirect away from / or leave it empty. The root route must always show the main page.`
+        : ''
+      const isPackageJson = (projectContext.filePath || '').replace(/\\/g, '/').toLowerCase().endsWith('package.json')
+      const packageJsonExpoBlock = isPackageJson
+        ? `
+CRITICAL for package.json: Do NOT add "expo", "react-native", or any "@expo/*" / "@react-native/*" to dependencies or devDependencies unless this project is a 100% Expo/React Native mobile app. For web projects (Next.js, Vite, CRA) package.json must contain only web stack deps (e.g. next, react, react-dom). Adding "expo": "*" or expo to a web project corrupts npm install and StackBlitz. Only include expo when the project is explicitly an Expo/React Native app.`
+        : ''
+      const webUIFileBlock = isWebUIFilePath(projectContext.filePath || '')
+        ? `
+
+${MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE}
+
+For this file (web UI): Apply full styling (Tailwind/shadcn/Headless UI patterns). No plain unstyled UI; no mock data. First build must be 100% deployable.`
+        : ''
+      const fullFilePrompt = `
+Generate the COMPLETE, runnable source code for this file. No placeholders, no TODOs, no stub comments—only real code.
+
+File path: ${projectContext.filePath}
+Project description: ${projectContext.description || 'Not provided'}
+${stackBlock}${phaseBlock}
+
+GRIP mandatory: the file must be full, valid, and runnable. Match the file type (e.g. next.config.js = Next.js config, tailwind.config.js = Tailwind config, prisma/schema.prisma = Prisma schema, lib/*.ts = real implementations). For next.config.js: always use ESM (const nextConfig = { ... }; export default nextConfig;). Never use require() or module.exports in next.config.js — it causes build failures when package.json has "type": "module".${esmNextConfigBlock}${appLayoutBlock}${appPageBlock}${packageJsonExpoBlock}${webUIFileBlock}
+
+Return ONLY a single JSON object with one key: "FileContent". The value must be the exact file content. Use \\n for newlines inside the string so the JSON is valid. Example: {"FileContent":"const x = 1;\\nexport default x;"}
+`
+      const anthropic = getAnthropicClient()
+      if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
+      console.info('[GRIP Files] Calling Anthropic API for template variables (generateTemplateVariables). Usage will appear in Anthropic console.')
+      const response = await anthropic.messages.create({
+        model: ANTHROPIC_MODEL_CHAT,
+        max_tokens: 8000,
+        temperature: 0.2,
+        messages: [{ role: 'user', content: fullFilePrompt }]
+      })
+      const text = response.content[0].text
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      const jsonString = jsonMatch ? jsonMatch[0] : '{}'
+      let fileContent = ''
+      try {
+        const parsed = JSON.parse(jsonString) as { FileContent?: string }
+        fileContent = (parsed?.FileContent ?? '').trim()
+      } catch {
+        const m = text.match(/"FileContent"\s*:\s*"((?:[^"\\]|\\.)*)"/s)
+        if (m) fileContent = m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim()
+      }
+      if (!fileContent || fileContent.length < 20) {
+        fileContent = (template.defaultValues?.FileContent as string) ?? 'export {} // TODO'
+      }
+      const totalTokens = (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0)
+      return { variables: { FileContent: fileContent } as ITemplateVariables, totalTokens }
+    }
+
     // Extract needed variables from template
     const missingVariables = template.variables.filter(v => {
       // Skip props and functions - they're complex types that will be handled specially
@@ -789,6 +893,9 @@ export async function generateTemplateVariables(
         ? `\nLanguages used/referenced in tree-sitter analysis: Primary: ${(projectContext.primaryLanguages ?? []).join(', ') || 'none'}; Extension counts: ${JSON.stringify(projectContext.mainLanguages ?? {})}. Generate variable values that match the languages and conventions of this project.\n`
         : ''
     
+    const webUIMandateBlock = isWebUIFilePath(projectContext.filePath || '')
+      ? `\n\nMANDATORY for this file (web UI): First build must be 100% deployable with full styling and no mock data. Generate variable values that produce styled, complete UI (Tailwind/shadcn/Headless UI patterns)—no plain unstyled content. No mock or fake data.\n`
+      : ''
     // Build prompt for AI
     const prompt = `
 I need to generate appropriate values for variables in a code template.
@@ -800,7 +907,7 @@ File Path: ${projectContext.filePath}
 Project Description: ${projectContext.description || 'Not provided'}
 ${stackBlock}${languagesBlock}${phaseBlock}
 
-GRIP mandatory rule: every file must have real, runnable code. Generate variable values that produce complete content—never placeholder or empty. The rendered template must be a full, valid file (e.g. a real component with real JSX, or real logic), not a stub or TODO.
+GRIP mandatory rule: every file must have real, runnable code. Generate variable values that produce complete content—never placeholder or empty. The rendered template must be a full, valid file (e.g. a real component with real JSX, or real logic), not a stub or TODO.${webUIMandateBlock}
 
 Return ONLY a single JSON object. Use double quotes for keys and string values. Do not use backticks. Keep string values short (under 200 chars) so the JSON is valid. Example: {"ComponentName":"MyComponent","ComponentContent":"<p>Hello</p>"}
 `

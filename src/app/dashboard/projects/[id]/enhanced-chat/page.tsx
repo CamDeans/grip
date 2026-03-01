@@ -9,6 +9,7 @@ import { LoadingState } from '@/components/ui/LoadingState'
 import { EnhancedChatProvider } from '@/components/providers/EnhancedChatProvider'
 import { useEnhancedChat } from '@/hooks/useEnhancedChat'
 import { Button } from '@/components/ui'
+import { Loader2, CheckCircle2, Inbox } from 'lucide-react'
 
 interface Project {
   _id: string
@@ -136,9 +137,13 @@ function TaskSpecificChat({
   autoSendRunErrors?: boolean
   implementCurrentPhase?: boolean
 }) {
-  const { sendInitialTaskMessage, sendMessage, contextEnabled, projectContext, messages } = useEnhancedChat()
+  const { sendInitialTaskMessage, sendMessage, contextEnabled, projectContext, messages, isTyping } = useEnhancedChat()
   const runErrorsAutoSendDone = useRef(false)
   const implementPhaseSentRef = useRef(false)
+  /** User came from "Send to GRIP" with StackBlitz errors; show status so they see GRIP received and is working. */
+  const [runErrorsStatus, setRunErrorsStatus] = useState<'idle' | 'receiving' | 'working' | 'done'>(() =>
+    autoSendRunErrors ? 'receiving' : 'idle'
+  )
   const [projectState, setProjectState] = useState<{
     currentPhase?: string
     phases?: Array<{ name: string; steps?: Array<{ title?: string }> }>
@@ -211,16 +216,17 @@ function TaskSpecificChat({
     }
   }, [task, taskMessageSent, hasExistingTaskMessage, sendInitialTaskMessage, projectContext, contextEnabled])
 
-  // When arriving from "Send to GRIP and open Develop" (StackBlitz errors), auto-send one message so GRIP processes lastRunErrors and responds.
-  // Prefer sending once history includes the run_errors_submission message; otherwise send after a fallback delay so the API still gets lastRunErrors from project context.
+  // When arriving from "Send to GRIP and open Develop" (StackBlitz errors), auto-send one message so GRIP starts fixing immediately.
+  // Short delay so context (lastRunErrors) is loaded; imperative message so the model fixes without asking.
   useEffect(() => {
     if (!autoSendRunErrors || !projectId || runErrorsAutoSendDone.current) return
     const hasRunErrorsSubmission = messages.some((m) => m.metadata?.type === 'run_errors_submission')
-    const delayMs = hasRunErrorsSubmission ? 1200 : 3000
+    const delayMs = hasRunErrorsSubmission ? 400 : 1500
     const timer = setTimeout(() => {
       if (runErrorsAutoSendDone.current) return
       runErrorsAutoSendDone.current = true
-      sendMessage('I just submitted StackBlitz errors. Please help fix them.')
+      setRunErrorsStatus('working')
+      sendMessage('Fix the StackBlitz/build errors I just submitted. Start now—output the corrected file(s) in code blocks with exact paths so they can be applied. Do not ask what to fix; apply fixes.')
       if (typeof window !== 'undefined' && window.history.replaceState) {
         const url = new URL(window.location.href)
         url.searchParams.delete('stackblitzErrorsSubmitted')
@@ -229,6 +235,17 @@ function TaskSpecificChat({
     }, delayMs)
     return () => clearTimeout(timer)
   }, [autoSendRunErrors, projectId, messages, sendMessage])
+
+  // When GRIP finishes responding after run-errors flow, mark done and clear banner after a short confirmation.
+  const wasTypingRef = useRef(false)
+  useEffect(() => {
+    if (runErrorsStatus === 'working' && wasTypingRef.current && !isTyping) {
+      setRunErrorsStatus('done')
+      const t = setTimeout(() => setRunErrorsStatus('idle'), 4000)
+      return () => clearTimeout(t)
+    }
+    wasTypingRef.current = isTyping
+  }, [runErrorsStatus, isTyping])
 
   // When arriving from Overview "Implement current phase in Develop", send one user message so GRIP implements the current phase steps.
   useEffect(() => {
@@ -262,10 +279,46 @@ function TaskSpecificChat({
     : undefined
 
   return (
-    <EnhancedChat
-      projectId={projectId}
-      className="flex-1 h-full"
-      welcomeMessage={welcomeMessage}
-    />
+    <div className="flex flex-col flex-1 h-full min-h-0">
+      {runErrorsStatus !== 'idle' && (
+        <div
+          className="shrink-0 flex items-center gap-3 px-4 py-2.5 rounded-lg border bg-primary/5 border-primary/20 text-sm"
+          role="status"
+          aria-live="polite"
+          aria-label={
+            runErrorsStatus === 'receiving'
+              ? 'Receiving StackBlitz errors'
+              : runErrorsStatus === 'working'
+                ? 'GRIP is working on fixes'
+                : 'GRIP has responded'
+          }
+        >
+          {runErrorsStatus === 'receiving' && (
+            <>
+              <Inbox className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+              <span className="text-foreground font-medium">StackBlitz errors received.</span>
+              <span className="text-muted-foreground">Sending to GRIP…</span>
+            </>
+          )}
+          {runErrorsStatus === 'working' && (
+            <>
+              <Loader2 className="h-4 w-4 shrink-0 text-primary animate-spin" aria-hidden />
+              <span className="text-foreground font-medium">GRIP has your errors and is working on fixes…</span>
+            </>
+          )}
+          {runErrorsStatus === 'done' && (
+            <>
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600 dark:text-green-500" aria-hidden />
+              <span className="text-foreground font-medium">GRIP has responded.</span>
+            </>
+          )}
+        </div>
+      )}
+      <EnhancedChat
+        projectId={projectId}
+        className="flex-1 h-full min-h-0"
+        welcomeMessage={welcomeMessage}
+      />
+    </div>
   )
 } 

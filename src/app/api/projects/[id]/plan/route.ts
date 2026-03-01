@@ -7,6 +7,7 @@ import { buildTokenBudgetPromptFragment } from '@/lib/constants/tokenBudgetPlan'
 import { generateProjectPlan, getProjectPlan } from '@/lib/services/projectPlanningService'
 import { ObjectId } from 'mongodb'
 import clientPromise, { DB_NAME } from '@/lib/db'
+import { gripLog } from '@/lib/gripLogger'
 
 /**
  * GET /api/projects/[id]/plan
@@ -113,6 +114,7 @@ export async function POST(
     const result = await generateProjectPlan(id, { tokenBudgetHint, tier: access.tier ?? 'starter' })
     const totalTokens = (result as { totalTokens?: number }).totalTokens ?? 0
     console.info('[GRIP Stage 3] plan POST complete', { projectId: id, totalTokens })
+    gripLog(3, 'plan POST complete', { projectId: id, totalTokens })
     if (totalTokens > 0 && session.user?.id) {
       await addTokenUsage(session.user.id, totalTokens).catch((err) =>
         console.warn('Project plan: failed to record token usage', err)
@@ -122,6 +124,7 @@ export async function POST(
     const { totalTokens: _drop, ...plan } = result as { totalTokens?: number; [k: string]: unknown }
     return NextResponse.json(plan)
   } catch (error) {
+    gripLog(3, 'plan POST error', { error: error instanceof Error ? error.message : String(error) })
     console.error('[GRIP Stage 3] plan POST error:', error)
     return NextResponse.json(
       { error: 'Failed to generate project plan' },
