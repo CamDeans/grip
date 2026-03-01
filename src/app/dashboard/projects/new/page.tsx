@@ -30,7 +30,7 @@ import {
   PhotoIcon,
   DocumentTextIcon
 } from '@heroicons/react/24/outline'
-import { Modal } from '@/components/ui/Modal'
+import { Rocket } from 'lucide-react'
 
 interface ProjectFormData {
   title: string
@@ -113,7 +113,10 @@ export default function NewProjectPage() {
     setCurrentStep('details')
   }
 
-  /** Run alignment check, then show modal. On "Proceed" from modal we call doCreateProject. */
+  /** In-flight overlay active from first "Create Project" click until redirect or "Choose different repo". Prevents refresh/back during alignment + create. */
+  const inFlightActive = alignmentLoading || alignmentModalOpen || isLoading
+
+  /** Run alignment check, then show result in in-flight overlay. On "Proceed" we call doCreateProject. */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isFormValid) {
@@ -180,6 +183,7 @@ export default function NewProjectPage() {
   const doCreateProject = async () => {
     if (!isFormValid || !formData.repository) return
     setAlignmentModalOpen(false)
+    // Show in-flight modal immediately so user sees GRIP is working and doesn't refresh or back out (better UX)
     setIsLoading(true)
     try {
       const submissionData = {
@@ -593,68 +597,88 @@ export default function NewProjectPage() {
         )}
       </form>
 
-      {/* Alignment check modal: show % and message, then Proceed or Choose different repo */}
-      <Modal
-        isOpen={alignmentModalOpen}
-        onClose={() => {
-          setAlignmentModalOpen(false)
-          setAlignmentResult(null)
-        }}
-        title="Project & repo alignment"
-        description={alignmentResult ? `Your project ideation and the selected repo align at ${alignmentResult.alignmentPercent}%.` : undefined}
-        size="md"
-        footer={
-          alignmentResult ? (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setAlignmentModalOpen(false)
-                  setAlignmentResult(null)
-                  setCurrentStep('details')
-                }}
-                icon={<ArrowLeftIcon className="h-5 w-5" />}
-              >
-                Choose different repo
-              </Button>
-              <Button
-                variant="default"
-                onClick={doCreateProject}
-                disabled={isLoading}
-                icon={isLoading ? <ArrowPathIcon className="h-5 w-5 animate-spin" /> : <PlusIcon className="h-5 w-5" />}
-              >
-                {isLoading ? 'Creating...' : 'Proceed with build'}
-              </Button>
-            </>
-          ) : undefined
-        }
-      >
-        {alignmentLoading ? (
-          <div className="flex items-center gap-3 py-4">
-            <ArrowPathIcon className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-text-secondary">Comparing your project with the selected repo…</p>
-          </div>
-        ) : alignmentResult ? (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-4">
-              <ChartBarIcon className="h-10 w-10 shrink-0 text-primary" />
-              <div>
-                <p className="text-2xl font-semibold text-foreground">{alignmentResult.alignmentPercent}%</p>
-                <p className="text-sm text-text-secondary">{alignmentResult.message}</p>
-              </div>
+      {/* Alignment content is now inside the in-flight overlay above (one continuous modal from repo confirm through create) */}
+
+      {/* In-flight modal: show from first "Create Project" click (repo confirmation) through alignment and creation so user doesn't refresh or back out */}
+      {inFlightActive && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-background/80 backdrop-blur-sm"
+          role="dialog"
+          aria-live="polite"
+          aria-label={isLoading ? 'Creating project' : alignmentResult ? 'Project alignment' : 'Checking alignment'}
+        >
+          <div className="min-h-[100dvh] flex items-center justify-center p-4">
+            <div className="flex flex-col items-center gap-5 rounded-xl border-2 border-primary/20 bg-card p-8 shadow-xl text-center w-[min(90vw,28rem)] shrink-0">
+              {isLoading ? (
+                <>
+                  <Rocket className="h-14 w-14 text-primary shrink-0 animate-pulse" aria-hidden />
+                  <p className="text-lg font-semibold text-foreground">Creating project</p>
+                  <p className="text-xs font-medium text-primary/90">Setting up your project…</p>
+                  <p className="text-sm text-muted-foreground">
+                    You&apos;ll be redirected to the Overview where the full pipeline runs (Analysis → Plan → Files → Build). Please don&apos;t refresh or go back.
+                  </p>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <ArrowPathIcon className="h-5 w-5 animate-spin" aria-hidden />
+                    <span className="text-sm">Creating…</span>
+                  </div>
+                </>
+              ) : alignmentResult ? (
+                <>
+                  <ChartBarIcon className="h-14 w-14 text-primary shrink-0" aria-hidden />
+                  <p className="text-lg font-semibold text-foreground">Project & repo alignment</p>
+                  <div className="flex flex-col gap-3 w-full">
+                    <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-4 text-left">
+                      <p className="text-2xl font-semibold text-foreground">{alignmentResult.alignmentPercent}%</p>
+                      <p className="text-sm text-text-secondary">{alignmentResult.message}</p>
+                    </div>
+                    {alignmentResult.suggestedProceed ? (
+                      <p className="text-sm text-text-secondary text-left">
+                        Good to proceed. Click <strong>Proceed with build</strong> to create the project and start the automated build.
+                      </p>
+                    ) : (
+                      <p className="text-sm text-amber-600 dark:text-amber-400 text-left">
+                        Consider <strong>Choose different repo</strong> to find a repo that better matches your project goals.
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-3 justify-center w-full">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setAlignmentModalOpen(false)
+                        setAlignmentResult(null)
+                        setCurrentStep('details')
+                      }}
+                      icon={<ArrowLeftIcon className="h-5 w-5" />}
+                    >
+                      Choose different repo
+                    </Button>
+                    <Button
+                      variant="default"
+                      onClick={doCreateProject}
+                      disabled={isLoading}
+                      icon={isLoading ? <ArrowPathIcon className="h-5 w-5 animate-spin" /> : <PlusIcon className="h-5 w-5" />}
+                    >
+                      {isLoading ? 'Creating...' : 'Proceed with build'}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Rocket className="h-14 w-14 text-primary shrink-0 animate-pulse" aria-hidden />
+                  <p className="text-lg font-semibold text-foreground">Checking alignment</p>
+                  <p className="text-xs font-medium text-primary/90">Comparing your project with the selected repo…</p>
+                  <p className="text-sm text-muted-foreground">You&apos;ll see alignment results next. Please don&apos;t refresh or go back.</p>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <ArrowPathIcon className="h-5 w-5 animate-spin" aria-hidden />
+                    <span className="text-sm">Checking…</span>
+                  </div>
+                </>
+              )}
             </div>
-            {alignmentResult.suggestedProceed ? (
-              <p className="text-sm text-text-secondary">
-                Good to proceed. Click <strong>Proceed with build</strong> to create the project and start the automated build.
-              </p>
-            ) : (
-              <p className="text-sm text-amber-600 dark:text-amber-400">
-                Consider going back to <strong>Choose different repo</strong> to find a repo that better matches your project goals.
-              </p>
-            )}
           </div>
-        ) : null}
-      </Modal>
+        </div>
+      )}
 
       {/* FAQ — link to home page FAQ; only 2 short page-specific answers here */}
       <Card className="mt-8">
