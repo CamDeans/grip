@@ -348,9 +348,39 @@ export default function ProjectOverviewPage() {
         // Stage 2: analysis — do not advance to plan until analysis has completed successfully
         if (!hasAnalysis) {
           setSetupStep('analysis')
-          const refreshRes = await fetch(`/api/projects/${projectId}/analysis/refresh`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+          const ANALYSIS_REFRESH_TIMEOUT_MS = 120_000 // 2 min so clone + tree-sitter can finish; avoid indefinite hang
+          const ac = new AbortController()
+          const timeoutId = setTimeout(() => ac.abort(), ANALYSIS_REFRESH_TIMEOUT_MS)
+          let refreshRes: Response
+          try {
+            refreshRes = await fetch(`/api/projects/${projectId}/analysis/refresh`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              signal: ac.signal,
+            })
+          } catch (fetchErr) {
+            clearTimeout(timeoutId)
+            const isTimeout = fetchErr instanceof Error && (fetchErr.name === 'AbortError' || fetchErr.message?.includes('abort'))
+            console.warn('[GRIP Overview] Stage 2 (analysis) fetch failed:', fetchErr)
+            if (isTimeout) {
+              sonnerToast.error('Analysis is taking longer than expected', {
+                description: 'Repository analysis timed out. Try again, or run analysis from the Repo tab. Large repos can take 1–2 minutes.',
+              })
+            } else {
+              sonnerToast.error('Analysis failed', {
+                description: fetchErr instanceof Error ? fetchErr.message : 'Network or server error. Try again or run analysis from the Repo tab.',
+              })
+            }
+            setSetupStep(null)
+            return
+          }
+          clearTimeout(timeoutId)
           if (!refreshRes.ok) {
-            console.warn('[GRIP Overview] Stage 2 (analysis) failed: analysis/refresh returned', refreshRes.status)
+            const errBody = await refreshRes.text().catch(() => '')
+            console.warn('[GRIP Overview] Stage 2 (analysis) failed: analysis/refresh returned', refreshRes.status, errBody)
+            sonnerToast.error('Analysis failed', {
+              description: refreshRes.status === 504 ? 'Server timed out. Try again or run analysis from the Repo tab.' : errBody || refreshRes.statusText,
+            })
             setSetupStep(null)
             return
           }
@@ -367,6 +397,9 @@ export default function ProjectOverviewPage() {
           }
           if (!analysisDone) {
             console.warn('[GRIP Overview] Stage 2 (analysis) did not complete within 90s. Stopping; do not advance to plan.')
+            sonnerToast.warning('Analysis status not updated', {
+              description: 'Analysis may still be running. Refresh the page or run analysis from the Repo tab.',
+            })
             setSetupStep(null)
             return
           }

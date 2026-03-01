@@ -95,8 +95,8 @@ export async function analyzeProject(projectId: string, repository: { owner: str
     }
 
     try {
-      console.log('Creating analysis document...');
-      const analysis = await db.collection('analyses').insertOne({
+      console.log('Creating or replacing analysis document...');
+      const analysisDoc = {
         projectId: projectObjectId,
         stages: [
           { name: 'Repository Analysis', status: 'in-progress', progress: 0 },
@@ -134,16 +134,21 @@ export async function analyzeProject(projectId: string, repository: { owner: str
         ],
         createdAt: new Date(),
         updatedAt: new Date()
-      });
+      };
+      const analysis = await db.collection('analyses').replaceOne(
+        { projectId: projectObjectId },
+        analysisDoc,
+        { upsert: true }
+      );
 
-      console.log('Analysis document created:', {
-        id: analysis.insertedId,
+      console.log('Analysis document created or replaced:', {
+        id: analysis.upsertedId ?? analysis.insertedId,
         fileCount: files.length,
         languages: Object.keys(getLanguageStats(files))
       });
 
       return {
-        analysisId: analysis.insertedId,
+        analysisId: analysis.upsertedId ?? analysis.insertedId,
         repositoryStructure: {
           files: files.map(f => f.path),
           totalFiles: files.length,
@@ -185,14 +190,18 @@ export async function analyzeProject(projectId: string, repository: { owner: str
           updatedAt: new Date()
         };
         
-        const analysis = await db.collection('analyses').insertOne(minimalAnalysis);
+        const analysis = await db.collection('analyses').replaceOne(
+          { projectId: projectObjectId },
+          minimalAnalysis,
+          { upsert: true }
+        );
         console.log('Minimal analysis saved:', {
-          id: analysis.insertedId,
+          id: analysis.upsertedId ?? analysis.insertedId,
           fileCount: files.length
         });
         
         return {
-          analysisId: analysis.insertedId,
+          analysisId: analysis.upsertedId ?? analysis.insertedId,
           repositoryStructure: {
             files: files.map(f => f.path),
             totalFiles: files.length,

@@ -12,6 +12,7 @@ import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/treeSitter/treeS
 import { buildTechnicalAnalysisPromptFromIdeation } from '@/lib/sandbox/ideationToTechnicalPrompt'
 import { gripLog } from '@/lib/gripLogger'
 
+/** Long-running analysis runs in background after 202; this route returns quickly so gateway does not 504. */
 const SANDBOX_ANALYSES_COLLECTION = 'sandboxAnalyses'
 
 /**
@@ -110,23 +111,22 @@ export async function POST(
         )
       }
 
-      const analysisResult = await analyzeProject(projectId, {
-        owner: projectDoc.repository.owner,
-        name: projectDoc.repository.name,
+      // Main project: return 202 and trigger analysis/run in a separate invocation so gateway does not 504.
+      // Client polls analysis/status; run route has maxDuration 120 and runs in its own serverless invocation.
+      const origin = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : new URL(request.url).origin
+      const runUrl = `${origin}/api/projects/${projectId}/analysis/run`
+      const secret = process.env.ANALYSIS_INTERNAL_SECRET ?? ''
+      fetch(runUrl, {
+        method: 'POST',
+        headers: { 'x-internal-secret': secret },
+        // Don't await; run runs in separate invocation
+      }).catch((err) => {
+        console.warn('[GRIP Stage 2] analysis/refresh: trigger run failed', err)
       })
-      const mainPathTokens = (analysisResult as { totalTokens?: number })?.totalTokens ?? 0
-      if (mainPathTokens > 0 && session.user?.id) {
-        await addTokenUsage(session.user.id, mainPathTokens).catch((err) =>
-          console.warn('Analysis refresh (main): failed to record token usage', err)
-        )
-      }
 
-      await db.collection('analyses').updateOne(
-        { projectId: new ObjectId(projectId) },
-        { $unset: { projectContextDocument: '' }, $set: { updatedAt: new Date() } }
-      )
-      console.info('[GRIP Stage 2] analysis/refresh main complete', { projectId })
-      gripLog(2, 'analysis/refresh main complete', { projectId })
+      return NextResponse.json({ accepted: true }, { status: 202 })
     }
 
     return NextResponse.json({ success: true })
