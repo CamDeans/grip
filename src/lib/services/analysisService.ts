@@ -3,6 +3,11 @@ import { clientPromise, DB_NAME } from '../mongodb'
 import { getRepositoryFiles, getOrCloneRepository } from '../repository'
 import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/treeSitter/treeSitterAnalysis'
 import { buildTechnicalAnalysisPromptFromIdeation } from '@/lib/sandbox/ideationToTechnicalPrompt'
+import { gripLog } from '@/lib/gripLogger'
+
+// Analysis: ensure pipeline can advance even when LLM/tree-sitter fail; reuse recent analysis to avoid timeout
+const ANALYSIS_CACHE_MAX_AGE_MS = 2 * 60 * 60 * 1000 // 2 hours — reuse existing analysis so refresh doesn't timeout
+const ANALYSIS_RETRY_ONCE_MS = 2000 // delay before single retry for clone or tree-sitter
 
 // Cache configuration
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
@@ -48,16 +53,20 @@ function getLanguageStats(files: RepositoryFile[]): { [key: string]: number } {
 }
 
 export async function analyzeProject(projectId: string, repository: { owner: string, name: string }) {
+  gripLog(2, 'analyzeProject start', { projectId, repo: `${repository.owner}/${repository.name}` })
   try {
-    console.log('=== Analysis Service: analyzeProject ===');
-    console.log('Parameters:', { projectId, repository });
-    
     const projectObjectId = new ObjectId(projectId);
     
-    // Get files from cached repository
-    console.log('Fetching repository files...');
-    const files = await getOrCloneRepository(repository.owner, repository.name, projectId);
-    
+    // Get files from cached repository (retry once on transient failure)
+    let files: Awaited<ReturnType<typeof getOrCloneRepository>>
+    try {
+      files = await getOrCloneRepository(repository.owner, repository.name, projectId)
+    } catch (cloneErr) {
+      gripLog(2, 'getOrCloneRepository failed, retrying once', { projectId, error: cloneErr instanceof Error ? cloneErr.message : String(cloneErr) })
+      await new Promise((r) => setTimeout(r, ANALYSIS_RETRY_ONCE_MS))
+      files = await getOrCloneRepository(repository.owner, repository.name, projectId)
+    }
+
     console.log('Repository files result:', {
       fileCount: files?.length || 0,
       sampleFiles: files?.slice(0, 3).map(f => f.path) || []
@@ -71,27 +80,71 @@ export async function analyzeProject(projectId: string, repository: { owner: str
     const client = await clientPromise;
     const db = client.db(DB_NAME);
 
-    // Optional: use project ideation to shape tree-sitter analysis (same as sandbox)
+    // Fast path: repo is already in DB (cached). If we have a recent analysis doc, reuse it to avoid timeout.
+    const existingAnalysis = await db.collection('analyses').findOne(
+      { projectId: projectObjectId },
+      { projection: { repositoryAnalysis: 1, updatedAt: 1 } }
+    ) as { repositoryAnalysis?: unknown; updatedAt?: Date } | null
+    if (existingAnalysis?.repositoryAnalysis && existingAnalysis?.updatedAt) {
+      const age = Date.now() - new Date(existingAnalysis.updatedAt).getTime()
+      if (age < ANALYSIS_CACHE_MAX_AGE_MS) {
+        gripLog(2, 'analysis fast path (cached)', { projectId, fileCount: files.length })
+        await db.collection('analyses').updateOne(
+          { projectId: projectObjectId },
+          { $set: { updatedAt: new Date() }, $unset: { projectContextDocument: '' } }
+        )
+        return {
+          analysisId: projectObjectId,
+          repositoryStructure: { files: files.map(f => f.path), totalFiles: files.length, languages: getLanguageStats(files) },
+          totalTokens: 0
+        }
+      }
+    }
+
+    // Tree-sitter + optional LLM (retry once; on failure persist minimal analysis so pipeline can advance)
     let repositoryAnalysis: any | null = null
     let analysisTokensUsed = 0
-    try {
+    const runTreeSitter = async () => {
       const projectDoc = await db.collection('projects').findOne(
         { _id: projectObjectId },
         { projection: { ideation: 1 } }
       ) as { ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string } } | null
       const { prompt: technicalPrompt, totalTokens: ideationTokens } = await buildTechnicalAnalysisPromptFromIdeation(projectDoc?.ideation ?? null)
       analysisTokensUsed += ideationTokens
-      const treeResult = await analyzeRepositoryStructureWithTreeSitter(
+      return analyzeRepositoryStructureWithTreeSitter(
         repository.owner,
         repository.name,
         projectId,
         { technicalPrompt: technicalPrompt || undefined, repoFiles: files }
       )
+    }
+    try {
+      let treeResult: Awaited<ReturnType<typeof runTreeSitter>>
+      try {
+        treeResult = await runTreeSitter()
+      } catch (firstErr) {
+        gripLog(2, 'tree-sitter failed, retrying once', { projectId, error: firstErr instanceof Error ? firstErr.message : String(firstErr) })
+        await new Promise((r) => setTimeout(r, ANALYSIS_RETRY_ONCE_MS))
+        treeResult = await runTreeSitter()
+      }
       const { totalTokens: treeTokens, ...analysisForDb } = treeResult
       analysisTokensUsed += treeTokens ?? 0
       repositoryAnalysis = analysisForDb
     } catch (treeErr) {
-      console.warn('Main analysis: tree-sitter repository analysis failed (falling back to basic structure only):', treeErr)
+      console.warn('Main analysis: tree-sitter repository analysis failed (falling back to structure-only):', treeErr)
+      gripLog(2, 'tree-sitter fallback to structure-only', { projectId, error: treeErr instanceof Error ? treeErr.message : String(treeErr) })
+      // Guarantee something for repositoryAnalysis so hasAnalysis is true and pipeline can advance
+      const langStats = getLanguageStats(files)
+      repositoryAnalysis = {
+        projectId,
+        fileCount: files.length,
+        directoryStructure: files.map((f) => f.path),
+        mainLanguages: langStats,
+        components: [],
+        features: [],
+        fileAnalyses: files.slice(0, 50).map((f) => ({ path: f.path, analysis: '' })),
+        projectAnalysis: `Structure-only analysis (tree-sitter/LLM unavailable). ${files.length} files; languages: ${JSON.stringify(langStats)}. Plan and build can proceed using file list and structure.`,
+      }
     }
 
     try {
@@ -141,11 +194,7 @@ export async function analyzeProject(projectId: string, repository: { owner: str
         { upsert: true }
       );
 
-      console.log('Analysis document created or replaced:', {
-        id: analysis.upsertedId ?? analysis.insertedId,
-        fileCount: files.length,
-        languages: Object.keys(getLanguageStats(files))
-      });
+      gripLog(2, 'analysis complete', { projectId, fileCount: files.length, tokens: analysisTokensUsed })
 
       return {
         analysisId: analysis.upsertedId ?? analysis.insertedId,
@@ -195,11 +244,8 @@ export async function analyzeProject(projectId: string, repository: { owner: str
           minimalAnalysis,
           { upsert: true }
         );
-        console.log('Minimal analysis saved:', {
-          id: analysis.upsertedId ?? analysis.insertedId,
-          fileCount: files.length
-        });
-        
+        gripLog(2, 'minimal analysis saved (validation fallback)', { projectId, fileCount: files.length })
+
         return {
           analysisId: analysis.upsertedId ?? analysis.insertedId,
           repositoryStructure: {

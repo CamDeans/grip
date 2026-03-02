@@ -778,24 +778,23 @@ export async function analyzeRepositoryStructureWithTreeSitter(
 
   let projectAnalysisText: string
   let totalTokens = 0
-  if (technicalPrompt) {
-    const projectResult = await buildProjectAnalysisWithPrompt(rawSummary, technicalPrompt)
-    projectAnalysisText = projectResult.text
-    totalTokens += projectResult.totalTokens
-  } else {
-    projectAnalysisText = rawSummary
-  }
-
   let structuredAnalysis: SandboxStructuredAnalysis | null = null
   if (technicalPrompt) {
-    const structResult = await buildStructuredAnalysisWithPrompt(rawSummary, technicalPrompt, {
-      owner,
-      repo,
-      projectId,
-      mainLanguages,
-    })
+    // Run both LLM calls in parallel so first-time analysis is faster (avoids sequential 30–60s each).
+    const [projectResult, structResult] = await Promise.all([
+      buildProjectAnalysisWithPrompt(rawSummary, technicalPrompt),
+      buildStructuredAnalysisWithPrompt(rawSummary, technicalPrompt, {
+        owner,
+        repo,
+        projectId,
+        mainLanguages,
+      }),
+    ])
+    projectAnalysisText = projectResult.text
     structuredAnalysis = structResult.structured
-    totalTokens += structResult.totalTokens
+    totalTokens += projectResult.totalTokens + structResult.totalTokens
+  } else {
+    projectAnalysisText = rawSummary
   }
 
   return {
