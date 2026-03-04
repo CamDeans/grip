@@ -105,10 +105,21 @@ export async function analyzeProject(projectId: string, repository: { owner: str
     let repositoryAnalysis: any | null = null
     let analysisTokensUsed = 0
     const runTreeSitter = async () => {
-      const projectDoc = await db.collection('projects').findOne(
+      let projectDoc = await db.collection('projects').findOne(
         { _id: projectObjectId },
         { projection: { ideation: 1 } }
       ) as { ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string } } | null
+      // Defensive: if ideation missing or all empty, fetch full document (ensures user ideation is used when present)
+      const hasIdeation = projectDoc?.ideation && [projectDoc.ideation.goals, projectDoc.ideation.targetAudience, projectDoc.ideation.keyFeatures, projectDoc.ideation.technicalRequirements].some((v) => v && String(v).trim())
+      if (!hasIdeation) {
+        const fullDoc = await db.collection('projects').findOne({ _id: projectObjectId }) as { ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string } } | null
+        if (fullDoc?.ideation) {
+          projectDoc = fullDoc
+          gripLog(2, 'analysis using ideation from full project read', { projectId })
+        } else {
+          console.warn('[GRIP Analysis] No ideation on project', projectId, '— tree-sitter will run without user-ideation technical prompt. Check that project creation persisted ideation.')
+        }
+      }
       const { prompt: technicalPrompt, totalTokens: ideationTokens } = await buildTechnicalAnalysisPromptFromIdeation(projectDoc?.ideation ?? null)
       analysisTokensUsed += ideationTokens
       return analyzeRepositoryStructureWithTreeSitter(

@@ -112,6 +112,7 @@ export async function POST(
       )
     }
 
+    // Contract for fix-build: always return both errors and output so fix-build gets full error context (see CONCRETE-RULES and .cursorrules autonomous_build_fix).
     return NextResponse.json({
       success: result.success,
       errors: result.errors,

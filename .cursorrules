@@ -65,16 +65,86 @@ overview_in_flight_stages:
     - "Stage 1 (preparing): delay only; then Stage 2."
     - "Stage 2 (analysis): advance only when POST analysis/refresh returns 200 and analysis/status reports completion within 90s."
     - "Stage 3 (plan): advance only when POST plan and POST plan/sync-state both return 200."
-    - "Stage 4 (files): advance only when POST files/generate returns 200 and the NDJSON stream sends a 'done' event."
-    - "Stage 5 (build): advance to done ONLY when POST run-build returns 200 AND response body success === true (build actually succeeded). If success is false, clear modal and show error toast; do not show done."
-  on_failure: "On any stage failure, clear the modal (setSetupStep null) and stop automation; do not advance. Build failure (success: false) must close modal and show build-failed toast, not done."
+    - "Stage 4 (files): advance only when POST files/generate returns 200, stream sends 'done', AND errorCount === 0. If any file has ✗, GRIP autonomously retries via POST /api/projects/[id]/files/retry-failed (up to 3 attempts); user sees only 'GRIP is fixing N file(s)…'—no raw errors. Only if retries exhausted: stay on 'files', show one message and optional Debug area."
+    - "Stage 5 (build): advance to done ONLY when POST run-build returns 200 AND response body success === true. If success is false, GRIP autonomously fixes and retries (see autonomous_build_fix); do NOT prompt user to 'Retry build' or 'Continue'."
+  on_failure: "On stage failure: clear modal or stay on step. Stage 4: call retry-failed for failed paths (up to 3x); user never sees raw file errors during retry. Build: fix-build then run-build loop until success (up to MAX_BUILD_FIX_ATTEMPTS from overviewBuild.ts, e.g. 25); user sees only 'Fixing build… (attempt N of M)', no error dump. GRIP must NEVER stop trying to fix until build succeeds or user closes (MANDATORY_GRIP_BUILD_FIX_UNTIL_SUCCESS). After max retries, show single message and optional Debug."
+  build_preview_scroll: "Build preview list in the in-flight modal MUST have horizontal scroll (overflow-auto, min-w-max on list) so the user can read long file paths and template names off to the right."
+  debug_area: "Debug / errors section is HIDDEN while GRIP is auto-fixing (retryingFilesCount !== null or buildFixInProgress). Only after retries exhausted (or user dismisses) show collapsible Debug with failed files and build error lines. User never sees raw errors during autonomous fix."
+
+# GRIP autonomous confirmation and step validators (full automation; guide user through each step)
+# Concrete: validators = only advance when API returns success; then confirm via toast + step strip so user and GRIP keep context in order.
+grip_autonomous_confirmation:
+  rule: "GRIP validates each step before advancing and confirms to the user. Do not advance until current stage returns success (analysis hasAnalysis, plan + sync-state 200, files stream done with zero failed files, run-build success). After each stage succeeds: set confirmedStages, show confirmation toast, and update step-progress strip in modal. Keeps context in order and completes build correctly."
+  toasts: "sonnerToast.success: 'GRIP confirmed: Preparing complete' (Context loaded. Starting repository analysis.); 'GRIP confirmed: Analysis complete' (Repository analyzed. Proceeding to plan.); 'GRIP confirmed: Plan ready' (Development plan and phases set. Generating files.); 'GRIP confirmed: Files generated' (N file(s) created. Running build.); 'GRIP confirmed: Build successful' (Project builds cleanly. Automation complete.)."
+  step_progress: "In-flight modal shows '1. Prepare ✓ · 2. Analysis ✓ · 3. Plan … · 4. Files · 5. Build · 6. Done' (confirmed ✓, current …, pending ·). On done, show all six with checkmarks. Clear confirmedStages when modal is dismissed (setupStep null)."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md grip-autonomous-confirmation."
+
+# Autonomous build fix and retry (mandatory concrete rule)
+# When the build fails, GRIP must fix the failing file(s) and re-run the build autonomously; the user must NOT be prompted to "Retry build" or "Continue". Only when GRIP gets a clean successful build does the modal show done and the user leave the in-flight flow.
+autonomous_build_fix:
+  rule: "On run-build success: false, Overview MUST call POST /api/projects/[id]/fix-build with { errors, output }, then call run-build again. Loop up to MAX_BUILD_FIX_ATTEMPTS (overviewBuild.ts, e.g. 25) until build succeeds. Only then setSetupStep('done'). After max attempts, show error and single button 'Close and fix in Develop' (no Retry). User never sees raw build errors during the loop—only 'Fixing build… (attempt N of M)' (buildFixInProgress hides error dump)."
+  fix_build_api: "POST /api/projects/[id]/fix-build: body { errors: string[], output?: string }. Full error context: dashboard sends both; fix-build merges errors + output for path parsing and AI. runMainProject sends last 15k chars of build failure (8k for npm install) in errors; fix-build AI prompt gets up to 12k chars. Multi-file deterministic pass first (all parsed paths: layout/children, next/head→Metadata, robots/sitemap/postcss); then single-file AI fix. getFileContentByPath; save via saveProjectFile; return { fixed: true, filePath } or { fixed: true, filesFixed: string[] }."
+  node_env: "runMainProject (and runSandboxProject) MUST set env: { ...process.env, NODE_ENV: 'production' } (or 'development' for dev) when running npm build so Next.js does not warn about non-standard NODE_ENV."
+
+# Stage 4 autonomous file retry (mandatory)
+# When file generation has failures, GRIP retries failed paths via retry-failed API; user sees progress only.
+stage4_autonomous_file_retry:
+  rule: "When files/generate returns errorCount > 0, Overview MUST call POST /api/projects/[id]/files/retry-failed with body { paths: failedPaths } (up to 3 attempts). retry-failed uses same resolveTemplateForPath so e.g. public/robots.txt and public/sitemap.xml get full-file (not ts-utility). User sees only 'GRIP is fixing N file(s)…' toast and progress; no raw file errors until retries exhausted."
+  templates: "resolveTemplateForPath: public/robots.txt, public/sitemap.xml, public/*.txt|.xml → full-file so AI outputs real file content. fileGeneratorService isPlaceholderOrEmpty allows .txt/.xml when content looks like real robots or sitemap."
+  enforcement: "dashboard/projects/[id]/page.tsx run() loop with MAX_BUILD_FIX_ATTEMPTS from overviewBuild.ts (e.g. 25); src/app/api/projects/[id]/fix-build/route.ts (full context: errors + output; multi-file deterministic then AI); runMainProject.ts (15k/8k error slice, env for spawnSync build)."
+
+# File generation: user ideation first, then middles (concrete — no constraints)
+# The template engine MUST put user ideation first, always and at all times; then middles. No constraints may override the user's input.
+file_generation_from_middles:
+  rule: "USER IDEATION FIRST — ALWAYS AND AT ALL TIMES. Then middles (repo analysis alignment, plan, build scope). No constraints may override or dilute the user's input. The user's input and repo analysis alignment are first, always and at all times. This is concrete and mandatory."
+  order: "buildMiddleReferenceBlock() enforces: section 1 = USER IDEATION (FIRST — ALWAYS AND AT ALL TIMES); section 2 = MIDDLES (use to align with; never to constrain or override ideation). Mandatory rules from buildQualityPlan support ideation-first and do not add constraints that override user input."
+  middle_reference: "Section 1: user ideation (goals, target audience, key features, technical requirements), project title. Section 2: scope reminder, phase + step titles, stack/repo type, languages. Then buildQualityPlan constants (MANDATORY_GRIP_IDEATION_100_MATCH, MANDATORY_GRIP_IDEATION_ONLY_NO_FILLER, MANDATORY_GRIP_REPO_PIGGYBACK, MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE) which support ideation-first."
+  file_type_hint: "buildFileTypeHint() injects only when needed: root layout, root page, next.config, package.json — no constraints that override ideation."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md file-generation-from-middles."
 
 # Build automation logging (Vercel / server-side)
 # Required so we can find where errors occur when full file creation or a stage fails.
 build_automation_logging:
   rule: "Server-side logs for build automation use the prefix [GRIP Stage N] (N = 2, 3, 4, 5) so Vercel logs can be filtered. Same events are written to logs/grip.log via gripLogger; use tail -f logs/grip.log to track GRIP in the terminal."
-  locations: "analysis/refresh, plan, plan/sync-state, files/generate, run-build; fileGeneratorService when content is rejected as placeholder/empty; src/lib/gripLogger.ts writes to logs/grip.log."
+  locations: "analysis/refresh, plan, plan/sync-state, files/generate, run-build, fix-build; fileGeneratorService when content is rejected as placeholder/empty; src/lib/gripLogger.ts writes to logs/grip.log."
   do_not: "Do not remove or weaken these logs; they are required for diagnosing why GRIP is not writing full code for each file."
+
+# Plan scope, tier limits, and file-level scope (full build and fix-build tracing)
+# GRIP is fully empowered: no constraint intended to limit ideation fulfillment. Tier limits set high; scope and plan get full context. Frontend 100%; backend usage increased only.
+plan_scope_and_file_level_scope:
+  grip_repo: "GRIP is GitHub Repo-Analysis Intellectual Partner. All projects need a linked repo to move on with full analysis (clone, tree-sitter, patterns). Pre-plan and plan can run without repo using project-only build requirements; full scope and checklist come from repo + tree-sitter when repo is present."
+  tier_limits: "CONCRETE AND MANDATORY: No token limits per tier. tokenLimitsByTier.ts exports single full-power values only; tier is ignored. PLAN_CONTEXT_LIMITS (42k, 10k, 6k); ANALYSIS_RAW_SUMMARY_MAX_CHARS 80k; REPO_CONTEXT_LIMITS (18k, 180k, 220); CHAT_SECTION_BUDGETS (35k, 22k, 110k, 22k); SCOPE_REMINDER_MAX_CHARS 2500. getChatSectionBudgets returns same for all; no scaling by remaining tokens. Token-risk modal is mandatory: GET build-token-risk uses conservative estimates and warns when remaining < estimatedNeeded or < 450k; PreRunTokenModal blocks run until user clicks Continue anyway."
+  full_analysis_context: "GRIP must use 100% of analysis context alongside user ideation (mandatory). All tree-sitter/repo analysis (routes, entrypoints, symbol_index, import_graph, behavior_flows, user stories, acceptance criteria, capabilities, subsystems, boot sequence) must be passed into plan and chat; no arbitrary caps. buildQualityPlan MANDATORY_GRIP_FULL_ANALYSIS_CONTEXT; planGeneratorService and enhanced-chat inject it; planContextFromAnalysisService and prePlanBuildRequirementsService include full flows, stories, criteria, symbol_index, import_graph. See docs/CONCRETE-RULES-AND-ALIGNMENT.md full-analysis-context."
+  plan_prompt_files: "Plan prompt: 'files' array must list every file for full production-ready build. planGeneratorService receives buildRequirementsDocument slice 0–32k; plan max_tokens 10k. Post-plan: warn if suggestedFiles.length < 8."
+  file_level_scope: "files/generate and retry-failed pass scopeReminder slice SCOPE_REMINDER_MAX_CHARS (2500) from buildRequirementsDocument; template engine uses up to 2500 in middle reference."
+  fix_build_tracing: "fix-build uses buildRequirementsDocument slice SCOPE_REMINDER_MAX_CHARS (2500) so GRIP can trace and fix autonomously. fix-build receives full error context: run-build returns errors + output; fix-build merges both for path parsing and AI (up to 12k chars to model). runMainProject sends last 15k of build failure (8k install) in errors."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md tier-limits-and-plan-scope, file-level-scope-and-fix-tracing, grip-full-power-backend, grip-repo-required."
+
+# GRIP full power backend (empowerment — no constraint to limit fulfillment)
+# Backend limits increased so GRIP can use 100% of ideation and tree-sitter; mandatory concrete rules remain; frontend unchanged.
+grip_full_power_backend:
+  rule: "GRIP is fully empowered to maximize user ideation and tree-sitter analysis. No constraint is intended to limit fulfillment. Backend: pre-plan doc 42k, plan context 32k, scope reminder 1500, file gen max_tokens 12k/2k/4k, ideation enhancement 5k, fix-build scope 1500. Mandatory rules (ideation first, no mock data, full builds) remain; no other constraint should limit fulfillment."
+  buildQualityPlan: "GRIP_FULL_POWER_BACKEND constant; MANDATORY_GRIP_IDEATION_FIRST_THEN_MIDDLES includes 'GRIP is fully empowered to use 100% of the user's ideation and tree-sitter analysis'."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md grip-full-power-backend."
+
+# Token risk before run and out-of-tokens pause/resume (mandatory concrete rule)
+# So user is warned and can continue; if they run out mid-build, GRIP pauses and shows add/upgrade modal, then resumes when ready.
+token_risk_and_exhausted_pause:
+  pre_run: "Before starting plan/files/build, call GET /api/projects/[id]/build-token-risk. If atRisk, show modal: this may take more tokens, you may need to upgrade or add tokens to complete the build. User can 'Continue anyway' or go to Add tokens/Upgrade."
+  continue_anyway: "On Continue anyway, run with skipTokenRiskCheck: true so GRIP runs and loops until build is done (current plan cannot handle token limits so GRIP takes it upon itself to build out entirely)."
+  out_of_tokens: "If any step (analysis/refresh, plan, files/generate, fix-build) returns 403 with code TOKENS_EXHAUSTED, GRIP pauses, shows 'Out of tokens — add more or upgrade' modal with 'Resume when ready'. User adds tokens or upgrades, then clicks Resume; GRIP continues from the paused step (plan, files, or build)."
+  resume: "run() accepts startFromStep: 'plan' | 'files' | 'build'; when set, skip earlier stages and continue from that step."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md token-risk-and-exhausted-pause."
+
+# Repo piggyback and ideation alignment (mandatory concrete rule)
+# GRIP = analyze repo, duplicate closeness without copying; user ideation is the spec, repo is the blueprint. Tree-sitter compares repo to ideation step by step; plan and file gen use that alignment so the user gets exactly what they asked for. No partial files; complete code only.
+repo_piggyback_and_ideation_alignment:
+  rule: "GRIP analyzes the GitHub repo and produces a build that is as close a match to the repo as possible without copying code or content—piggybacking off the original creator's work. User ideation is the spec; repo is the blueprint. Compare repo analysis to user ideation step by step; align them so the user gets exactly what they asked for (matched capabilities from repo + missing capabilities implemented in new code). No partial files; every file must contain full, production-ready code that aligns with repo-derived scope and user ideation."
+  tree_sitter: "Tree-sitter buildStructuredAnalysisWithPrompt: step-by-step alignment instructions (matched_capabilities, missing_capabilities); populate ideation_alignment fully; max_tokens 5500. buildProjectAnalysisWithPrompt: compare repo to ideation step by step; note piggyback (structure/patterns without copying)."
+  pre_plan: "prePlanBuildRequirementsService injects MANDATORY_GRIP_REPO_PIGGYBACK; BUILD_REQUIREMENTS_DOC_MAX_CHARS 42k; enhanced 14k, raw 12k, research 2k; flows 25, user stories 30, acceptance 25 so full context reaches plan and file gen."
+  plan_and_file_gen: "planGeneratorService and templateEngineService full-file prompt inject MANDATORY_GRIP_REPO_PIGGYBACK. templateEngineService: 'No partial files: write full implementations that align with repo-derived scope and user ideation.'"
+  middles: "All middles (tree-sitter, plan context, styling, shadcn, etc.) serve this rule: no constraints that prevent full, aligned output. Claude has no restraint to writing complete files—deliver full implementations so the first build matches the user's expected outcome."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md repo-piggyback-and-ideation-alignment; buildQualityPlan.ts MANDATORY_GRIP_REPO_PIGGYBACK."
 
 # File generation templates (full code for every file)
 # Config/schema/lib/hooks/types and similar paths must use the full-file template so the AI returns complete runnable content (single FileContent variable). ts-utility is for utility modules where the functions array is populated; do not use ts-utility for paths that need full file body. Enforced: projectPlanningService.defaultTemplateForPath, templateEngineService full-file prompt.
@@ -106,17 +176,17 @@ expo_only_for_expo_apps:
   see_also: ".cursor/rules/expo-only-for-expo-apps.mdc; docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 18."
 
 # Next.js App Router root layout (mandatory concrete rule)
-# Prevents "children is not defined" and "next/head inside app directory" when generating app/layout.tsx.
+# Prevents "children is not defined" and "next/head inside app directory" when generating app/layout.tsx and all app-dir files.
 nextjs_app_router_layout:
-  rule: "When generating or editing app/layout.tsx or src/app/layout.tsx: (1) Define children in the function signature: export default function RootLayout({ children }: { children: React.ReactNode }). (2) Do NOT use next/head or <Head> in app directory — use export const metadata = { title, description }. (3) Return only <html><body>{children}</body></html>; do not wrap in fragment or <main>."
-  enforcement: "buildQualityPlan MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT injected in planGeneratorService, enhanced-chat, and legal-sandbox chat; templateEngineService full-file prompt includes CRITICAL block when file path is app/layout.tsx or src/app/layout.tsx."
+  rule: "When generating or editing app/layout.tsx or src/app/layout.tsx: (1) Define children in the function signature: export default function RootLayout({ children }: { children: React.ReactNode }). (2) FORBIDDEN in app/ and src/app/: next/head, import Head from 'next/head', <Head>. Use Metadata API only: export const metadata = { title, description }. (3) Return only <html><body>{children}</body></html>; do not wrap in fragment or <main>."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT and MANDATORY_GRIP_NEXTJS_METADATA_NO_HEAD injected in plan; file-type hint for all app/ and src/app/ files; fileGeneratorService rejects saving app-dir files containing next/head; fix-build replaces layout with canonical (Metadata API) when layout uses next/head."
   see_also: ".cursor/rules/nextjs-app-router-layout.mdc; docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 19."
 
 # Preview-ready: navigation and styling (mandatory concrete rule)
 # Ensures all buttons/links work and app is styled so user can use project in StackBlitz and first visit looks clean/modern.
 preview_ready_navigation_and_styling:
-  rule: "(1) All buttons and links must work: real href or router/Link to correct page; no dead links, no href='#', no empty onClick. (2) Web apps must be styled for clean, modern first-visit: use Tailwind (or project styling) consistently so GRIP Preview/StackBlitz does not show a plain, unstyled page; layout and components must look finished and eye-catching."
-  enforcement: "buildQualityPlan MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY and MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX injected in planGeneratorService, enhanced-chat, and legal-sandbox chat. In-flight modal only advances to done when build succeeds; these rules ensure generated code includes working navigation and styling."
+  rule: "(1) All buttons and links must work: real href or router/Link to correct page; no dead links, no href='#', no empty onClick. (2) EVERY LINK MUST HAVE A PAGE: Every route in header/footer/nav must have a corresponding page file in the plan (e.g. /about → app/about/page.tsx or src/app/about/page.tsx). No 404s—plan 'files' array must include a page for each nav route. (3) Styling: Root layout MUST import globals.css (import './globals.css') so Tailwind and base styles apply; include app/globals.css or src/app/globals.css in the plan. Web apps must be styled for clean, modern first-visit."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY, MANDATORY_GRIP_ALL_LINKS_HAVE_PAGES, MANDATORY_GRIP_LAYOUT_IMPORT_GLOBALS_CSS. Plan prompt and deriveSuggestedFilesFromPlan require a page per nav route and globals.css; templateEngineService root-layout hint injects layout import globals; canonical layout and export fallbacks include import './globals.css'."
   see_also: ".cursor/rules/preview-ready-navigation-and-styling.mdc; docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 20."
 
 # StackBlitz/preview: route to main page (mandatory concrete rule — enforce in generated code + export)
@@ -132,6 +202,20 @@ first_build_complete_deployable:
   rule: "The first automation build (in-flight modal: plan → file generation → build) MUST produce a 100% deployable product. Full styling (Tailwind/shadcn/Headless UI), full functionality, no mock data. GRIP does not exit the in-flight modal (does not show 'done') until the build succeeds; the product must be deployable at that point."
   enforcement: "buildQualityPlan MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE injected in planGeneratorService, enhanced-chat, and legal-sandbox chat. templateEngineService: for every web UI file (app/*, components/*, globals.css), injects this mandate + styling into full-file and generic variable prompts so generated code is styled and production-ready (isWebUIFilePath). In-flight modal: done only when run-build returns success (dashboard/projects/[id]/page.tsx)."
   see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 22 and section 'Styling and first-build enforcement in the middle'."
+
+# User uploads must be in the build (mandatory and concrete)
+# When user uploads images, files, docs, logos, favicons, GRIP adds them to the build.
+user_uploads_in_build:
+  rule: "When the user uploads images, files, docs, logos, or favicons, GRIP MUST add them to the build. Every uploaded asset must be included and referenced: logo in header, hero images on pages, favicon in layout metadata, reference docs for requirements/copy. No placeholders when the user provided assets."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_USER_UPLOADS_IN_BUILD. planGeneratorService injects uploads block with this rule; enhanced-chat injects 'User uploads — MANDATORY: add to the build'. Export includes all projectFiles (user uploads already in export)."
+  see_also: ".cursor/rules/user-uploads-must-use.mdc; docs/CONCRETE-RULES-AND-ALIGNMENT.md user-uploads-in-build."
+
+# Local / IDE run target (mandatory and concrete — same as iOS/Android)
+# When technical user wants to run in terminal/IDE instead of StackBlitz, treat like native mobile.
+local_ide_target:
+  rule: "GRIP supports both StackBlitz preview and local/IDE development. When project runTarget is 'local', treat like native iOS/Android: emphasize Export to GitHub and Download, then run in terminal or VS Code/Cursor; do not require StackBlitz first. Preview tab shows 'Local / IDE development' card; preflight for stackblitz reports that project is set for local run."
+  enforcement: "Project field runTarget: 'stackblitz' | 'local' (default stackblitz). PATCH/GET /api/projects/[id] support runTarget. Preflight when target=stackblitz and runTarget=local returns error. Preview page: run target dropdown; when local, show amber card and optional 'Open in StackBlitz anyway'. buildQualityPlan MANDATORY_GRIP_LOCAL_IDE_TARGET."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md local-ide-target."
 
 # Mobile-first builds and preview (mandatory concrete rule)
 # 100% iOS, 100% Android, and Expo: how GRIP handles them and how preview aligns with web (StackBlitz).
@@ -162,11 +246,24 @@ production_styling_middle:
   see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md section 'Styling and first-build enforcement in the middle'."
 
 # User ideation — 100% match in code and design (mandatory concrete rule)
-# GRIP must identify and add the user's ideation (goals, audience, features, technical requirements) into the app; build at 100% match.
+# GRIP must identify and add the user's ideation (goals, audience, features, technical requirements) into the app; build at 100% match. Main page must show project name, ideation-based content, and nav links.
 ideation_100_match:
-  rule: "GRIP MUST identify and add the user's ideation (goals, target audience, key features, technical requirements) into the code and design of the app. Build the code around meeting the user's ideation at 100% match. Do not ignore or dilute the user's ideation; no generic or off-the-shelf content. Every plan, file, and design decision must reflect the user's Goals, Target Audience, Key Features, and Technical Requirements."
-  enforcement: "buildQualityPlan MANDATORY_GRIP_IDEATION_100_MATCH; planGeneratorService injects it when build requirements exist (buildReqsText); templateEngineService full-file prompt receives ideation in projectContext and injects 'User ideation (build code and design to match 100%)' block + MANDATORY_GRIP_IDEATION_100_MATCH. files/generate route fetches project/sandbox ideation and passes it in every FileGenerationRequest; fileGeneratorService passes ideation to generateTemplateVariables. ideationEnhancementService and planContextFromAnalysisService use ideation for enhanced build requirements and layer prompts."
+  rule: "GRIP MUST identify and add the user's ideation (goals, target audience, key features, technical requirements) into the code and design of the app. Build the code around meeting the user's ideation at 100% match. Do not ignore or dilute the user's ideation; no generic or off-the-shelf content. Every plan, file, and design decision must reflect the user's Goals, Target Audience, Key Features, and Technical Requirements. The main/root page (app/page.tsx or src/app/page.tsx) MUST show the project name, ideation-based content (no generic 'Welcome' or 'Edit this page'), and navigation links to other app routes."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_IDEATION_100_MATCH; planGeneratorService injects it when build requirements exist (buildReqsText); templateEngineService full-file prompt receives ideation and projectTitle in projectContext and injects 'User ideation' block + MANDATORY_GRIP_IDEATION_100_MATCH. files/generate route fetches project/sandbox ideation and project title and passes them in every FileGenerationRequest; fileGeneratorService passes ideation and projectTitle to generateTemplateVariables. Root page uses full-file template (resolveTemplateForPath returns full-file for app/page.tsx, src/app/page.tsx); template engine appPageBlock mandates project name in UI, ideation content, and nav with Link. ideationEnhancementService and planContextFromAnalysisService use ideation for enhanced build requirements and layer prompts."
   see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md rule 26 and section 'User ideation — 100% match in code and design'."
+
+# Research instructions (optional project field)
+# User can add instructions for GRIP to do web research (e.g. public figure, company) and use real data in the build.
+research_instructions:
+  rule: "Project creation form MAY include an optional 'Research for GRIP' field (researchInstructions). When set, GRIP uses it in ideation enhancement and plan so the build incorporates real, findable data (e.g. from web research) instead of guessing."
+  enforcement: "Project model and schema have optional researchInstructions; ProjectForm.tsx; ideationEnhancementService.enhanceIdeationForBuild(researchInstructions); projectPlanningService passes it; planGeneratorService injects 'Research for GRIP' block when project.researchInstructions is present."
+
+# Full build — no partial builds (mandatory concrete rule)
+# GRIP must complete full builds only; no partial builds, no broken code files; app must be fully functional and production-ready.
+full_build_no_partial:
+  rule: "GRIP must complete full builds. No way for the user to receive a partial build (missing files, half-generated pages, broken imports). Every generated file must be valid, runnable code. App must build successfully, run, and be deployable; main page must reflect project name and ideation; navigation must work."
+  enforcement: "buildQualityPlan MANDATORY_GRIP_FULL_BUILD_NO_PARTIAL; planGeneratorService injects it."
+  see_also: "docs/CONCRETE-RULES-AND-ALIGNMENT.md (full-build-no-partial, autonomous-build-fix)."
 
 # Admin token reset and area of assurance (mandatory concrete rule)
 # Enables quick response when token/access errors affect admin or real users.

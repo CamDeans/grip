@@ -144,7 +144,7 @@ export async function runMainProject(projectId: string, isSandbox: boolean = fal
         }
         if (installResult.status !== 0) {
           const finalCombined = (installOut + '\n' + installErr).trim()
-          if (finalCombined) errors.push(`npm install failed:\n${finalCombined.slice(-2000)}`)
+          if (finalCombined) errors.push(`npm install failed:\n${finalCombined.slice(-8000)}`)
           return { success: false, errors, output: fullOutput, buildCommand: 'npm install' }
         }
       }
@@ -156,11 +156,13 @@ export async function runMainProject(projectId: string, isSandbox: boolean = fal
     const buildCommand = scripts.build ? 'npm run build' : scripts.dev ? 'npm run dev' : 'npm run build'
 
     const buildCmd = scripts.build ? ['run', 'build'] : ['run', 'dev']
+    const buildEnv = { ...process.env, NODE_ENV: scripts.build ? 'production' : 'development' }
     let buildResult = spawnSync('npm', buildCmd, {
       cwd: tmpDir,
       encoding: 'utf8',
       timeout: QUICK_BUILD_TIMEOUT_MS,
       shell: true,
+      env: buildEnv,
     })
     const timedOut = buildResult.status === null
     if (timedOut) {
@@ -173,6 +175,7 @@ export async function runMainProject(projectId: string, isSandbox: boolean = fal
         encoding: 'utf8',
         timeout: BUILD_TIMEOUT_MS,
         shell: true,
+        env: buildEnv,
       })
     }
     const buildOut = (buildResult.stdout ?? '').trim()
@@ -180,7 +183,7 @@ export async function runMainProject(projectId: string, isSandbox: boolean = fal
     fullOutput = fullOutput + '\n' + buildOut + '\n' + buildErr
     if (buildResult.status !== 0) {
       const combined = (buildOut + '\n' + buildErr).trim()
-      if (combined) errors.push(`${buildCommand} failed:\n${combined.slice(-3000)}`)
+      if (combined) errors.push(`${buildCommand} failed:\n${combined.slice(-15000)}`)
       return { success: false, errors, output: fullOutput, buildCommand }
     }
 

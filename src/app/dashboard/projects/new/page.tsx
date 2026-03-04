@@ -75,16 +75,12 @@ export default function NewProjectPage() {
   const [pendingUploadFiles, setPendingUploadFiles] = useState<File[]>([])
   const uploadInputRef = useRef<HTMLInputElement>(null)
 
-  // Validate form whenever data changes (repo required)
+  // Validate form: title, description, and repo required to create. Ideation can be partial—user can add more in Settings.
   useEffect(() => {
     const isValid = Boolean(
       formData.title.trim() &&
       formData.description.trim() &&
-      formData.repository &&
-      formData.ideation.goals.trim() &&
-      formData.ideation.targetAudience.trim() &&
-      formData.ideation.keyFeatures.trim() &&
-      formData.ideation.technicalRequirements.trim()
+      formData.repository
     )
     setIsFormValid(isValid)
   }, [formData])
@@ -121,8 +117,8 @@ export default function NewProjectPage() {
     e.preventDefault()
     if (!isFormValid) {
       toast({
-        title: "Incomplete form",
-        description: "Please fill in all required fields before submitting.",
+        title: "Missing required fields",
+        description: "Please enter a title, description, and select a GitHub repository.",
         variant: "destructive"
       })
       return
@@ -195,10 +191,10 @@ export default function NewProjectPage() {
           name: formData.repository.name.trim()
         },
         ideation: {
-          goals: formData.ideation.goals.trim(),
-          targetAudience: formData.ideation.targetAudience.trim(),
-          keyFeatures: formData.ideation.keyFeatures.trim(),
-          technicalRequirements: formData.ideation.technicalRequirements.trim()
+          goals: (formData.ideation?.goals ?? '').trim(),
+          targetAudience: (formData.ideation?.targetAudience ?? '').trim(),
+          keyFeatures: (formData.ideation?.keyFeatures ?? '').trim(),
+          technicalRequirements: (formData.ideation?.technicalRequirements ?? '').trim()
         }
       }
 
@@ -422,7 +418,6 @@ export default function NewProjectPage() {
                     className="form-input mt-1.5 w-full"
                     rows={4}
                     placeholder="e.g. Help users save recipes and search by ingredient. Keep it simple so anyone can use it."
-                    required
                   />
                 </div>
 
@@ -445,7 +440,6 @@ export default function NewProjectPage() {
                     className="form-input mt-1.5 w-full"
                     rows={4}
                     placeholder="e.g. Home cooks who want to organize recipes. Non-technical users who need a simple interface."
-                    required
                   />
                 </div>
 
@@ -468,7 +462,6 @@ export default function NewProjectPage() {
                     className="form-input mt-1.5 w-full"
                     rows={4}
                     placeholder="e.g. Add and edit recipes. Search by name or ingredient. Save favorites. Print or share a recipe."
-                    required
                   />
                 </div>
 
@@ -490,8 +483,7 @@ export default function NewProjectPage() {
                     }))}
                     className="form-input mt-1.5 w-full"
                     rows={4}
-                    placeholder="e.g. Must work on phones. Fast loading. Simple design. Or leave blank if you're not sure."
-                    required
+                    placeholder="e.g. Must work on phones. Fast loading. Simple design. Optional—add later in Settings if needed."
                   />
                 </div>
               </div>

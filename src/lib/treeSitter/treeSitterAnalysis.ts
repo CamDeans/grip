@@ -377,9 +377,9 @@ ${rawSummary}
 
 Output a short, technical project analysis (bullet points or short paragraphs) that:
 - Provides a top-level architecture synthesis: how routes, pages, and layouts are organized (L3-style multi-page structure if present or implied).
-- Compares the repo against the criteria and highlights fit, gaps, and recommendations.
+- Compares the repo against the user's ideation criteria step by step: what in the repo aligns with what the user wants (fit), and what the user wants that the repo does not have (gaps). We will deliver both: piggyback off the repo (structure, patterns, behavior) without copying code, and implement gaps so the user gets exactly what they asked for.
 - Calls out UX/UI and design-relevant patterns (screens, flows, components, layout approach) where present.
-- Notes what should be preserved or recreated in new code (patterns only, no copying) to meet the quality bar.
+- Notes what should be preserved or recreated in new code (patterns only, no copying) to achieve closeness to the repo and meet the quality bar.
 - If the "Top-level structure" section shows routes/pages/layouts, summarize that structure; if not, recommend an L3 file structure (multiple pages/screens/routes, shared layouts) for best-in-class output unless the user explicitly asked for a single landing only.
 Use the AST and structure summary to their fullest. No preamble.`
         }
@@ -413,11 +413,17 @@ async function buildStructuredAnalysisWithPrompt(
     const anthropic = new Anthropic({ apiKey })
     const response = await anthropic.messages.create({
       model: ANTHROPIC_MODEL_CHAT,
-      max_tokens: 3000,
+      max_tokens: 5500,
       messages: [
         {
           role: 'user',
           content: `You are G.R.I.P. in legal-sandbox mode. Using the AST/repo summary and the user's technical/ideation criteria, emit a single JSON object that matches EXACTLY the following schema. This JSON will be used as a structured analysis of the repo and its alignment to the user's requirements.
+
+MANDATORY — Step-by-step repo–ideation alignment:
+1. Compare the repo (AST/summary) to the user's ideation criteria point by point.
+2. matched_capabilities: list what the repo HAS that fulfills the user's ideation (routes, features, structure, UX). Each item = repo capability + evidence + which user story/requirement it maps to.
+3. missing_capabilities: list what the user WANTS that the repo does NOT have. For each: needed_capability, impact, recommended_approach. We will implement these in new code so the user gets exactly what they asked for.
+4. Goal: align repo and ideation so the build can piggyback off the repo (structure, patterns, behavior) without copying code, and add any missing pieces from ideation. User ideation is the spec; repo is the blueprint. Fill ideation_alignment fully so plan and file generation get the full picture.
 
 User technical/ideation criteria (normalized prompt):
 ${technicalPrompt}
@@ -431,7 +437,7 @@ Repo context:
 AST/repo summary:
 ${rawSummary}
 
-JSON schema (fill all fields; use empty strings/arrays where information is not available; do not add extra top-level keys).
+JSON schema (fill all fields; use empty strings/arrays where information is not available; do not add extra top-level keys). Populate ideation_alignment completely: user_ideation summary, normalized_requirements (user_stories, acceptance_criteria), matched_capabilities, missing_capabilities.
 For identity.project_type use exactly one of: web_app, full_stack, ai_ml_llm, ios_app, android_app, python_app, go_app, rust_app, cli_tool, game, interactive_3d, generic (choose the best fit for the repo).
 {
   "analysis_metadata": {

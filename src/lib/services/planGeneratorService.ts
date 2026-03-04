@@ -4,7 +4,7 @@ import { Anthropic } from '@anthropic-ai/sdk'
 import { getOrCreateProjectStructure } from './structureGeneratorService'
 import { IProjectStructureData } from '@/lib/models/ProjectStructure'
 import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
-import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONE_STACK_ONLY, MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS, MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT, MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT, MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE, MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY, MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE, MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS, MANDATORY_GRIP_IDEATION_100_MATCH, MANDATORY_GRIP_PRODUCTION_STYLING_MIDDLE } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONE_STACK_ONLY, MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS, MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT, MANDATORY_GRIP_NEXTJS_METADATA_NO_HEAD, MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT, MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE, MANDATORY_GRIP_FULL_BUILD_NO_PARTIAL, MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY, MANDATORY_GRIP_ALL_LINKS_HAVE_PAGES, MANDATORY_GRIP_LAYOUT_IMPORT_GLOBALS_CSS, MANDATORY_GRIP_USER_UPLOADS_IN_BUILD, MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE, MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS, MANDATORY_GRIP_IDEATION_100_MATCH, MANDATORY_GRIP_PRODUCTION_STYLING_MIDDLE, MANDATORY_GRIP_REPO_PIGGYBACK, MANDATORY_GRIP_FULL_ANALYSIS_CONTEXT } from '@/lib/constants/buildQualityPlan'
 import { buildPlanContextFromAnalysis, type PlanContextFromAnalysis } from './planContextFromAnalysisService'
 
 /**
@@ -105,6 +105,48 @@ export interface SuggestedPlanFile {
   description?: string
 }
 
+/** Mandatory file paths that must appear in the plan's suggestedFiles for a full build (no partial plans). */
+const MANDATORY_PLAN_FILE_PATHS: Array<{ path: string; description: string }> = [
+  { path: 'package.json', description: 'Dependencies and scripts for npm/StackBlitz preview' },
+  { path: 'tsconfig.json', description: 'TypeScript config for build and preview' },
+  { path: '.env.example', description: 'Env placeholders for StackBlitz/local run' },
+  { path: 'README.md', description: 'Project-specific README: name, description, getting started, tech stack' },
+]
+
+/**
+ * Ensure the plan's suggestedFiles list includes mandatory paths so the saved plan always defines a full build scope.
+ * If the AI omits package.json, layout, or page, we merge them in (phaseId 1) so file generation still gets a complete set.
+ */
+function ensureMandatoryFilesInSuggestedFiles(files: SuggestedPlanFile[]): SuggestedPlanFile[] {
+  const normalized = (p: string) => p.replace(/^\/+/, '').replace(/\\/g, '/')
+  const seen = new Set(files.map((f) => normalized(f.path)))
+  const out: SuggestedPlanFile[] = [...files]
+  for (const { path, description } of MANDATORY_PLAN_FILE_PATHS) {
+    const p = normalized(path)
+    if (seen.has(p)) continue
+    out.push({ path: p, phaseId: '1', description })
+    seen.add(p)
+  }
+  const paths = files.map((f) => normalized(f.path))
+  const useSrcApp = paths.some((p) => p.startsWith('src/app/'))
+  const useApp = paths.some((p) => p.startsWith('app/'))
+  const prefix = useSrcApp ? 'src/app' : useApp ? 'app' : null
+  if (prefix) {
+    const rootAppPaths = [
+      { path: `${prefix}/layout.tsx`, description: 'Root layout' },
+      { path: `${prefix}/page.tsx`, description: 'Root page (main landing)' },
+      { path: `${prefix}/globals.css`, description: 'Global CSS for Tailwind and base styles' },
+    ]
+    for (const { path, description } of rootAppPaths) {
+      const p = normalized(path)
+      if (seen.has(p)) continue
+      out.push({ path: p, phaseId: '1', description })
+      seen.add(p)
+    }
+  }
+  return out
+}
+
 export interface DevelopmentPlan {
   _id?: ObjectId
   projectId: ObjectId
@@ -142,17 +184,20 @@ export async function generateDevelopmentPlan(projectId: string, options?: Gener
 
     // Middle: tree-sitter analysis + ideation → plan context (checklist, layer prompts, stack guidance)
     let planContext: PlanContextFromAnalysis
+    let buildRequirementsDocument: string | undefined
     try {
       const analysis = await db.collection('analyses').findOne(
         { projectId: new ObjectId(projectId) },
-        { projection: { repositoryAnalysis: 1 } }
+        { projection: { repositoryAnalysis: 1, buildRequirementsDocument: 1 } }
       ) as {
         repositoryAnalysis?: {
           structuredAnalysis?: any
           projectAnalysis?: string
           mainLanguages?: Record<string, number>
         }
+        buildRequirementsDocument?: string
       } | null
+      buildRequirementsDocument = analysis?.buildRequirementsDocument
       const ra = analysis?.repositoryAnalysis
       const sa = ra?.structuredAnalysis
       planContext = buildPlanContextFromAnalysis({
@@ -188,8 +233,8 @@ export async function generateDevelopmentPlan(projectId: string, options?: Gener
     // Get project structure
     const structure = await getOrCreateProjectStructure(projectId)
 
-    // Generate initial plan (with plan context: checklist, layer prompts, stack guidance; token budget so plan fits user's allowance; user uploads so tasks use them)
-    const { plan, totalTokens } = await createInitialPlan(projectId, project, structure, planContext, options?.tokenBudgetHint, userUploadsSummary)
+    // Generate initial plan (with plan context + full build requirements doc when present; token budget; user uploads)
+    const { plan, totalTokens } = await createInitialPlan(projectId, project, structure, planContext, options?.tokenBudgetHint, userUploadsSummary, buildRequirementsDocument)
 
     // Add resource requirements
     await addResourceRequirements(plan)
@@ -231,7 +276,8 @@ async function createInitialPlan(
   structure: IProjectStructureData,
   planContext: PlanContextFromAnalysis,
   tokenBudgetHint?: string,
-  userUploadsSummary?: string
+  userUploadsSummary?: string,
+  buildRequirementsDocument?: string
 ): Promise<{ plan: DevelopmentPlan; totalTokens: number }> {
   const phases: Phase[] = [
     createPhase('1', 'Setup', 'Project setup and configuration', 0),
@@ -241,7 +287,7 @@ async function createInitialPlan(
     createPhase('5', 'Deployment', 'Deployment preparation and launch', 4)
   ]
 
-  const { totalTokens, suggestedFiles } = await addTasksToPhases(phases, project, structure, planContext, tokenBudgetHint, userUploadsSummary)
+  const { totalTokens, suggestedFiles } = await addTasksToPhases(phases, project, structure, planContext, tokenBudgetHint, userUploadsSummary, buildRequirementsDocument ?? undefined)
 
   const plan: DevelopmentPlan = {
     projectId: new ObjectId(projectId),
@@ -282,19 +328,27 @@ async function addTasksToPhases(
   structure: IProjectStructureData,
   planContext: PlanContextFromAnalysis,
   tokenBudgetHint?: string,
-  userUploadsSummary?: string
+  userUploadsSummary?: string,
+  buildRequirementsDocument?: string
 ): Promise<{ totalTokens: number; suggestedFiles?: SuggestedPlanFile[] }> {
   try {
-    // Prefer enhanced build requirements (from ideation enhancement step) so AI gets best input
-    const buildReqsText = project.enhancedBuildRequirements?.fullPromptText
-      ? project.enhancedBuildRequirements.fullPromptText
-      : project.ideation
-        ? `Project Goals: ${project.ideation.goals ?? ''}\nKey Features: ${project.ideation.keyFeatures ?? ''}\nTechnical Requirements: ${project.ideation.technicalRequirements ?? ''}`
-        : ''
+    // Full project build requirements from pre-plan analysis (single source of truth for full scope)
+    const fullBuildReqsBlock = (buildRequirementsDocument ?? '').trim()
+      ? `\n## Full project build requirements (pre-plan analysis — use this as the complete scope; plan must satisfy every item; no partial builds)\n${buildRequirementsDocument.trim().slice(0, 32_000)}\n`
+      : ''
+
+    // Fallback: enhanced build requirements or raw ideation when no pre-plan document
+    const buildReqsText = fullBuildReqsBlock
+      ? ''
+      : (project.enhancedBuildRequirements?.fullPromptText
+          ? project.enhancedBuildRequirements.fullPromptText
+          : project.ideation
+            ? `Project Goals: ${project.ideation.goals ?? ''}\nKey Features: ${project.ideation.keyFeatures ?? ''}\nTechnical Requirements: ${project.ideation.technicalRequirements ?? ''}`
+            : '')
 
     const checklistSummary = planContext.checklistSummary?.trim() ?? ''
     const checklistBlock = checklistSummary
-      ? `\nImplementation checklist from tree-sitter analysis (align phases and tasks with these; implement each in new code—do not copy repo source):\n${checklistSummary}\n\nIf the repo has both frontend and backend (e.g. separate api/ or server/ dirs), include a task for a single root dev script (e.g. concurrently or npm-run-all) so Run in StackBlitz starts the full stack.\n`
+      ? `\nImplementation checklist from tree-sitter analysis (align phases and tasks with these; implement each in new code—do not copy repo source):\n${checklistSummary}\n\nThis checklist is built from 100% of the tree-sitter analysis; use every item when defining phases and the "files" array. If the repo has both frontend and backend (e.g. separate api/ or server/ dirs), include a task for a single root dev script (e.g. concurrently or npm-run-all) so Run in StackBlitz starts the full stack.\n`
       : ''
 
     const lp = planContext.layerPrompts
@@ -319,8 +373,12 @@ async function addTasksToPhases(
         : ''
     const uploadsBlock =
       userUploadsSummary?.trim()
-        ? `\n## User uploads (use in implementation)\nThe user has uploaded images and/or reference docs. Include tasks that use them: ${userUploadsSummary}\n- Use image paths in the app (e.g. logo in header, hero image, favicon). Use reference docs for requirements or copy where relevant.\n`
+        ? `\n## User uploads — MANDATORY: add to build\n${MANDATORY_GRIP_USER_UPLOADS_IN_BUILD}\nUploaded assets for this project: ${userUploadsSummary}\n- Include in the "files" array any paths needed (e.g. public/ for images). Layout must reference favicon if user uploaded one; header/nav must use uploaded logo. Use reference docs for requirements or copy. Every uploaded image, file, doc, logo, and favicon must be added to the build.\n`
         : ''
+
+    const researchBlock = (project.researchInstructions ?? '').trim()
+      ? `\n## Research for GRIP (mandatory when building)\nThe user asked GRIP to do web research and use real data: "${String(project.researchInstructions).trim()}". When generating the plan and when generating code, GRIP must use real, findable data (e.g. public figure, company, client) so the app is not generic. Include this in task descriptions and ensure the build incorporates researched details.\n`
+      : ''
 
     // Build prompt for AI
     const prompt = `
@@ -329,14 +387,20 @@ Here's the project information:
 
 Project Title: ${project.title}
 Project Description: ${project.description}
+${fullBuildReqsBlock}
 ${buildReqsText ? `\nBuild requirements (use these for task scope and quality):\n${buildReqsText}\n` : ''}
 ${checklistBlock}
 ${layerBlock}
 ${stackBlock}${stylingBlock}
 ${repoTypeBlock}
 ${uploadsBlock}
+${researchBlock}
 
 ${MANDATORY_GRIP_PRODUCTION_STYLING_MIDDLE}
+
+${MANDATORY_GRIP_REPO_PIGGYBACK}
+
+${MANDATORY_GRIP_FULL_ANALYSIS_CONTEXT}
 
 ${MANDATORY_GRIP_APP_VS_USER_SETTINGS}
 
@@ -356,11 +420,15 @@ ${MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING}
 
 ${MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT}
 
+${MANDATORY_GRIP_NEXTJS_METADATA_NO_HEAD}
+
 ${MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY}
 
 ${MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX}
 
 ${MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE}
+
+${MANDATORY_GRIP_FULL_BUILD_NO_PARTIAL}
 
 ${buildReqsText ? MANDATORY_GRIP_IDEATION_100_MATCH : ''}
 
@@ -386,7 +454,11 @@ For each phase, I need a list of specific tasks. Each task should include:
 
 CRITICAL — One stack only: Choose exactly ONE stack for this project (Next.js web OR Expo/React Native mobile OR Vite, etc.) before listing any files. Do NOT mix Next.js with Expo in the same project (that causes npm ERESOLVE and StackBlitz cannot run). package.json must list only dependencies and scripts for that one stack. If the repo or goals indicate a web app, use only Next.js (or Vite)—do not add expo or react-native. If a mobile app, use only Expo—do not add next.
 
-Also output a "files" array listing every file path that should be created to implement this plan in one run. Each item: "path" (e.g. package.json, tsconfig.json, .env.example, README.md, src/app/layout.tsx), "phaseId" (e.g. "1"), "taskId" (e.g. "1.1", optional), "description" (short purpose). You MUST include: package.json (full dependencies and scripts matching the ONE chosen stack only), tsconfig.json (project-specific), .env.example (variables this app uses), README.md (project-specific: name, description, getting started, tech stack—never generic or .env copy), plus all app/layout/pages, API routes, lib, and components. Include all config, entry, and feature files needed for the complete build—not just a few placeholders.
+Also output a "files" array listing every file path that should be created to implement this plan in one run. Each item: "path" (e.g. package.json, tsconfig.json, .env.example, README.md, src/app/layout.tsx), "phaseId" (e.g. "1"), "taskId" (e.g. "1.1", optional), "description" (short purpose). Mandatory concrete rules for the "files" array:
+(1) List every file required for a full production-ready build—no partial builds. Include: package.json, tsconfig.json, .env.example, README.md, root layout (app/layout.tsx or src/app/layout.tsx), root page, app/globals.css or src/app/globals.css (Tailwind + base styles), all routes/pages, API routes, lib, and components.
+(2) EVERY LINK MUST HAVE A PAGE: Every route that will appear in the app's header, footer, or navigation MUST have a corresponding page in this list. If the app has links to /about, /programs, /contact, /booking, etc., you MUST include app/about/page.tsx, app/programs/page.tsx, app/contact/page.tsx, app/booking/page.tsx (or src/app/...). No link may point to a route without a page file—404 is forbidden. Derive the full set of nav routes from the user's ideation and include a page for each.
+(3) Root layout must import globals.css so styling applies (see layout/globals rule).
+Do NOT add Sanity or headless CMS unless the user's ideation or repo explicitly requires it.
 
 Please output your response as a JSON object with this structure:
 {
@@ -430,7 +502,7 @@ For dependencies, use task IDs (e.g., "1.1", "2.3") to reference tasks that must
     console.info('[GRIP Plan] Calling Anthropic API for plan phases/tasks (addTasksToPhases). Usage will appear in Anthropic console for this key.')
     const response = await anthropic.messages.create({
       model: ANTHROPIC_MODEL_CHAT,
-      max_tokens: 6000,
+      max_tokens: 10_000,
       temperature: 0.2,
       messages: [{ role: 'user', content: prompt }]
     })
@@ -483,7 +555,19 @@ For dependencies, use task IDs (e.g., "1.1", "2.3") to reference tasks that must
           taskId: typeof f.taskId === 'string' ? f.taskId : undefined,
           description: typeof f.description === 'string' ? f.description : undefined
         })).filter((f: SuggestedPlanFile) => f.path.length > 0)
+        // Remove Sanity/CMS paths unless build scope explicitly requires a CMS.
+        const scopeText = (buildRequirementsDocument ?? '') + (planData.phases ? JSON.stringify(planData.phases) : '')
+        const planMentionsCms = /sanity|cms|headless\s*cms|content\s*management|contentful|strapi/i.test(scopeText)
+        const isSanityPath = (p: string) => /^sanity(\/|\.config\.|\\|$)/i.test(p.replace(/\\/g, '/'))
+        if (!planMentionsCms && suggestedFiles.some((f) => isSanityPath(f.path))) {
+          suggestedFiles = suggestedFiles.filter((f) => !isSanityPath(f.path))
+          console.log('[GRIP Plan] removed Sanity/CMS paths from suggestedFiles—scope does not explicitly require a CMS.')
+        }
         if (suggestedFiles.length > 0) {
+          suggestedFiles = ensureMandatoryFilesInSuggestedFiles(suggestedFiles)
+          if (suggestedFiles.length < 8) {
+            console.warn(`[GRIP Plan] suggestedFiles has ${suggestedFiles.length} files; full production-ready builds typically need config, layout, page, routes, lib, and components. Plan may be partial—check scope.`, { fileCount: suggestedFiles.length })
+          }
           return { totalTokens, suggestedFiles }
         }
       }
@@ -710,9 +794,9 @@ export async function deriveSuggestedFilesFromPlan(projectId: string): Promise<S
     )
     .join('\n\n')
 
-  const prompt = `Given this development plan, output a JSON object with a single key "files": an array of file paths to implement the full build. Each item: {"path":"package.json","phaseId":"1","description":"deps"} or {"path":"src/app/layout.tsx","phaseId":"1","taskId":"1.1","description":"root layout"}. Include package.json, tsconfig.json, .env.example, README.md, src/app/layout.tsx, src/app/page.tsx, API routes, lib, and key components. For Next.js do not include src/index.tsx; for Vite include src/index.tsx. Output only valid JSON: no markdown, no trailing commas, no text after the closing brace. List 25-50 key files.
+  const prompt = `Given this development plan, output a JSON object with a single key "files": an array of file paths to implement the full build. Each item: {"path":"package.json","phaseId":"1","description":"deps"} or {"path":"src/app/layout.tsx","phaseId":"1","taskId":"1.1","description":"root layout"}. Include: package.json, tsconfig.json, .env.example, README.md, src/app/layout.tsx, src/app/globals.css, src/app/page.tsx, a page for every route that appears in navigation (e.g. src/app/about/page.tsx, src/app/contact/page.tsx—every link in header/footer must have a page; no 404s), API routes, lib, and key components. For Next.js do not include src/index.tsx; for Vite include src/index.tsx. Do NOT add Sanity or headless CMS unless the plan explicitly requires it. Output only valid JSON: no markdown, no trailing commas. List 25-50 key files.
 
-GRIP mandatory rule: every file in this list will be generated with full code. Only list files for which full implementations can be provided—no placeholders, no empty files, no "add later" stubs. Every path you list must receive complete, runnable code.
+GRIP mandatory: every file gets full code; every link in the app must have a corresponding page in this list (no 404s). Root layout must import globals.css so styling applies.
 
 Plan:
 ${phasesText}`
@@ -720,7 +804,7 @@ ${phasesText}`
   try {
     const response = await anthropic.messages.create({
       model: ANTHROPIC_MODEL_CHAT,
-      max_tokens: 4000,
+      max_tokens: 10_000,
       temperature: 0.2,
       messages: [{ role: 'user', content: prompt }]
     })
@@ -735,7 +819,7 @@ ${phasesText}`
       data = parseFilesArrayFromText(content)
     }
 
-    const files: SuggestedPlanFile[] = Array.isArray(data.files)
+    let files: SuggestedPlanFile[] = Array.isArray(data.files)
       ? data.files
           .map((f: { path?: string; phaseId?: string; taskId?: string; description?: string }) => ({
             path: typeof f.path === 'string' ? f.path.trim() : '',
@@ -745,6 +829,17 @@ ${phasesText}`
           }))
           .filter((f: SuggestedPlanFile) => f.path.length > 0)
       : []
+
+    // Remove Sanity/CMS paths unless the plan explicitly requires a CMS (user asked for Sanity, headless CMS, or content management).
+    const planMentionsCms = /sanity|cms|headless\s*cms|content\s*management|contentful|strapi/i.test(phasesText)
+    const isSanityPath = (p: string) => /^sanity(\/|\.config\.|\\|$)/i.test(p.replace(/\\/g, '/'))
+    if (!planMentionsCms && files.some((f) => isSanityPath(f.path))) {
+      const before = files.length
+      files = files.filter((f) => !isSanityPath(f.path))
+      if (before !== files.length) {
+        console.log(`[GRIP Plan] removed ${before - files.length} Sanity/CMS file path(s)—plan does not explicitly require a CMS.`)
+      }
+    }
 
     if (files.length > 0) {
       const db = (await clientPromise).db()

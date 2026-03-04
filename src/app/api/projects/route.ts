@@ -3,7 +3,7 @@ import { requireAppAccess, requireTokenBalance } from '@/lib/access'
 import { NextResponse } from 'next/server'
 import { ObjectId } from 'mongodb'
 import { Project } from '@/lib/models/Project'
-import { connectToDatabase } from '@/lib/mongodb'
+import { connectToDatabase, clientPromise, DB_NAME } from '@/lib/mongodb'
 import type { IProject } from '@/lib/models/Project'
 import mongoose from 'mongoose'
 
@@ -34,9 +34,19 @@ export async function POST(req: Request) {
     await connectToDatabase()
     console.log('Connected to database')
 
-    // Create project with user ID
+    // Normalize ideation so it always has all four keys (default ''). Ensures save succeeds when user leaves some fields blank.
+    const rawIdeation = data.ideation && typeof data.ideation === 'object' ? data.ideation : {}
+    const ideation = {
+      goals: String(rawIdeation.goals ?? '').trim(),
+      targetAudience: String(rawIdeation.targetAudience ?? '').trim(),
+      keyFeatures: String(rawIdeation.keyFeatures ?? '').trim(),
+      technicalRequirements: String(rawIdeation.technicalRequirements ?? '').trim()
+    }
+
+    // Create project with user ID and normalized ideation
     const projectToCreate = {
       ...data,
+      ideation,
       userId: session.user.id
     }
 
@@ -66,6 +76,19 @@ export async function POST(req: Request) {
     try {
       const savedProject = await project.save()
       console.log('Project saved successfully:', JSON.stringify(savedProject, null, 2))
+
+      // Force-persist ideation with native driver so analysis/plan/file-gen always see it (avoids Mongoose/nested-doc quirks).
+      try {
+        const client = await clientPromise
+        const db = client.db(DB_NAME)
+        await db.collection('projects').updateOne(
+          { _id: savedProject._id },
+          { $set: { ideation, updatedAt: new Date() } }
+        )
+        console.log('Project creation: ideation force-persisted for', savedProject._id)
+      } catch (persistErr) {
+        console.warn('Project creation: ideation force-persist failed (non-fatal):', persistErr)
+      }
 
       // Do not run analysis here — it can take 60s+ (clone + tree-sitter + LLM) and causes 504 on Vercel.
       // Analysis runs when the user lands on the project Overview (POST analysis/refresh in the pipeline).

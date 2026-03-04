@@ -9,6 +9,9 @@ import { getProjectState } from '@/lib/services/projectStateService'
 import { getProjectContextForHighLevelFiles } from '@/lib/services/highLevelFileContextService'
 import { getProjectFilesForExport } from '@/lib/services/exportService'
 import { validatePackageJsonForStackBlitz } from '@/lib/services/packageJsonRequirementsService'
+import { saveProjectFile } from '@/lib/services/gripProjectActions'
+import { CANONICAL_ROOT_LAYOUT, CANONICAL_GLOBALS_CSS, isRootLayoutPath, isGlobalsCssPath } from '@/lib/constants/canonicalAppFiles'
+import { SCOPE_REMINDER_MAX_CHARS } from '@/lib/constants/tokenLimitsByTier'
 import { gripLog, gripLogRunStart } from '@/lib/gripLogger'
 import { ObjectId } from 'mongodb'
 import clientPromise, { DB_NAME } from '@/lib/mongodb'
@@ -37,8 +40,12 @@ function resolveTemplateForPath(
 ): string {
   const normalized = fullPath.replace(/^\/+/, '').replace(/\\/g, '/')
   const baseName = normalized.split('/').pop() || ''
-  // Tailwind/PostCSS/Next config: always full-file so AI generates valid config (ts-utility would produce stubs and fail)
-  if (baseName.startsWith('tailwind.config.') || baseName.startsWith('postcss.config.') || baseName.startsWith('next.config.')) {
+  // Root page (main landing): use full-file so AI gets ideation + project name + nav links mandate (no generic Welcome)
+  if ((normalized === 'app/page.tsx' || normalized === 'app/page.jsx' || normalized === 'src/app/page.tsx' || normalized === 'src/app/page.jsx') && (framework === 'next' || !framework)) {
+    return 'full-file'
+  }
+  // Tailwind/PostCSS/Next/Sanity config: always full-file so AI generates valid config (ts-utility would produce stubs and fail)
+  if (baseName.startsWith('tailwind.config.') || baseName.startsWith('postcss.config.') || baseName.startsWith('next.config.') || baseName === 'sanity.config.ts' || baseName === 'sanity.config.js') {
     return 'full-file'
   }
   // lib, types, sanity: full-file so AI returns complete code (ts-utility produces stubs and causes ✗)
@@ -47,6 +54,9 @@ function resolveTemplateForPath(
   if (/^sanity\/.+\.(ts|js)$/.test(normalized)) return 'full-file'
   // public SVG: full-file so AI returns valid SVG (ts-utility would produce wrong content)
   if (/^public\/.+\.svg$/i.test(normalized)) return 'full-file'
+  // public robots.txt, sitemap.xml, and other plain text/XML: full-file so AI returns real file content (ts-utility produces TS/JS and gets rejected)
+  if (/^public\/robots\.txt$/i.test(normalized) || /^public\/sitemap\.xml$/i.test(normalized)) return 'full-file'
+  if (/^public\/.+\.(txt|xml)$/i.test(normalized)) return 'full-file'
   // Next.js App Router API routes (app or src/app)
   const isNextAppApiRoute = /^(src\/)?app\/api\/.+\/route\.(ts|js)$/.test(normalized)
   if (isNextAppApiRoute) {
@@ -102,9 +112,24 @@ export async function POST(
       })
     }
 
+    // Dedupe by full path so we never process the same file twice in one run (avoids duplicate key + duplicate UI rows)
+    const seenPaths = new Set<string>()
+    const dedupedFiles = filesToGenerate.filter((f) => {
+      const path = (f.path || '').replace(/^\/+/, '')
+      const name = f.name || path.split('/').pop() || 'file.txt'
+      const full = path && !path.endsWith(name) ? `${path.replace(/\/$/, '')}/${name}` : path || name
+      if (seenPaths.has(full)) return false
+      seenPaths.add(full)
+      return true
+    })
+    if (dedupedFiles.length < filesToGenerate.length) {
+      console.info('[GRIP Stage 4] files/generate deduped', { from: filesToGenerate.length, to: dedupedFiles.length })
+      gripLog(4, 'files/generate deduped', { from: filesToGenerate.length, to: dedupedFiles.length })
+    }
+
     gripLogRunStart('files/generate', id)
-    console.info('[GRIP Stage 4] files/generate start', { projectId: id, fileCount: filesToGenerate.length, streamProgress })
-    gripLog(4, 'files/generate start', { projectId: id, fileCount: filesToGenerate.length, streamProgress })
+    console.info('[GRIP Stage 4] files/generate start', { projectId: id, fileCount: dedupedFiles.length, streamProgress })
+    gripLog(4, 'files/generate start', { projectId: id, fileCount: dedupedFiles.length, streamProgress })
     console.info('[GRIP Files] POST /files/generate: generating', filesToGenerate.length, 'files. Anthropic will be called for templates that need AI (e.g. nextjs-page, react-component). Ensure ANTHROPIC_API_KEY is set.')
     // Ensure project structure exists so generateFile() can run (plan may have suggestedFiles but structure not yet stored)
     let structure = await getProjectStructure(id)
@@ -165,22 +190,38 @@ export async function POST(
     }
 
     let projectIdeation: IdeationForGen = null
+    let projectTitle: string | undefined
+    let scopeReminder: string | undefined
     try {
       const client = await clientPromise
       const db = client.db(DB_NAME)
       let proj = await db.collection('projects').findOne(
         { _id: new ObjectId(id) },
-        { projection: { ideation: 1 } }
-      ) as { ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string } } | null
+        { projection: { ideation: 1, title: 1 } }
+      ) as { ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string }; title?: string } | null
       if (!proj) {
         proj = await db.collection('sandboxProjects').findOne(
           { _id: new ObjectId(id) },
-          { projection: { ideation: 1 } }
-        ) as { ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string } } | null
+          { projection: { ideation: 1, title: 1 } }
+        ) as { ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string }; title?: string } | null
+      }
+      // Defensive: if ideation missing or all empty, fetch full project so file gen uses user ideation when present
+      const hasIdeation = proj?.ideation && [proj.ideation.goals, proj.ideation.targetAudience, proj.ideation.keyFeatures, proj.ideation.technicalRequirements].some((v) => v && String(v).trim())
+      if (proj && !hasIdeation) {
+        const fullProj = await db.collection('projects').findOne({ _id: new ObjectId(id) }) as typeof proj | null
+        if (fullProj?.ideation) proj = fullProj
       }
       if (proj?.ideation) projectIdeation = proj.ideation
+      if (proj?.title && String(proj.title).trim()) projectTitle = String(proj.title).trim()
+      const analysis = await db.collection('analyses').findOne(
+        { projectId: new ObjectId(id) },
+        { projection: { buildRequirementsDocument: 1 } }
+      ) as { buildRequirementsDocument?: string } | null
+      if (analysis?.buildRequirementsDocument?.trim()) {
+        scopeReminder = analysis.buildRequirementsDocument.trim().slice(0, SCOPE_REMINDER_MAX_CHARS)
+      }
     } catch (e) {
-      console.warn('Could not load project ideation for file generation:', e)
+      console.warn('Could not load project ideation/title/scope for file generation:', e)
     }
 
     if (streamProgress) {
@@ -189,7 +230,7 @@ export async function POST(
         async start(controller) {
           const emit = (obj: object) => controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'))
           try {
-            emit({ type: 'start', total: filesToGenerate.length })
+            emit({ type: 'start', total: dedupedFiles.length })
             const emittedFolders = new Set<string>()
             const generatedFiles: Array<{ id?: string; name?: string; path?: string; success: boolean; error?: string }> = []
             let streamTotalTokens = 0
@@ -199,7 +240,7 @@ export async function POST(
             const primaryLanguages = highLevelContext?.primaryLanguages ?? undefined
             const mainLanguages = highLevelContext?.mainLanguages ?? undefined
 
-            for (const file of filesToGenerate) {
+            for (const file of dedupedFiles) {
               const meta = file.generationMetadata || {}
               const filePath = file.path || ''
               const fileName = file.name || filePath.split('/').pop() || 'file.txt'
@@ -243,31 +284,55 @@ export async function POST(
                 repoCategory,
                 primaryLanguages,
                 mainLanguages,
-                ideation: projectIdeation ?? undefined
+                ideation: projectIdeation ?? undefined,
+                projectTitle,
+                scopeReminder
               }
 
               try {
                 console.info('[GRIP Stage 4] file start', { path: fullPath, templateId })
                 gripLog(4, 'file start', { path: fullPath, templateId })
-                const result = await generateFile(genRequest)
-                if (result.success) {
-                  streamTotalTokens += result.totalTokens ?? 0
-                  generatedFiles.push({ id: result.fileId, name: file.name, path: file.path, success: true })
-                  emit({ type: 'file', path: fullPath, name: fileName, success: true })
-                  console.info('[GRIP Stage 4] file success', { path: fullPath })
-                  gripLog(4, 'file success', { path: fullPath })
+                // Root layout: write canonical directly so we never get next/head rejection (App Router Metadata API only).
+                if (isRootLayoutPath(fullPath)) {
+                  const saveResult = await saveProjectFile(id, fullPath, CANONICAL_ROOT_LAYOUT)
+                  if (!saveResult.ok) throw new Error(saveResult.message || 'Failed to save layout')
+                  const version = saveResult.version ?? 1
+                  generatedFiles.push({ id: '', name: file.name, path: file.path, success: true })
+                  emit({ type: 'file', path: fullPath, name: fileName, success: true, version, templateId })
+                  console.info('[GRIP Stage 4] file success (canonical layout)', { path: fullPath })
+                  gripLog(4, 'file success (canonical layout)', { path: fullPath })
+                } else if (isGlobalsCssPath(fullPath)) {
+                  // globals.css: write canonical CSS so StackBlitz/Next never get JS/TS in a .css file (syntax error).
+                  const saveResult = await saveProjectFile(id, fullPath, CANONICAL_GLOBALS_CSS)
+                  if (!saveResult.ok) throw new Error(saveResult.message || 'Failed to save globals.css')
+                  const version = saveResult.version ?? 1
+                  generatedFiles.push({ id: '', name: file.name, path: file.path, success: true })
+                  emit({ type: 'file', path: fullPath, name: fileName, success: true, version, templateId })
+                  console.info('[GRIP Stage 4] file success (canonical globals.css)', { path: fullPath })
+                  gripLog(4, 'file success (canonical globals.css)', { path: fullPath })
                 } else {
-                  throw new Error(result.error || 'Unknown error generating file')
+                  const result = await generateFile(genRequest)
+                  if (result.success) {
+                    streamTotalTokens += result.totalTokens ?? 0
+                    const version = (result as { version?: number }).version ?? 1
+                    generatedFiles.push({ id: result.fileId, name: file.name, path: file.path, success: true })
+                    emit({ type: 'file', path: fullPath, name: fileName, success: true, version, templateId })
+                    console.info('[GRIP Stage 4] file success', { path: fullPath, version })
+                    gripLog(4, 'file success', { path: fullPath, version })
+                  } else {
+                    throw new Error(result.error || 'Unknown error generating file')
+                  }
                 }
               } catch (error) {
                 const errMsg = error instanceof Error ? error.message : 'Unknown error'
                 console.error('[GRIP Stage 4] file failed', { path: fullPath, name: fileName, templateId, error: errMsg }, error)
                 gripLog(4, 'file failed', { path: fullPath, name: fileName, templateId, error: errMsg })
                 generatedFiles.push({ name: file.name, path: file.path, success: false, error: errMsg })
-                emit({ type: 'file', path: fullPath, name: fileName, success: false, error: errMsg })
+                emit({ type: 'file', path: fullPath, name: fileName, success: false, error: errMsg, templateId })
               }
             }
 
+            const totalProcessed = dedupedFiles.length
             if (streamTotalTokens > 0 && session.user?.id) {
               await addTokenUsage(session.user.id, streamTotalTokens).catch((err) =>
                 console.warn('Projects files generate (stream): failed to record token usage', err)
@@ -275,8 +340,8 @@ export async function POST(
             }
             const errorCount = generatedFiles.filter((f) => !f.success).length
             const successCount = generatedFiles.filter((f) => f.success).length
-            console.info('[GRIP Stage 4] files/generate stream complete', { projectId: id, successCount, errorCount, total: filesToGenerate.length })
-            gripLog(4, 'files/generate stream complete', { projectId: id, successCount, errorCount, total: filesToGenerate.length })
+            console.info('[GRIP Stage 4] files/generate stream complete', { projectId: id, successCount, errorCount, total: totalProcessed })
+            gripLog(4, 'files/generate stream complete', { projectId: id, successCount, errorCount, total: totalProcessed })
             if (errorCount > 0) {
               console.warn('[GRIP Stage 4] GRIP mandatory: every file must have code.', { failedPaths: generatedFiles.filter((f) => !f.success).map((f) => f.path), errorCount })
               gripLog(4, 'GRIP mandatory: every file must have code', { failedPaths: generatedFiles.filter((f) => !f.success).map((f) => f.path), errorCount })
@@ -367,7 +432,9 @@ export async function POST(
           repoCategory,
           primaryLanguages,
           mainLanguages,
-          ideation: projectIdeation ?? undefined
+          ideation: projectIdeation ?? undefined,
+          projectTitle,
+          scopeReminder
         }
 
         const result = await generateFile(genRequest)

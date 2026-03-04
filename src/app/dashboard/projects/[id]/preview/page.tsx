@@ -23,6 +23,7 @@ export default function ProjectPreviewPage() {
     deployedUrl?: string
     mongodbCollectionName?: string | null
     repoCategory?: 'ios_swift' | 'android_kotlin'
+    runTarget?: 'stackblitz' | 'local'
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [collections, setCollections] = useState<string[]>([])
@@ -173,14 +174,48 @@ export default function ProjectPreviewPage() {
 
   const hasRepo = !!(project?.repository?.owner && project?.repository?.name) || !!project?.exportedRepoUrl
   const isNativeMobile = project?.repoCategory === 'ios_swift' || project?.repoCategory === 'android_kotlin'
+  const isLocalTarget = project?.runTarget === 'local'
+
+  async function setRunTarget(value: 'stackblitz' | 'local') {
+    if (!projectId) return
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runTarget: value }),
+      })
+      if (!res.ok) throw new Error('Failed to update')
+      setProject((p) => (p ? { ...p, runTarget: value } : null))
+      sonnerToast.success(value === 'local' ? 'Run target set to Local / IDE' : 'Run target set to StackBlitz')
+    } catch {
+      sonnerToast.error('Could not update run target')
+    }
+  }
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold">Preview — get your app into your hands</h2>
-        <p className="text-sm text-text-secondary mt-1">
-          Run it in the browser, download it, or create a new GitHub repo and deploy. No terminal required for the first two.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold">Preview — get your app into your hands</h2>
+          <p className="text-sm text-text-secondary mt-1">
+            Run it in the browser, download it, or create a new GitHub repo and deploy. No terminal required for the first two.
+          </p>
+        </div>
+        {!isNativeMobile && (
+          <div className="flex items-center gap-2">
+            <Label htmlFor="run-target" className="text-xs text-muted-foreground whitespace-nowrap">Run target:</Label>
+            <select
+              id="run-target"
+              aria-label="Run target: StackBlitz browser or Local/IDE"
+              value={project?.runTarget ?? 'stackblitz'}
+              onChange={(e) => setRunTarget(e.target.value as 'stackblitz' | 'local')}
+              className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+            >
+              <option value="stackblitz">StackBlitz (browser)</option>
+              <option value="local">Local / IDE (Export, then run in terminal or VS Code)</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -190,7 +225,7 @@ export default function ProjectPreviewPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {/* 1. Run in browser (StackBlitz) — hidden for native iOS/Android */}
+          {/* 1. Run in browser (StackBlitz) — card for native iOS/Android or Local/IDE target */}
           {isNativeMobile ? (
             <Card className="border-amber-500/20 bg-amber-500/5">
               <CardHeader>
@@ -203,6 +238,31 @@ export default function ProjectPreviewPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-text-secondary">Use <strong>Export to GitHub</strong> or <strong>Download project</strong> below, then open the repo in {project?.repoCategory === 'ios_swift' ? 'Xcode' : 'Android Studio'}.</p>
+              </CardContent>
+            </Card>
+          ) : isLocalTarget ? (
+            <Card className="border-amber-500/20 bg-amber-500/5">
+              <CardHeader>
+                <CardTitle className="text-base">Local / IDE development</CardTitle>
+                <CardDescription>
+                  This project is set for local development. Use <strong>Export to GitHub</strong> or <strong>Download project</strong> below, then run in your terminal (e.g. <code className="text-xs bg-muted px-1 rounded">npm run dev</code>) or open in VS Code/Cursor. No need to use StackBlitz unless you want a quick browser preview.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-text-secondary">Use <strong>Export to GitHub</strong> or <strong>Download project</strong> below to get the files, then run locally in your preferred environment.</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 gap-2"
+                  onClick={() => {
+                    const url = `/dashboard/open-stackblitz/${projectId}`
+                    window.open(url, '_blank', 'noopener,noreferrer')
+                    sonnerToast.info('Opening StackBlitz (optional)', { description: 'You can also run locally.' })
+                  }}
+                >
+                  <Play className="h-4 w-4" />
+                  Open in StackBlitz anyway (optional)
+                </Button>
               </CardContent>
             </Card>
           ) : (

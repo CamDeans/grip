@@ -15,6 +15,8 @@ export interface IProject extends Document {
     keyFeatures: string;
     technicalRequirements: string;
   };
+  /** Optional: instructions for GRIP to do web research (e.g. public figure, client, company) and use real data in the build. */
+  researchInstructions?: string;
   userId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -46,50 +48,10 @@ const RepositorySchema = new mongoose.Schema({
 }, { _id: false })
 
 const IdeationSchema = new mongoose.Schema({
-  goals: { 
-    type: String, 
-    required: true, 
-    trim: true,
-    validate: {
-      validator: function(v: string) {
-        return v.length > 0;
-      },
-      message: 'Goals cannot be empty'
-    }
-  },
-  targetAudience: { 
-    type: String, 
-    required: true, 
-    trim: true,
-    validate: {
-      validator: function(v: string) {
-        return v.length > 0;
-      },
-      message: 'Target audience cannot be empty'
-    }
-  },
-  keyFeatures: { 
-    type: String, 
-    required: true, 
-    trim: true,
-    validate: {
-      validator: function(v: string) {
-        return v.length > 0;
-      },
-      message: 'Key features cannot be empty'
-    }
-  },
-  technicalRequirements: { 
-    type: String, 
-    required: true, 
-    trim: true,
-    validate: {
-      validator: function(v: string) {
-        return v.length > 0;
-      },
-      message: 'Technical requirements cannot be empty'
-    }
-  }
+  goals: { type: String, default: '', trim: true },
+  targetAudience: { type: String, default: '', trim: true },
+  keyFeatures: { type: String, default: '', trim: true },
+  technicalRequirements: { type: String, default: '', trim: true }
 }, { _id: false })
 
 const ProjectSchema = new mongoose.Schema<IProject>({
@@ -111,16 +73,12 @@ const ProjectSchema = new mongoose.Schema<IProject>({
       message: 'Repository must have both owner and name if present'
     }
   },
-  ideation: { 
+  ideation: {
     type: IdeationSchema,
-    required: true,
-    validate: {
-      validator: function(v: any) {
-        return v && v.goals && v.targetAudience && v.keyFeatures && v.technicalRequirements;
-      },
-      message: 'All ideation fields are required'
-    }
+    required: false,
+    default: () => ({ goals: '', targetAudience: '', keyFeatures: '', technicalRequirements: '' })
   },
+  researchInstructions: { type: String, required: false, trim: true },
   userId: { type: String, required: true, trim: true }
 }, {
   timestamps: true,
@@ -150,44 +108,14 @@ ProjectSchema.pre('save', function(next) {
       throw new Error(`Missing required fields: ${missingFields.join(', ')}`)
     }
 
-    // Initialize ideation if not set
-    if (!this.ideation) {
-      console.log('Initializing empty ideation object')
-      this.ideation = {
-        goals: '',
-        targetAudience: '',
-        keyFeatures: '',
-        technicalRequirements: ''
-      }
-    }
-
-    // Validate ideation fields
-    if (!this.ideation.goals?.trim() || 
-        !this.ideation.targetAudience?.trim() || 
-        !this.ideation.keyFeatures?.trim() || 
-        !this.ideation.technicalRequirements?.trim()) {
-      const missingFields = []
-      if (!this.ideation.goals?.trim()) missingFields.push('ideation.goals')
-      if (!this.ideation.targetAudience?.trim()) missingFields.push('ideation.targetAudience')
-      if (!this.ideation.keyFeatures?.trim()) missingFields.push('ideation.keyFeatures')
-      if (!this.ideation.technicalRequirements?.trim()) missingFields.push('ideation.technicalRequirements')
-      
-      console.error('Missing ideation fields:', missingFields)
-      throw new Error(`Missing ideation fields: ${missingFields.join(', ')}`)
-    }
-
-    // Ensure all ideation fields are strings and trimmed
-    const originalIdeation = { ...this.ideation }
-    this.ideation.goals = String(this.ideation.goals).trim()
-    this.ideation.targetAudience = String(this.ideation.targetAudience).trim()
-    this.ideation.keyFeatures = String(this.ideation.keyFeatures).trim()
-    this.ideation.technicalRequirements = String(this.ideation.technicalRequirements).trim()
-
-    if (JSON.stringify(originalIdeation) !== JSON.stringify(this.ideation)) {
-      console.log('Ideation fields were trimmed:', {
-        before: originalIdeation,
-        after: this.ideation
-      })
+    // Normalize ideation: ensure object and all four keys exist (default ''). Allow partial/empty so project creation always succeeds and user can add more in Settings.
+    if (!this.ideation || typeof this.ideation !== 'object') {
+      this.ideation = { goals: '', targetAudience: '', keyFeatures: '', technicalRequirements: '' }
+    } else {
+      this.ideation.goals = String(this.ideation.goals ?? '').trim()
+      this.ideation.targetAudience = String(this.ideation.targetAudience ?? '').trim()
+      this.ideation.keyFeatures = String(this.ideation.keyFeatures ?? '').trim()
+      this.ideation.technicalRequirements = String(this.ideation.technicalRequirements ?? '').trim()
     }
 
     // Validate repository if present

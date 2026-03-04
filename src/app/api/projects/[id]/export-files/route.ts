@@ -207,7 +207,7 @@ export async function GET(
       // non-fatal
     }
 
-    // Next.js: ALWAYS inject a known-good root layout + page for StackBlitz so GET / returns 200.
+    // Next.js: inject root layout + page ONLY when truly missing. Never overwrite existing content so GRIP-generated ideation is never replaced.
     try {
       const pkgRaw = files['package.json']
       if (pkgRaw) {
@@ -219,10 +219,17 @@ export async function GET(
           const appDir = useSrcApp ? 'src/app' : 'app'
           const layoutPath = `${appDir}/layout.tsx`
           const pagePath = `${appDir}/page.tsx`
-          files[layoutPath] = `import type { Metadata } from 'next'
+          const projectTitle = (project?.title || 'App').trim() || 'App'
+          const existingLayout = files[layoutPath]
+          const existingPage = files[pagePath]
+          const hasLayout = typeof existingLayout === 'string' && existingLayout.trim().length > 0
+          const hasPage = typeof existingPage === 'string' && existingPage.trim().length > 0
+          if (!hasLayout) {
+            files[layoutPath] = `import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
+import './globals.css'
 
-export const metadata: Metadata = { title: 'App', description: 'GRIP project' }
+export const metadata: Metadata = { title: '${projectTitle.replace(/'/g, "\\'")}', description: 'GRIP project' }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -232,15 +239,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   )
 }
 `
-          files[pagePath] = `export default function Home() {
+          }
+          if (!hasPage) {
+            const safeTitle = projectTitle.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$')
+            files[pagePath] = `export default function Home() {
   return (
     <main style={{ padding: '2rem', fontFamily: 'system-ui' }}>
-      <h1>Welcome</h1>
-      <p>Your app is running. Edit this page in the editor.</p>
+      <h1>Welcome to ${safeTitle}</h1>
+      <p>Run plan and build in GRIP to generate your full app with ideation, navigation, and styling.</p>
     </main>
   )
 }
 `
+          }
         }
       }
     } catch {

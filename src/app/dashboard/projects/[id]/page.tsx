@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui'
-import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, ChevronDown, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle, Plus, RefreshCw, Trash2, Rocket, Folder } from 'lucide-react'
+import { CheckCircle2, Code, Lightbulb, MessageSquare, PenTool, PuzzleIcon, ChevronRight, ChevronDown, Book, ArrowRight, Zap, ClipboardIcon, HelpCircle, Loader2, ExternalLink, FileCode, Terminal, Circle, ListChecks, FlaskConical, GitBranch, Shield, ArrowUpCircle, Plus, RefreshCw, Trash2, Rocket, Folder, Bug } from 'lucide-react'
 import { refreshTokenUsage } from '@/lib/tokenRefresh'
 import { toast as sonnerToast } from 'sonner'
 import Link from 'next/link'
@@ -79,17 +79,53 @@ export default function ProjectOverviewPage() {
   const [loadingSandboxes, setLoadingSandboxes] = useState(false)
   const [creatingSandbox, setCreatingSandbox] = useState(false)
   const [setupStep, setSetupStep] = useState<null | 'preparing' | 'analysis' | 'plan' | 'files' | 'build' | 'done'>(null)
+  /** Stages GRIP has validated/confirmed (for autonomous guidance and user visibility) */
+  const [confirmedStages, setConfirmedStages] = useState<Array<'preparing' | 'analysis' | 'plan' | 'files' | 'build'>>([])
   /** Live preview: folders and files as they are generated (streaming from files/generate) */
-  const [buildPreviewItems, setBuildPreviewItems] = useState<Array<{ type: 'folder' | 'file'; path: string; name?: string; success?: boolean; error?: string }>>([])
+  const [buildPreviewItems, setBuildPreviewItems] = useState<Array<{ type: 'folder' | 'file'; path: string; name?: string; success?: boolean; error?: string; version?: number; templateId?: string }>>([])
   const [buildPreviewTotal, setBuildPreviewTotal] = useState(0)
   /** When file generation returns buildArtifactAlignment and !ok, show this so user can fix in Develop or rerun */
   const [buildArtifactAlignmentWarning, setBuildArtifactAlignmentWarning] = useState<string | null>(null)
+  /** When build fails, keep modal open and show this so user can retry or fix; GRIP must not close until build succeeds or user dismisses */
+  const [buildFailureMessage, setBuildFailureMessage] = useState<string | null>(null)
+  /** Last build error lines for debugging area (when run-build returns success: false) */
+  const [buildErrorsList, setBuildErrorsList] = useState<string[]>([])
+  /** When true, show expanded debugging area (failed files + build errors) */
+  const [debugAreaExpanded, setDebugAreaExpanded] = useState(false)
+  /** When non-null, GRIP is autonomously retrying N failed files; user sees progress only, no error details */
+  const [retryingFilesCount, setRetryingFilesCount] = useState<number | null>(null)
+  /** When true, GRIP is in the build fix loop; user sees "Fixing build…" only, no raw error dump */
+  const [buildFixInProgress, setBuildFixInProgress] = useState(false)
+  /** Pre-run: token risk warning — user may run out; show modal and allow "Continue anyway" (mandatory concrete rule) */
+  const [showPreRunTokenModal, setShowPreRunTokenModal] = useState(false)
+  const [preRunTokenRiskPayload, setPreRunTokenRiskPayload] = useState<{
+    atRisk: boolean
+    remainingTokens: number
+    estimatedNeeded: number
+    fileCount: number
+    tier: string
+    message?: string
+    upgradeSuggestions: Array<{ action: 'upgrade' | 'add_tokens'; targetTier?: string; label: string }>
+  } | null>(null)
+  /** Out-of-tokens during run: GRIP pauses and shows add/upgrade modal; user can resume when ready */
+  const [tokenExhaustedPaused, setTokenExhaustedPaused] = useState(false)
+  const [tokenExhaustedStep, setTokenExhaustedStep] = useState<'plan' | 'files' | 'build' | null>(null)
+  const [tokenExhaustedPayload, setTokenExhaustedPayload] = useState<{
+    message?: string
+    code?: string
+    tier?: string
+    upgradeSuggestions?: Array<{ action: string; targetTier?: string; label: string }>
+  } | null>(null)
   const [uploads, setUploads] = useState<Array<{ path: string; filename: string; size: number; purpose: string }>>([])
   const [loadingUploads, setLoadingUploads] = useState(false)
   const [uploading, setUploading] = useState(false)
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const inFlightToastRef = useRef<HTMLDivElement>(null)
   const inFlightCardRef = useRef<HTMLDivElement>(null)
+  /** Prevent duplicate run (e.g. Strict Mode or double effect); only one plan→files→build at a time */
+  const runInProgressRef = useRef(false)
+  /** Expose run with options so pre-run and token-exhausted modals can continue or resume */
+  const runWithOptionsRef = useRef<(opts?: { skipTokenRiskCheck?: boolean; startFromStep?: 'plan' | 'files' | 'build' }) => void>(() => {})
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const projectId = params?.id || ''
@@ -314,13 +350,48 @@ export default function ProjectOverviewPage() {
     if (!projectId || project?.isSandbox || !project?.repository?.owner || !project?.repository?.name) return
     if (autoPlanRanRef.current === projectId && rerunTrigger === 0) return
 
-    const run = async () => {
+    type RunOptions = { skipTokenRiskCheck?: boolean; startFromStep?: 'plan' | 'files' | 'build' }
+    const run = async (options?: RunOptions) => {
+      if (runInProgressRef.current) return
+      runInProgressRef.current = true
+      setTokenExhaustedPaused(false)
+      setTokenExhaustedStep(null)
+      setTokenExhaustedPayload(null)
       try {
+        const startFromStep = options?.startFromStep
+        const skipTokenRiskCheck = options?.skipTokenRiskCheck === true
+
+        // Mandatory: pre-run token risk — warn user and allow "Continue anyway"; if at risk and not accepted, pause
+        if (!skipTokenRiskCheck && !startFromStep) {
+          try {
+            const riskRes = await fetch(`/api/projects/${projectId}/build-token-risk`, { credentials: 'include' })
+            if (riskRes.ok) {
+              const riskData = await riskRes.json().catch(() => ({}))
+              if (riskData.atRisk && riskData.remainingTokens != null) {
+                setPreRunTokenRiskPayload({
+                  atRisk: true,
+                  remainingTokens: riskData.remainingTokens ?? 0,
+                  estimatedNeeded: riskData.estimatedNeeded ?? 0,
+                  fileCount: riskData.fileCount ?? 0,
+                  tier: riskData.tier ?? 'starter',
+                  message: riskData.message,
+                  upgradeSuggestions: Array.isArray(riskData.upgradeSuggestions) ? riskData.upgradeSuggestions : [],
+                })
+                setShowPreRunTokenModal(true)
+                runInProgressRef.current = false
+                return
+              }
+            }
+          } catch (_) { /* ignore; proceed with run */ }
+        }
+
         // Show in-flight modal immediately so user sees GRIP is working (concrete: start on trigger, don't wait for API)
         setSetupStep('preparing')
+        setBuildFailureMessage(null)
+        setConfirmedStages([])
 
-        // If not a forced rerun, check whether plan and build phases are already complete — skip to save tokens
-        if (rerunTrigger === 0) {
+        // If not a forced rerun and not resuming from a step, check whether plan and build phases are already complete — skip to save tokens
+        if (rerunTrigger === 0 && !startFromStep) {
           const [stateRes, planRes] = await Promise.all([
             fetch(`/api/projects/${projectId}/state`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
             fetch(`/api/projects/${projectId}/plan`).then((r) => r.json()).then((d) => !!d?.plan).catch(() => false),
@@ -342,8 +413,14 @@ export default function ProjectOverviewPage() {
         autoPlanRanRef.current = projectId
         if (rerunTrigger > 0) setRerunTrigger(0)
 
+        // When resuming from 'files' or 'build', skip preparing + analysis + plan
+        if (startFromStep !== 'files' && startFromStep !== 'build') {
         // Stage 1: preparing — brief delay (modal already shown at start of run())
         await new Promise((resolve) => setTimeout(resolve, 1800))
+        setConfirmedStages((prev) => (prev.includes('preparing') ? prev : [...prev, 'preparing']))
+        sonnerToast.success('GRIP confirmed: Preparing complete', {
+          description: 'Context loaded. Starting repository analysis.',
+        })
 
         // Stage 2: analysis — do not advance to plan until analysis has completed successfully
         if (!hasAnalysis) {
@@ -377,6 +454,15 @@ export default function ProjectOverviewPage() {
           clearTimeout(timeoutId)
           if (!refreshRes.ok) {
             const errBody = await refreshRes.text().catch(() => '')
+            let errData: { code?: string; message?: string; tier?: string; upgradeSuggestions?: Array<{ action: string; targetTier?: string; label: string }> } = {}
+            try { errData = JSON.parse(errBody) } catch { /* ignore */ }
+            if (refreshRes.status === 403 && errData?.code === 'TOKENS_EXHAUSTED') {
+              setTokenExhaustedPaused(true)
+              setTokenExhaustedStep('plan')
+              setTokenExhaustedPayload({ message: errData.message, code: errData.code, tier: errData.tier, upgradeSuggestions: errData.upgradeSuggestions })
+              runInProgressRef.current = false
+              return
+            }
             console.warn('[GRIP Overview] Stage 2 (analysis) failed: analysis/refresh returned', refreshRes.status, errBody)
             sonnerToast.error('Analysis failed', {
               description: refreshRes.status === 504 ? 'Server timed out. Try again or run analysis from the Repo tab.' : errBody || refreshRes.statusText,
@@ -404,13 +490,34 @@ export default function ProjectOverviewPage() {
             setSetupStep(null)
             return
           }
+          setConfirmedStages((prev) => (prev.includes('analysis') ? prev : [...prev, 'analysis']))
+          sonnerToast.success('GRIP confirmed: Analysis complete', {
+            description: 'Repository analyzed. Proceeding to plan.',
+          })
         }
 
         // Stage 3: plan — do not advance to files until plan + sync-state both return success
+        if (hasAnalysis) {
+          setConfirmedStages((prev) => {
+            const next = [...prev]
+            if (!next.includes('preparing')) next.push('preparing')
+            if (!next.includes('analysis')) next.push('analysis')
+            return next
+          })
+        }
         setSetupStep('plan')
         const planPostRes = await fetch(`/api/projects/${projectId}/plan`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
         if (!planPostRes.ok) {
           const errBody = await planPostRes.text()
+          let errData: { code?: string; message?: string; tier?: string; upgradeSuggestions?: Array<{ action: string; targetTier?: string; label: string }> } = {}
+          try { errData = JSON.parse(errBody) } catch { /* ignore */ }
+          if (planPostRes.status === 403 && errData?.code === 'TOKENS_EXHAUSTED') {
+            setTokenExhaustedPaused(true)
+            setTokenExhaustedStep('plan')
+            setTokenExhaustedPayload({ message: errData.message, code: errData.code, tier: errData.tier, upgradeSuggestions: errData.upgradeSuggestions })
+            runInProgressRef.current = false
+            return
+          }
           console.warn('[GRIP Overview] Plan POST failed:', planPostRes.status, errBody || planPostRes.statusText, '— Anthropic plan phase was not run. Check server logs and ANTHROPIC_API_KEY.')
           setSetupStep(null)
           return
@@ -422,8 +529,14 @@ export default function ProjectOverviewPage() {
           setSetupStep(null)
           return
         }
+        setConfirmedStages((prev) => (prev.includes('plan') ? prev : [...prev, 'plan']))
+        sonnerToast.success('GRIP confirmed: Plan ready', {
+          description: 'Development plan and phases set. Generating files.',
+        })
+        } // end: startFromStep !== 'files' && !== 'build'
 
         // Stage 4: files — do not advance to build until files/generate returns 200 and stream sends 'done'
+        if (startFromStep !== 'build') {
         setSetupStep('files')
         setBuildPreviewItems([])
         setBuildPreviewTotal(0)
@@ -442,12 +555,24 @@ export default function ProjectOverviewPage() {
         })
         if (!filesRes.ok) {
           const errBody = await filesRes.text()
+          let errData: { code?: string; message?: string; tier?: string; upgradeSuggestions?: Array<{ action: string; targetTier?: string; label: string }> } = {}
+          try { errData = JSON.parse(errBody) } catch { /* ignore */ }
+          if (filesRes.status === 403 && errData?.code === 'TOKENS_EXHAUSTED') {
+            setTokenExhaustedPaused(true)
+            setTokenExhaustedStep('files')
+            setTokenExhaustedPayload({ message: errData.message, code: errData.code, tier: errData.tier, upgradeSuggestions: errData.upgradeSuggestions })
+            runInProgressRef.current = false
+            return
+          }
           console.warn('[GRIP Overview] Stage 4 (files) failed: files/generate returned', filesRes.status, errBody?.slice(0, 200))
           setSetupStep(null)
           return
         }
         let fileCount = 0
         let stage4Done = false
+        let stage4ErrorCount = 0
+        /** Paths that failed in this run; used for autonomous retry (user never sees raw errors) */
+        let failedPathsFromStream: string[] = []
         if (filesRes.body) {
           const reader = filesRes.body.getReader()
           const decoder = new TextDecoder()
@@ -472,19 +597,35 @@ export default function ProjectOverviewPage() {
                     error?: string
                     successCount?: number
                     errorCount?: number
-                    generatedFiles?: Array<{ success?: boolean }>
+                    generatedFiles?: Array<{ success?: boolean; path?: string; name?: string }>
                     tokenUsage?: { tokenAllowance: number; tokensUsedThisPeriod: number }
                     buildArtifactAlignment?: { ok: boolean; errors?: string[]; suggestions?: string[]; missingDeps?: string[] }
                   }
                   if (event.type === 'start' && typeof event.total === 'number') {
                     setBuildPreviewTotal((prev) => Math.max(prev, event.total!))
-                  } else if (event.type === 'folder' && event.path) {
+                  } else                   if (event.type === 'folder' && event.path) {
                     setBuildPreviewItems((prev) => [...prev, { type: 'folder', path: event.path! }])
                   } else if (event.type === 'file' && event.path) {
-                    setBuildPreviewItems((prev) => [...prev, { type: 'file', path: event.path!, name: event.name, success: event.success, error: event.error }])
+                    const version = (event as { version?: number }).version
+                    const templateId = (event as { templateId?: string }).templateId
+                    setBuildPreviewItems((prev) => {
+                      const rest = prev.filter((x) => !(x.type === 'file' && x.path === event.path))
+                      return [...rest, { type: 'file' as const, path: event.path!, name: event.name, success: event.success, error: event.error, version, templateId }]
+                    })
                   } else if (event.type === 'done') {
                     stage4Done = true
                     fileCount = event.successCount ?? event.generatedFiles?.filter((f) => f.success).length ?? 0
+                    stage4ErrorCount = event.errorCount ?? event.generatedFiles?.filter((f) => !f.success).length ?? 0
+                    failedPathsFromStream = (event.generatedFiles || [])
+                      .filter((f) => !f.success)
+                      .map((f) => {
+                        const p = String(f.path ?? '').trim()
+                        const n = String(f.name ?? '').trim()
+                        if (!p && !n) return ''
+                        if (p && n && !p.endsWith(n)) return p.replace(/\/$/, '') + '/' + n
+                        return p || n
+                      })
+                      .filter(Boolean)
                     if (event.tokenUsage) refreshTokenUsage(event.tokenUsage)
                     if (event.buildArtifactAlignment && !event.buildArtifactAlignment.ok) {
                       const msg = event.buildArtifactAlignment.errors?.length
@@ -508,6 +649,18 @@ export default function ProjectOverviewPage() {
           const filesData = await filesRes.json().catch(() => ({}))
           stage4Done = true
           fileCount = filesData.skipped ? (filesData.fileCount ?? 0) : (filesData.successCount ?? filesData.generatedFiles?.filter((f: { success?: boolean }) => f.success).length ?? 0)
+          stage4ErrorCount = filesData.errorCount ?? (filesData.generatedFiles?.filter((f: { success?: boolean }) => !f.success).length ?? 0)
+          const genFiles = (filesData.generatedFiles || []) as Array<{ success?: boolean; path?: string; name?: string }>
+          failedPathsFromStream = genFiles
+            .filter((f) => !f.success)
+            .map((f) => {
+              const p = String(f.path ?? '').trim()
+              const n = String(f.name ?? '').trim()
+              if (!p && !n) return ''
+              if (p && n && !p.endsWith(n)) return p.replace(/\/$/, '') + '/' + n
+              return p || n
+            })
+            .filter(Boolean)
           if (filesData.tokenUsage) refreshTokenUsage(filesData.tokenUsage)
         }
         if (!stage4Done) {
@@ -515,37 +668,162 @@ export default function ProjectOverviewPage() {
           setSetupStep(null)
           return
         }
+        // Mandatory: when any file failed, GRIP autonomously retries (user sees progress only, no error details).
+        const MAX_FILE_RETRY_ATTEMPTS = 3
+        let pathsToRetry = failedPathsFromStream
+        if (stage4ErrorCount > 0 && pathsToRetry.length > 0) {
+          setSetupStep('files')
+          for (let attempt = 1; attempt <= MAX_FILE_RETRY_ATTEMPTS; attempt++) {
+            setRetryingFilesCount(pathsToRetry.length)
+            sonnerToast.info('GRIP is fixing ' + pathsToRetry.length + ' file(s)…', {
+              description: 'Updating code to meet mandatory rules. No action needed.',
+            })
+            const retryRes = await fetch(`/api/projects/${projectId}/files/retry-failed`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ paths: pathsToRetry }),
+            })
+            if (!retryRes.ok && retryRes.status === 403) {
+              const retryErrBody = await retryRes.text().catch(() => '')
+              let retryErrData: { code?: string; message?: string; tier?: string; upgradeSuggestions?: Array<{ action: string; targetTier?: string; label: string }> } = {}
+              try { retryErrData = JSON.parse(retryErrBody) } catch { /* ignore */ }
+              if (retryErrData?.code === 'TOKENS_EXHAUSTED') {
+                setTokenExhaustedPaused(true)
+                setTokenExhaustedStep('files')
+                setTokenExhaustedPayload({ message: retryErrData.message, code: retryErrData.code, tier: retryErrData.tier, upgradeSuggestions: retryErrData.upgradeSuggestions })
+                runInProgressRef.current = false
+                return
+              }
+            }
+            const retryData = await retryRes.json().catch(() => ({ successCount: 0, errorCount: pathsToRetry.length, results: [] as Array<{ path: string; success: boolean; error?: string }> }))
+            const results = (retryData.results || []) as Array<{ path: string; success: boolean; error?: string }>
+            setBuildPreviewItems((prev) =>
+              prev.map((item) => {
+                if (item.type !== 'file' || !item.path) return item
+                const r = results.find((x) => x.path === item.path)
+                if (!r) return item
+                return { ...item, success: r.success, error: r.error }
+              })
+            )
+            if (retryData.errorCount === 0) {
+              stage4ErrorCount = 0
+              fileCount += retryData.successCount
+              setRetryingFilesCount(null)
+              break
+            }
+            pathsToRetry = results.filter((r) => !r.success).map((r) => r.path)
+            if (pathsToRetry.length === 0) {
+              stage4ErrorCount = 0
+              setRetryingFilesCount(null)
+              break
+            }
+          }
+          setRetryingFilesCount(null)
+          if (stage4ErrorCount > 0) {
+            console.warn('[GRIP Overview] Stage 4: still', pathsToRetry.length, 'failed after', MAX_FILE_RETRY_ATTEMPTS, 'retries.')
+            setDebugAreaExpanded(true)
+            sonnerToast.warning('GRIP couldn\'t complete ' + pathsToRetry.length + ' file(s).', {
+              description: 'You can dismiss or rerun plan and build.',
+            })
+            refreshTokenUsage()
+            return
+          }
+        }
+        setConfirmedStages((prev) => (prev.includes('files') ? prev : [...prev, 'files']))
+        sonnerToast.success('GRIP confirmed: Files generated', {
+          description: `${fileCount} file(s) created. Running build.`,
+        })
         refreshTokenUsage()
         const state = await fetch(`/api/projects/${projectId}/state`).then((r) => (r.ok ? r.json() : null)).catch(() => null)
         setProjectState(state && (state.phases?.length || state.currentPhase) ? state : null)
         setHasPlan(true)
+        } // end: startFromStep !== 'build'
 
-        // Stage 5: build — do not advance to done until run-build returns success
+        // Stage 5: build — do not advance to done until run-build returns success (mandatory: GRIP autonomously fixes and re-runs until clean build)
+        const MAX_BUILD_FIX_ATTEMPTS = (await import('@/lib/constants/overviewBuild')).MAX_BUILD_FIX_ATTEMPTS
         setSetupStep('build')
-        const buildRes = await fetch(`/api/projects/${projectId}/run-build`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-        if (!buildRes.ok) {
-          console.warn('[GRIP Overview] Stage 5 (build) failed: run-build returned', buildRes.status)
-          setSetupStep(null)
-          return
-        }
-        const buildData = await buildRes.json().catch(() => ({ success: false, errors: ['Build response invalid'] }))
-
-        // Stage 6: done — only when build actually succeeded; otherwise keep modal closed and show failure
-        if (!buildData.success) {
-          console.warn('[GRIP Overview] Stage 5 (build) failed: build did not succeed', buildData.errors)
-          setSetupStep(null)
-          const errLines = (buildData.errors as string[] | undefined) ?? []
-          const errText = errLines.join('\n')
-          const isSandboxEnv = /sbx_user|ENOENT.*mkdir|\/home\/sbx_/i.test(errText)
-          let description = errLines.length
-            ? `Build reported errors. Fix in Develop or use enhanced chat. ${errLines.slice(0, 2).join(' ')}`
-            : (fileCount > 0 ? `Phases and ${fileCount} file(s) created but build failed. Open Develop to fix or preview.` : 'Plan created but build failed. Open Develop to build with GRIP.')
-          if (isSandboxEnv) {
-            description += ' If this is from StackBlitz or a sandbox, npm install can fail there—try Export to GitHub and run locally, or fix in Develop.'
+        setBuildFailureMessage(null)
+        let buildSucceeded = false
+        let lastBuildData: { success?: boolean; errors?: string[]; output?: string } = {}
+        for (let attempt = 1; attempt <= MAX_BUILD_FIX_ATTEMPTS && !buildSucceeded; attempt++) {
+          const buildRes = await fetch(`/api/projects/${projectId}/run-build`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+          if (!buildRes.ok) {
+            const buildErrBody = await buildRes.text().catch(() => '')
+            let buildErrData: { code?: string; message?: string; tier?: string; upgradeSuggestions?: Array<{ action: string; targetTier?: string; label: string }> } = {}
+            try { buildErrData = JSON.parse(buildErrBody) } catch { /* ignore */ }
+            if (buildRes.status === 403 && buildErrData?.code === 'TOKENS_EXHAUSTED') {
+              setTokenExhaustedPaused(true)
+              setTokenExhaustedStep('build')
+              setTokenExhaustedPayload({ message: buildErrData.message, code: buildErrData.code, tier: buildErrData.tier, upgradeSuggestions: buildErrData.upgradeSuggestions })
+              runInProgressRef.current = false
+              return
+            }
+            console.warn('[GRIP Overview] Stage 5 (build) failed: run-build returned', buildRes.status)
+            setSetupStep(null)
+            return
           }
-          sonnerToast.error('Build failed', { description })
+          const buildData = await buildRes.json().catch(() => ({ success: false, errors: ['Build response invalid'] }))
+          lastBuildData = buildData
+          const errLines = Array.isArray(buildData.errors) ? buildData.errors : (buildData.output ? [buildData.output] : [])
+          setBuildErrorsList(errLines)
+          if (buildData.success) {
+            buildSucceeded = true
+            setBuildErrorsList([])
+            setBuildFixInProgress(false)
+            break
+          }
+          // Build failed: autonomously fix and retry (mandatory — user sees progress only, no raw errors)
+          if (attempt < MAX_BUILD_FIX_ATTEMPTS) {
+            setBuildFixInProgress(true)
+            setBuildFailureMessage(`Fixing build… (attempt ${attempt} of ${MAX_BUILD_FIX_ATTEMPTS})`)
+            const fixResRaw = await fetch(`/api/projects/${projectId}/fix-build`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ errors: buildData.errors ?? [], output: buildData.output ?? '' }),
+            })
+            if (!fixResRaw.ok && fixResRaw.status === 403) {
+              const fixErrBody = await fixResRaw.text().catch(() => '')
+              let fixErrData: { code?: string; message?: string; tier?: string; upgradeSuggestions?: Array<{ action: string; targetTier?: string; label: string }> } = {}
+              try { fixErrData = JSON.parse(fixErrBody) } catch { /* ignore */ }
+              if (fixErrData?.code === 'TOKENS_EXHAUSTED') {
+                setTokenExhaustedPaused(true)
+                setTokenExhaustedStep('build')
+                setTokenExhaustedPayload({ message: fixErrData.message, code: fixErrData.code, tier: fixErrData.tier, upgradeSuggestions: fixErrData.upgradeSuggestions })
+                runInProgressRef.current = false
+                return
+              }
+            }
+            const fixRes = fixResRaw.ok ? await fixResRaw.json().catch(() => ({})) : {}
+            if (!fixRes.fixed) {
+              console.warn('[GRIP Overview] fix-build could not fix', fixRes.error)
+              setBuildFixInProgress(false)
+              setBuildFailureMessage('Build failed. GRIP could not auto-fix this attempt.')
+              setBuildErrorsList(errLines)
+              sonnerToast.error('Build failed', { description: 'GRIP tried to fix. You can dismiss or fix in Develop.' })
+              return
+            }
+            // Fixed; loop will run build again (user sees only "Fixing build…", no error dump)
+            continue
+          }
+        }
+        setBuildFixInProgress(false)
+        if (!buildSucceeded) {
+          const errLines = (lastBuildData.errors as string[] | undefined) ?? []
+          setBuildErrorsList(errLines)
+          const errText = errLines.join('\n').slice(0, 500)
+          const isSandboxEnv = /sbx_user|ENOENT.*mkdir|\/home\/sbx_/i.test(errText)
+          const message = isSandboxEnv
+            ? 'Build failed after auto-fix attempts. StackBlitz/sandbox can fail—try Export to GitHub and run locally.'
+            : 'Build failed after auto-fix attempts. You can dismiss or fix in Develop.'
+          setBuildFailureMessage(message)
+          sonnerToast.error('Build failed', { description: message })
           return
         }
+        setConfirmedStages((prev) => (prev.includes('build') ? prev : [...prev, 'build']))
+        sonnerToast.success('GRIP confirmed: Build successful', {
+          description: 'Project builds cleanly. Automation complete.',
+        })
+        setBuildFailureMessage(null)
         setSetupStep('done')
         refetchPhaseStatus()
         refreshGeneratedFiles()
@@ -559,19 +837,37 @@ export default function ProjectOverviewPage() {
       } catch {
         autoPlanRanRef.current = null
         setSetupStep(null)
+      } finally {
+        runInProgressRef.current = false
       }
     }
+    runWithOptionsRef.current = run
     run()
   }, [projectId, project?.repository?.owner, project?.repository?.name, hasAnalysis, rerunTrigger])
 
-  // Clear build preview and alignment warning when modal is dismissed so next run shows fresh list
+  // Clear build preview, alignment warning, and confirmed stages when modal is dismissed so next run shows fresh state
   useEffect(() => {
     if (setupStep === null) {
       setBuildPreviewItems([])
       setBuildPreviewTotal(0)
       setBuildArtifactAlignmentWarning(null)
+      setBuildFailureMessage(null)
+      setBuildErrorsList([])
+      setDebugAreaExpanded(false)
+      setConfirmedStages([])
+      setRetryingFilesCount(null)
+      setBuildFixInProgress(false)
+      setTokenExhaustedPaused(false)
+      setTokenExhaustedStep(null)
+      setTokenExhaustedPayload(null)
     }
   }, [setupStep])
+
+  const failedFileItems = buildPreviewItems.filter((x): x is typeof x & { error?: string } => x.type === 'file' && x.success === false)
+  const hasFileErrors = failedFileItems.length > 0
+  const hasBuildErrors = buildErrorsList.length > 0
+  /** Hide error details when GRIP is autonomously fixing (user sees progress only) */
+  const showDebugArea = (hasFileErrors || hasBuildErrors) && retryingFilesCount === null && !buildFixInProgress
 
   // Keep in-flight toast in view: allow scroll inside overlay, bring card into view when toast appears
   useEffect(() => {
@@ -668,7 +964,7 @@ export default function ProjectOverviewPage() {
           : setupStep === 'files'
             ? 'Generating files…'
             : setupStep === 'build'
-              ? 'Running build…'
+              ? (buildFailureMessage ? 'Build failed' : 'Running build…')
               : setupStep === 'done'
                 ? 'Automation completed'
                 : ''
@@ -690,29 +986,113 @@ export default function ProjectOverviewPage() {
           : setupStep === 'files'
             ? 'Generating code for each file in the plan; build runs next.'
               : setupStep === 'build'
-              ? 'Running npm install and npm run build to validate the project.'
+              ? (buildFailureMessage ? 'Fix errors below or in Develop, then retry. GRIP stays here until build succeeds or you close.' : 'Running npm install and npm run build to validate the project.')
               : ''
 
   return (
     <div className="space-y-8">
-      {/* In-flight toast: scrollable overlay so user can scroll to the card when zoomed in */}
+      {/* Pre-run token risk: mandatory — warn user and allow "Continue anyway" so GRIP can build; if they run out mid-build, show add/upgrade modal and resume */}
+      {showPreRunTokenModal && preRunTokenRiskPayload && (
+        <Modal
+          isOpen={true}
+          onClose={() => { setShowPreRunTokenModal(false); setPreRunTokenRiskPayload(null) }}
+          title="Token usage notice"
+        >
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              {preRunTokenRiskPayload.message ?? 'This build may use more tokens than you have left. You may run out and need to add tokens or upgrade to complete the build.'}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              You have <strong>{preRunTokenRiskPayload.remainingTokens.toLocaleString()}</strong> tokens remaining (estimated need: {preRunTokenRiskPayload.estimatedNeeded.toLocaleString()} for plan + {preRunTokenRiskPayload.fileCount} files + build). GRIP will continue and loop until the build is done; if you run out, GRIP will pause and show an option to add tokens or upgrade, then resume when ready.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button
+                onClick={() => {
+                  setShowPreRunTokenModal(false)
+                  setPreRunTokenRiskPayload(null)
+                  runWithOptionsRef.current?.({ skipTokenRiskCheck: true })
+                }}
+              >
+                Continue anyway
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="/plans">Add tokens / Upgrade</Link>
+              </Button>
+              {preRunTokenRiskPayload.upgradeSuggestions?.slice(0, 2).map((s, i) => (
+                <Button key={i} variant="outline" size="sm" asChild>
+                  <Link href={s.action === 'add_tokens' ? '/plans' : '/plans'}>{s.label}</Link>
+                </Button>
+              ))}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Out-of-tokens during run: GRIP pauses; user adds tokens or upgrades, then clicks "Resume when ready" (above in-flight overlay) */}
+      {tokenExhaustedPaused && tokenExhaustedStep && (
+        <div className="relative z-[60]">
+        <Modal
+          isOpen={true}
+          onClose={() => {}}
+          title="Out of tokens — add more or upgrade"
+        >
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              {tokenExhaustedPayload?.message ?? "You've run out of tokens for this period. GRIP has paused. Add more tokens or upgrade to continue; then click Resume and GRIP will continue from where it stopped."}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              GRIP will resume from the <strong>{tokenExhaustedStep}</strong> step when you're ready.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button
+                onClick={async () => {
+                  setTokenExhaustedPaused(false)
+                  setTokenExhaustedPayload(null)
+                  const step = tokenExhaustedStep
+                  setTokenExhaustedStep(null)
+                  refreshTokenUsage()
+                  runWithOptionsRef.current?.({ skipTokenRiskCheck: true, startFromStep: step })
+                }}
+              >
+                Resume when ready
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="/plans">Add tokens / Upgrade</Link>
+              </Button>
+              {tokenExhaustedPayload?.upgradeSuggestions?.slice(0, 2).map((s, i) => (
+                <Button key={i} variant="outline" size="sm" asChild>
+                  <Link href="/plans">{s.label}</Link>
+                </Button>
+              ))}
+            </div>
+          </div>
+        </Modal>
+        </div>
+      )}
+
+      {/* In-flight toast: stay within viewport on all screen sizes; flex/wrap and horizontal + vertical scroll when needed */}
       {setupStep != null && (
         <div
           ref={inFlightToastRef}
-          className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-background/80 backdrop-blur-sm"
+          className="fixed inset-0 z-50 overflow-auto max-h-[100dvh] max-w-[100vw] bg-background/80 backdrop-blur-sm overscroll-contain"
           role="dialog"
           aria-live="polite"
           aria-label="Build automation in progress"
         >
-          <div className="min-h-[100dvh] flex items-center justify-center p-4">
+          <div className="flex min-h-full min-w-0 max-w-full items-center justify-center p-4">
             <div
               ref={inFlightCardRef}
-              className="flex flex-col items-center gap-5 rounded-xl border-2 border-primary/20 bg-card p-8 shadow-xl text-center w-[min(90vw,28rem)] shrink-0"
+              className="flex flex-col items-center gap-5 rounded-xl border-2 border-primary/20 bg-card p-6 sm:p-8 shadow-xl text-center w-full max-w-[min(90vw,28rem)] min-w-0 max-h-[calc(100dvh-2rem)] overflow-y-auto overflow-x-auto shrink-0"
             >
             {setupStep === 'done' ? (
               <>
                 <CheckCircle2 className="h-14 w-14 text-success" aria-hidden />
                 <p className="text-xl font-semibold text-foreground">Automation completed</p>
+                <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-success font-medium" role="status">
+                  {['Preparing', 'Analysis', 'Plan', 'Files', 'Build', 'Done'].map((label, i) => (
+                    <span key={label}>{i + 1}. {label} ✓</span>
+                  ))}
+                </div>
                 <p className="text-sm text-muted-foreground">
                   The automated build process is complete. You can now move to <strong>Develop</strong> or <strong>Preview</strong>.
                 </p>
@@ -752,33 +1132,84 @@ export default function ProjectOverviewPage() {
                 <p className="text-xs font-medium text-primary/90">
                   Stage {setupStepStage} of 6 · Build automation
                 </p>
+                {/* Step progress: GRIP confirmations so user and context stay in order */}
+                <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-muted-foreground" role="status" aria-label="Automation step progress">
+                  {(['preparing', 'analysis', 'plan', 'files', 'build'] as const).map((stage, i) => {
+                    const confirmed = confirmedStages.includes(stage)
+                    const isCurrent = setupStep === stage
+                    const label = stage === 'preparing' ? 'Prepare' : stage === 'analysis' ? 'Analysis' : stage === 'plan' ? 'Plan' : stage === 'files' ? 'Files' : 'Build'
+                    return (
+                      <span key={stage} className={confirmed ? 'text-success font-medium' : isCurrent ? 'text-primary font-medium' : ''}>
+                        {i + 1}. {label} {confirmed ? '✓' : isCurrent ? '…' : '·'}
+                      </span>
+                    )
+                  })}
+                  <span className={setupStep === 'done' ? 'text-success font-medium' : ''}>6. Done{setupStep === 'done' ? ' ✓' : ''}</span>
+                </div>
                 <p className="text-sm text-muted-foreground">
                   {setupStepDetail}
                 </p>
-                {/* Build preview: view the build through GRIP's eyes (folders + files as they're generated) */}
+                {setupStep === 'build' && buildFailureMessage && (
+                  <div className="w-full text-left space-y-2">
+                    <p className="text-xs font-medium text-destructive">
+                      {buildFailureMessage.startsWith('Fixing build') ? buildFailureMessage : 'Build error (GRIP could not fix after retries):'}
+                    </p>
+                    {!buildFailureMessage.startsWith('Fixing build') && (
+                      <pre className="text-xs bg-muted rounded p-2 max-h-24 overflow-y-auto overflow-x-auto whitespace-pre-wrap break-words">
+                        {buildFailureMessage}
+                      </pre>
+                    )}
+                    {!buildFailureMessage.startsWith('Fixing build') && (
+                      <div className="flex flex-wrap gap-2 justify-center pt-1">
+                        <Button variant="outline" size="sm" onClick={() => { setSetupStep(null); setBuildFailureMessage(null) }}>
+                          Close and fix in Develop
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Build preview: view the build through GRIP's eyes (folders + files as they're generated); horizontal + vertical scroll so user can read long paths */}
                 {(setupStep === 'files' || setupStep === 'build' || setupStep === 'done' || buildPreviewItems.length > 0) && (
                   <div className="w-full text-left border border-border rounded-lg bg-muted/30 overflow-hidden">
                     <p className="text-xs font-semibold text-muted-foreground px-3 py-2 border-b border-border">
                       Build preview
                     </p>
-                    <ScrollArea className="h-[min(12rem,40vh)] w-full">
-                      <ul className="p-2 space-y-0.5 font-mono text-xs">
+                    <div className="h-[min(12rem,40vh)] w-full overflow-auto overflow-x-auto overflow-y-auto">
+                      <ul className="p-2 space-y-0.5 font-mono text-xs min-w-max">
                         {buildPreviewItems.length === 0 && setupStep === 'files' && (
                           <li className="text-muted-foreground py-1">Preparing file list…</li>
                         )}
                         {buildPreviewItems.map((item, i) => (
-                          <li key={`${item.type}-${item.path}-${i}`} className="flex items-center gap-2 py-0.5 truncate">
+                          <li key={`${item.type}-${item.path}-${i}`} className="flex items-center gap-2 py-0.5">
                             {item.type === 'folder' ? (
                               <>
                                 <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-                                <span className="text-muted-foreground truncate">{item.path}</span>
+                                <span className="text-muted-foreground whitespace-nowrap">{item.path}</span>
                               </>
                             ) : (
                               <>
                                 <FileCode className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
-                                <span className="truncate">{item.path}</span>
-                                {item.success === true && <span className="shrink-0 text-success" aria-label="Success">✓</span>}
-                                {item.success === false && <span className="shrink-0 text-destructive" title={item.error} aria-label="Error">✗</span>}
+                                <span className="flex-1 min-w-0 whitespace-nowrap" title={item.path}>{item.path}</span>
+                                {item.success === true && (
+                                  <span className="shrink-0 text-success flex items-center gap-1.5" aria-label="Success">
+                                    <span>✓</span>
+                                    {item.version != null && item.version > 1 && (
+                                      <span className="text-muted-foreground font-normal" title="Updated version">v{item.version}</span>
+                                    )}
+                                    {item.version === 1 && <span className="text-muted-foreground font-normal" title="Created">new</span>}
+                                    {item.templateId && (
+                                      <span className="text-muted-foreground/80 font-normal truncate max-w-[6rem]" title={`Template: ${item.templateId}`}>
+                                        {item.templateId}
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                                {item.success === false && (
+                                  <span className="shrink-0 text-destructive flex items-center gap-1" title={item.error} aria-label="Error">
+                                    <span>✗</span>
+                                    {item.templateId && <span className="text-muted-foreground/80 truncate max-w-[5rem]">{item.templateId}</span>}
+                                  </span>
+                                )}
                               </>
                             )}
                           </li>
@@ -797,8 +1228,107 @@ export default function ProjectOverviewPage() {
                           ) : null
                         })()}
                       </ul>
-                    </ScrollArea>
+                    </div>
                   </div>
+                )}
+                {/* Debug / errors area: failed file creation + build errors for easier tracking */}
+                {showDebugArea && (setupStep === 'files' || setupStep === 'build' || setupStep === 'done') && (
+                  <div className="w-full text-left border border-destructive/30 rounded-lg bg-destructive/5 overflow-hidden mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setDebugAreaExpanded((e) => !e)}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm font-semibold text-foreground hover:bg-destructive/10 transition-colors"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Bug className="h-4 w-4 text-destructive" aria-hidden />
+                        Debug / errors
+                        {hasFileErrors && (
+                          <span className="text-destructive text-xs font-normal">
+                            {failedFileItems.length} file(s) failed
+                          </span>
+                        )}
+                        {hasBuildErrors && (
+                          <span className="text-destructive text-xs font-normal">
+                            {buildErrorsList.length} build error(s)
+                          </span>
+                        )}
+                      </span>
+                      <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${debugAreaExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+                    {debugAreaExpanded && (
+                      <div className="border-t border-destructive/20 px-3 py-2 space-y-3 text-xs font-mono max-h-[14rem] overflow-auto">
+                        {hasFileErrors && (
+                          <div>
+                            <p className="font-semibold text-destructive mb-1">File creation errors (fix or retry before build)</p>
+                            <ul className="space-y-1 list-none">
+                              {failedFileItems.map((item, i) => (
+                                <li key={`failed-${item.path}-${i}`} className="text-muted-foreground">
+                                  <span className="text-foreground break-all">{item.path}</span>
+                                  {item.error && <span className="block text-destructive mt-0.5 pl-2 border-l-2 border-destructive/50">{item.error}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                            {failedFileItems.some((item) => (item.path || '').includes('layout.tsx')) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-2"
+                                onClick={async () => {
+                                  const layoutPaths = failedFileItems.map((item) => item.path).filter((p): p is string => !!p && p.includes('layout.tsx'))
+                                  if (!layoutPaths.length || !projectId) return
+                                  try {
+                                    const res = await fetch(`/api/projects/${projectId}/files/retry-failed`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ paths: layoutPaths }),
+                                    })
+                                    const data = await res.json().catch(() => ({}))
+                                    const results = (data.results || []) as Array<{ path: string; success: boolean }>
+                                    setBuildPreviewItems((prev) =>
+                                      prev.map((item) => {
+                                        if (item.type !== 'file' || !item.path) return item
+                                        const r = results.find((x) => x.path === item.path)
+                                        if (!r?.success) return item
+                                        return { ...item, success: true, error: undefined }
+                                      })
+                                    )
+                                    if (results.some((r) => r.success)) sonnerToast.success('Layout fixed. You can run build now.')
+                                  } catch {
+                                    sonnerToast.error('Could not fix layout.')
+                                  }
+                                }}
+                              >
+                                Fix layout (use default)
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                        {hasBuildErrors && (
+                          <div>
+                            <p className="font-semibold text-destructive mb-1">Build errors</p>
+                            <ul className="space-y-0.5 list-none text-muted-foreground whitespace-pre-wrap break-words">
+                              {buildErrorsList.slice(0, 25).map((line, i) => (
+                                <li key={`build-err-${i}`}>{line}</li>
+                              ))}
+                              {buildErrorsList.length > 25 && (
+                                <li className="text-muted-foreground/80">… and {buildErrorsList.length - 25} more</li>
+                              )}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {setupStep === 'files' && retryingFilesCount !== null && (
+                  <p className="text-xs text-muted-foreground mt-2 px-1">
+                    GRIP is fixing {retryingFilesCount} file(s)… No action needed.
+                  </p>
+                )}
+                {setupStep === 'files' && hasFileErrors && retryingFilesCount === null && (
+                  <p className="text-xs text-muted-foreground mt-2 px-1">
+                    GRIP couldn&apos;t complete some files after retries. You can dismiss or rerun plan and build.
+                  </p>
                 )}
               </>
             )}

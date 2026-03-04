@@ -74,12 +74,14 @@ export async function getFileContentByPath(
 /**
  * Save or update a file at the given full path (path/filename).
  * Used by GRIP to copy files or write new content without user clicking Save.
+ * Uses find-then-write (findOne then updateOne or insertOne) to avoid MongoDB ConflictingUpdateOperators
+ * ($setOnInsert version vs $inc version on upsert). Ensures fix-build and file generation can save without 500s.
  */
 export async function saveProjectFile(
   projectId: string,
   fullPath: string,
   content: string
-): Promise<{ ok: boolean; message?: string }> {
+): Promise<{ ok: boolean; message?: string; version?: number }> {
   const normalized = fullPath.replace(/^\/+/, '').trim()
   const lastSlash = normalized.lastIndexOf('/')
   const path = lastSlash >= 0 ? normalized.slice(0, lastSlash) : ''
@@ -100,38 +102,37 @@ export async function saveProjectFile(
   const size = Buffer.byteLength(contentToSave, 'utf8')
   const hash = crypto.createHash('md5').update(contentToSave).digest('hex')
   const now = new Date()
-  const existing = await coll.findOne({
+  const filter = {
     projectId: new ObjectId(projectId),
     path,
     filename,
-  })
-  if (existing) {
-    await coll.updateOne(
-      { _id: existing._id },
-      {
-        $set: {
-          content: contentToSave,
-          size,
-          hash,
-          updatedAt: now,
-        },
-      }
-    )
-    return { ok: true }
   }
-  await coll.insertOne({
-    projectId: new ObjectId(projectId),
-    path,
-    filename,
-    content: contentToSave,
-    language: 'plaintext',
-    size,
-    version: 1,
-    hash,
-    metadata: { generatedBy: 'grip', purpose: 'Saved by GRIP' },
-    history: [],
-    createdAt: now,
-    updatedAt: now,
-  })
-  return { ok: true }
+  // Use find-then-write to avoid MongoDB ConflictingUpdateOperators ($setOnInsert version vs $inc version on upsert).
+  const existing = await coll.findOne(filter, { projection: { version: 1 } })
+  const nextVersion = existing ? ((existing as { version?: number }).version ?? 0) + 1 : 1
+  if (existing) {
+    await coll.updateOne(filter, {
+      $set: {
+        content: contentToSave,
+        size,
+        hash,
+        updatedAt: now,
+        version: nextVersion,
+      },
+    })
+  } else {
+    await coll.insertOne({
+      ...filter,
+      content: contentToSave,
+      size,
+      hash,
+      language: 'plaintext',
+      metadata: { generatedBy: 'grip', purpose: 'Saved by GRIP' },
+      history: [],
+      createdAt: now,
+      updatedAt: now,
+      version: nextVersion,
+    })
+  }
+  return { ok: true, version: nextVersion }
 }

@@ -22,6 +22,33 @@ export const MANDATORY_GRIP_APP_VS_USER_SETTINGS = `
 - **Rule:** GRIP code must never read Settings for GRIP's AI or backend. Errors for GRIP AI/deployment must direct users to set vars in deployment (e.g. Vercel env vars or .env.local). When the **user's project** needs a var (e.g. MONGODB_URI), point them to Dashboard → Settings → Backend connections so they can copy into their project .env.
 `.trim()
 
+/**
+ * Mandatory GRIP concept: repo piggyback and ideation alignment.
+ * GRIP analyzes the GitHub repo and produces a build that achieves maximum closeness to the repo (structure, behavior, routes, UX) without copying code—piggybacking on the original creator's work. User ideation is the spec; repo is the blueprint. Align both so the user gets exactly what they asked for.
+ */
+export const MANDATORY_GRIP_REPO_PIGGYBACK = `
+## MANDATORY: Repo piggyback and ideation alignment (concrete rule)
+
+- **GRIP = analyze repo, duplicate closeness without copying.** The whole concept of GRIP is to take GitHub repos, analyze them, and produce a build that is as close a match to the repo as possible **without copying code or content** from the repo—achieving closeness by piggybacking off the work already done by the original creator/developer. This is mandatory and concrete.
+- **User ideation is the spec; repo is the blueprint.** (1) Compare repo analysis to user ideation step by step. (2) What the repo has that matches ideation → implement in new, clean-room code (same structure, routes, behavior, UX). (3) What the user wants that the repo does not have → also implement in new code so the user gets exactly what they asked for. Align repo and ideation together; do not drop or dilute either.
+- **No partial files; complete code only.** Every file must contain full, production-ready code that aligns with both repo-derived scope and user ideation. No placeholders, no "add later," no stub-only content. Claude has no restraint to writing complete files—deliver full implementations so the first build matches the user's expected outcome.
+- **Middles (tree-sitter, plan context, styling) serve this rule.** Tree-sitter analysis must compare repo to ideation and output matched_capabilities (repo fulfills ideation) and missing_capabilities (ideation asks for it; we build it). Plan and file generation must use that alignment so the build achieves full potential: repo closeness + 100% ideation fulfillment.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: use 100% of analysis context (tree-sitter + repo) alongside user ideation.
+ * No dropping or truncating of context; analysis and ideation together are the single source of truth.
+ */
+export const MANDATORY_GRIP_FULL_ANALYSIS_CONTEXT = `
+## MANDATORY: Use 100% of analysis context alongside user ideation (concrete rule)
+
+- **GRIP must use 100% of the analysis context.** All tree-sitter and repository analysis (routes, entrypoints, symbol_index, import_graph, behavior_flows, user stories, acceptance criteria, matched/missing capabilities, subsystems, boot sequence, dependency summary) must be passed into the plan and file generation. Do not drop, truncate, or ignore any part of the analysis when it is available.
+- **The implementation checklist and structured summary must include every route, entrypoint, behavior flow, user story, and acceptance criterion from the analysis—no partial lists when the full list fits within tier limits.** Plan phases and the "files" array must reflect each of these; implement each in new code; do not copy repo source.
+- **Analysis and user ideation work together.** User ideation is the spec; analysis is the blueprint. Both are the single source of truth for what to build.
+- **No arbitrary caps on context.** Where analysis is provided (tree-sitter structured analysis, repo reference), include it in full (or up to tier character limits). Do not slice lists to tiny subsets when the full list fits—use the full context so GRIP can fulfill 100% of scope alongside ideation.
+- **Outcome:** Every build uses the complete analysis context together with the user's ideation so the delivered app matches both the repo-derived scope and 100% of what the user asked for.
+`.trim()
+
 export const MANDATORY_GRIP_BUILD_QUALITY = `
 ## GRIP mandatory build quality (follow every time)
 
@@ -95,6 +122,15 @@ export const MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING = `
 `.trim()
 
 /**
+ * Mandatory GRIP rule: Next.js App Router — Metadata API only, no next/head.
+ * Use in file-type hints for any app/ or src/app/ file so generated code never imports next/head.
+ */
+export const MANDATORY_GRIP_NEXTJS_METADATA_NO_HEAD = `
+FORBIDDEN in app/ and src/app/: \`import Head from 'next/head'\`, \`<Head>\`, or any use of next/head. The App Router does not support it and Next.js will warn: "You're using next/head inside the app directory, please migrate to the Metadata API."
+REQUIRED: Use the Metadata API only. Export \`metadata\` (or \`generateMetadata\`) from the file: \`import type { Metadata } from "next"; export const metadata: Metadata = { title: "...", description: "..." };\` For per-page metadata, export \`metadata\` from that page. Never use <Head> in app directory.
+`.trim()
+
+/**
  * Mandatory GRIP rule: Next.js App Router root layout must be valid — no next/head, children must be in signature, correct structure only.
  * Prevents "children is not defined" and "next/head inside app directory" errors.
  */
@@ -107,9 +143,7 @@ When generating or editing \`app/layout.tsx\` or \`src/app/layout.tsx\`, you MUS
    \`export default function RootLayout({ children }: { children: React.ReactNode }) { ... }\`
    Do NOT use \`{children}\` in JSX without defining it in the function parameters—that causes "children is not defined".
 
-2. **Do NOT use \`next/head\` or \`<Head>\` in the app directory.** The App Router does not allow it. Use the **Metadata API** instead:
-   \`export const metadata = { title: '...', description: '...' }\`
-   at the top of the file. Never \`import Head from 'next/head'\` in app/ or src/app/.
+2. **FORBIDDEN: \`next/head\` and \`<Head>\`.** Do NOT use \`import Head from 'next/head'\` or \`<Head>\` anywhere in app/ or src/app/. The App Router does not allow it; Next.js will show: "You're using next/head inside the app directory, please migrate to the Metadata API." Use the **Metadata API only**: at the top of the file, \`import type { Metadata } from "next"\` and \`export const metadata: Metadata = { title: '...', description: '...' }\`. Never use next/head in the app directory.
 
 3. **Return only \`<html>\` and \`<body>\`; do not wrap in fragment or \`<main>\`.** The root layout must return exactly:
    \`return (\\n  <html lang="en">\\n    <body>{children}</body>\\n  </html>\\n)\`
@@ -164,6 +198,31 @@ export const MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE = `
 `.trim()
 
 /**
+ * Mandatory GRIP rule: GRIP must NEVER stop trying to fix build errors until the build succeeds or the user closes.
+ * Equips GRIP with a high attempt limit so multiple files or repeated errors can be fixed autonomously.
+ */
+export const MANDATORY_GRIP_BUILD_FIX_UNTIL_SUCCESS = `
+## MANDATORY: Build fix — do not stop until success or user closes
+
+- **GRIP must NEVER stop trying to fix the build** until either (1) the build succeeds, or (2) the user dismisses/closes the modal. Do not give up after a fixed number of "attempts" from the user's perspective; the system uses a high attempt limit (MAX_BUILD_FIX_ATTEMPTS in overviewBuild.ts) so GRIP can fix multiple files or the same file repeatedly until the build passes.
+- **Overview and enhanced-chat:** Both flows call fix-build then run-build in a loop. The loop continues until run-build returns success or the attempt limit is reached (safety cap). The limit is set high (MAX_BUILD_FIX_ATTEMPTS, e.g. 25) so GRIP effectively keeps fixing until success in normal cases.
+- **fix-build:** Applies deterministic fixes (layout/children, layout next/head → Metadata, app-dir page next/head → Metadata, robots.ts, sitemap.ts, postcss ESM) and AI fix for other errors. In one request it may fix multiple files (multi-file deterministic pass); then AI fixes one file per request for remaining errors. Multiple rounds are expected until the build passes.
+- **Outcome:** The user sees "Fixing build… (attempt N of M)" until the build succeeds or they close; GRIP does not show "Build failed after auto-fix attempts" until the high attempt cap is actually reached.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: complete full builds only; no partial builds, no broken files; app must be fully functional and production-ready.
+ */
+export const MANDATORY_GRIP_FULL_BUILD_NO_PARTIAL = `
+## MANDATORY: Complete full builds only — no partial builds, no broken code
+
+- **GRIP must complete full builds.** Every automation run (plan → file generation → build) MUST produce a complete, runnable app. There must be no way for the user to receive a partial build (e.g. missing files, half-generated pages, or broken imports).
+- **No broken code files.** Every generated file MUST be valid, runnable code. No syntax errors, no missing exports, no placeholder-only content. If a file cannot be implemented fully, do not create it in a broken state—either generate full code or omit it and ensure the rest of the app still runs.
+- **Fully functional and production-ready.** The app MUST build successfully (npm run build or equivalent), run (npm run dev/start), and be deployable. All links and buttons must work; the main page must reflect the user's project name and ideation; navigation must allow the user to move through the app. No generic "Welcome" or "Edit this page" without project-specific content.
+- **Enforcement:** File generation rejects placeholder/empty content; the in-flight modal does not show "done" until the build succeeds. Plan and templates must mandate full implementations so the first run delivers a complete product.
+`.trim()
+
+/**
  * Mandatory GRIP rule: all buttons and links must work and route to the correct page before the build is considered done.
  */
 export const MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY = `
@@ -172,6 +231,54 @@ export const MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY = `
 - **Every button and link must do something real.** Every interactive element MUST work: navigation links must use the correct \`href\` or router (e.g. Next.js \`Link\` or \`useRouter().push\`) to the real route; buttons that should navigate must have \`onClick\` (or equivalent) that goes to the correct page. No dead links, no \`href="#"\` or empty \`onClick={() => {}}\`, no "TODO" handlers.
 - **Match the plan and routes.** If the app has pages (e.g. /dashboard, /settings, /about), every nav item, CTA, and link MUST point to the actual path. Header/footer/nav must use real routes so the user can click through the app in GRIP Preview/StackBlitz.
 - **Do not ship placeholder interactivity.** When writing layout, header, nav, and page components: implement working \`Link\`/\`href\` and button handlers so the first run in StackBlitz/Preview is usable. The user must be able to click every visible link/button and reach the correct page.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: every link in the app (header, footer, nav) must have a corresponding page file—no 404s.
+ * The plan's "files" array must include a page for every route that appears in navigation.
+ */
+export const MANDATORY_GRIP_ALL_LINKS_HAVE_PAGES = `
+## MANDATORY: Every link must have a page (no 404s)
+
+- **Every navigation link must have a built page.** Any route that appears in the app's header, footer, or navigation (e.g. /about, /programs, /contact, /booking) MUST have a corresponding page file in the plan's "files" list. For Next.js App Router: a link to \`/about\` requires \`app/about/page.tsx\` or \`src/app/about/page.tsx\`; a link to \`/programs\` requires \`app/programs/page.tsx\` or \`src/app/programs/page.tsx\`.
+- **The "files" array must list every page that links point to.** Before listing files, derive the full set of routes from the user's ideation and any header/footer/nav you will generate. Include a page file for each of those routes. Never generate links to routes that do not have a page—that causes 404 Page Not Found in StackBlitz.
+- **Outcome:** In StackBlitz/preview, every clickable link must resolve to a real page with content. No 404s. This is mandatory and concrete.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: root layout must import global CSS so Tailwind and base styles apply on every page.
+ */
+export const MANDATORY_GRIP_LAYOUT_IMPORT_GLOBALS_CSS = `
+## MANDATORY: Root layout must import global CSS (styling visible on every page)
+
+- **Root layout MUST import the project's global CSS.** In \`app/layout.tsx\` or \`src/app/layout.tsx\`, add at the top: \`import './globals.css'\` (globals.css lives next to layout in the same directory). Without this import, Tailwind directives and base styles do not apply and the main page (and all pages) will have no styling.
+- **Ensure globals.css exists and is in the plan.** The "files" array must include \`app/globals.css\` or \`src/app/globals.css\` with Tailwind directives (\`@tailwind base; components; utilities;\`) and any \`:root\`/\`body\` styles. The root layout must import it so the first visit in StackBlitz shows styled content.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: user uploads (images, files, docs, logos, favicons) must be added to the build.
+ */
+export const MANDATORY_GRIP_USER_UPLOADS_IN_BUILD = `
+## MANDATORY: User uploads must be in the build (concrete rule)
+
+- **Every uploaded asset must be added to the build.** When the user uploads images, files, docs, logos, or favicons, GRIP MUST include them in the generated app. This is mandatory and concrete.
+- **Images (logos, hero, branding):** Store in \`public/\` (or the path provided); reference in code—e.g. logo in header (\`<img src="/logo.png">\` or \`/filename\`), hero image on the main page, any uploaded image used where the user expects it. Do not omit or replace with placeholders.
+- **Favicon:** If the user uploads a favicon (e.g. .ico, .png), add it to \`public/\` and reference it in the root layout metadata (Next.js: \`metadata.icons\` or \`<link rel="icon">\`) so the tab shows the user's icon.
+- **Reference docs (PDF, TXT, MD):** Use for requirements, copy, or specs; incorporate their content into the plan and generated code where relevant.
+- **Export:** User uploads are stored in projectFiles; they are included in export/StackBlitz when present. The plan and file generation must reference every uploaded image/file so the built app uses them—no dead references, no "add your logo here" placeholders when the user already uploaded one.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: when project is set for local/IDE run (not StackBlitz), treat like native mobile—emphasize Export + run locally.
+ */
+export const MANDATORY_GRIP_LOCAL_IDE_TARGET = `
+## MANDATORY: Local / IDE run target (same as iOS/Android handling)
+
+- **GRIP supports both StackBlitz preview and local/IDE development.** When a technical/developer user wants to use a specific tech stack and run it locally (terminal, VS Code, Cursor) rather than in StackBlitz, the project can be set to run target "local" (or "IDE").
+- **When run target is local/IDE:** Treat like native iOS/Android: do not emphasize "Run in StackBlitz" as the primary path. Emphasize **Export to GitHub**, **Download project**, and **run in your terminal or IDE** (e.g. \`npm run dev\`, or the stack's run command). StackBlitz may still be offered as optional for web stacks, but the primary guidance is "Export or download, then run locally."
+- **Preview tab:** Show the same style of card as for native mobile: "This project is configured for local development. Export to GitHub or download the project, then run in your terminal (\`npm run dev\`) or open in VS Code/Cursor." No requirement to use StackBlitz first.
+- **Preflight:** When target is stackblitz but project.runTarget is 'local', preflight may report that the project is set for local run; suggest Export or download for the intended workflow.
+- **Outcome:** Technical users who choose a stack and want to develop in their own environment get the same clear, mandatory handling as iOS/Android: Export + local run, not StackBlitz-first.
 `.trim()
 
 /**
@@ -204,6 +311,36 @@ export const MANDATORY_GRIP_IDEATION_100_MATCH = `
 - **GRIP MUST identify and add the user's ideation in the app.** Every plan, file, and design decision must reflect the user's Goals, Target Audience, Key Features, and Technical Requirements. The generated code and UI must implement and embody these—not generic or off-the-shelf content.
 - **Build the code around meeting the user's ideation at 100% match.** Copy, flows, components, and features must align with the stated goals and key features; the design and UX must suit the target audience; technical choices must satisfy the stated technical requirements. No ignoring or diluting the user's ideation.
 - **Concrete:** When generating any file (pages, components, layout, lib, config), use the project's ideation as the source of truth. If the user specified "recipe app for home cooks", the app must look and behave like a recipe app for that audience—not a generic template. If they specified accessibility or mobile-first, the code must implement it.
+`.trim()
+
+/**
+ * Mandatory GRIP rule: only plan and build what the user asked for. No mock data, no filler content.
+ * Every page (especially the main page) must contain only ideation-derived content; all links/buttons must work and match ideation.
+ */
+export const MANDATORY_GRIP_IDEATION_ONLY_NO_FILLER = `
+## MANDATORY: Ideation only — no mock data, no filler (concrete rule)
+
+- **Plan and build ONLY what the user described in their ideation.** Do not add sections, copy, features, or pages the user did not describe in Goals, Target Audience, Key Features, or Technical Requirements. Create exactly what they asked for—no generic "web development" or "marketing" filler.
+- **No mock data.** Do not use mock data, fake APIs, lorem ipsum, or placeholder content. Use real env vars, real data flow, and content derived from the user's ideation. If the app needs data, wire it to real sources or env; do not hardcode dummy arrays or fake responses.
+- **Main page (root route) is mandatory ideation.** The main page MUST display the project name/title and content that comes directly from the user's ideation (goals, audience, features). It MUST include working navigation (Link/href) to every other page or feature in the app. No "Welcome" or "Run plan and build in GRIP" placeholder text; no generic marketing copy the user did not ask for.
+- **Every page and component must be ideation-scoped.** Do not add hero sections, testimonials, "features" blocks, or CTAs that the user did not specify. If the user asked for a contact form and an about page, build exactly that—not extra sections or filler. All links and buttons must work and point to real routes that match the plan and ideation.
+`.trim()
+
+/**
+ * Mandatory GRIP order: user ideation first, then middles. No constraints may override the user's input.
+ * GRIP is fully empowered to use full ideation and tree-sitter analysis to maximize fulfillment.
+ */
+export const MANDATORY_GRIP_IDEATION_FIRST_THEN_MIDDLES = `
+## MANDATORY ORDER (concrete — always and at all times)
+1. **USER IDEATION FIRST.** The user's input (goals, target audience, key features, technical requirements) is the spec. Build exactly what they asked for. No constraints may override or dilute this. GRIP is fully empowered to use 100% of the user's ideation and tree-sitter analysis to maximize the build—no artificial limits.
+2. **THEN middles** (repo analysis alignment, plan, build scope). Use these to align structure and patterns; they must not constrain or override the user's ideation. User input and repo analysis alignment are first, always and at all times.
+`.trim()
+
+/**
+ * Empowerment: GRIP uses full backend capability to fulfill user ideation. No constraint is intended to limit fulfillment.
+ */
+export const GRIP_FULL_POWER_BACKEND = `
+GRIP is fully empowered to maximize the user's ideation and tree-sitter analysis. Use full context (ideation, build requirements, repo scope) to deliver exactly what the user asked for. Backend limits have been set high so GRIP can use 100% of available context; mandatory concrete rules (ideation first, no mock data, full builds) remain—no other constraint should limit fulfillment.
 `.trim()
 
 /**

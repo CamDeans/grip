@@ -38,15 +38,15 @@ export async function GET(
     // Check if this is a sandbox project
     let project = await db.collection('projects').findOne(
       { _id: new ObjectId(projectId) },
-      { projection: { userId: 1, repository: 1, exportedRepoUrl: 1, repositoryAnalysis: 1 } }
-    ) as { userId?: unknown; repository?: { owner: string; name: string }; exportedRepoUrl?: string; repositoryAnalysis?: { structuredAnalysis?: { identity?: { project_type?: string } } } } | null
+      { projection: { userId: 1, repository: 1, exportedRepoUrl: 1, repositoryAnalysis: 1, runTarget: 1 } }
+    ) as { userId?: unknown; repository?: { owner: string; name: string }; exportedRepoUrl?: string; repositoryAnalysis?: { structuredAnalysis?: { identity?: { project_type?: string } } }; runTarget?: 'stackblitz' | 'local' } | null
 
     let isSandbox = false
     if (!project) {
       const sandboxProject = await db.collection('sandboxProjects').findOne(
         { _id: new ObjectId(projectId) },
-        { projection: { userId: 1, repository: 1, repositoryAnalysis: 1 } }
-      ) as { userId?: unknown; repository?: { owner: string; name: string }; repositoryAnalysis?: { structuredAnalysis?: { identity?: { project_type?: string } } } } | null
+        { projection: { userId: 1, repository: 1, repositoryAnalysis: 1, runTarget: 1 } }
+      ) as { userId?: unknown; repository?: { owner: string; name: string }; repositoryAnalysis?: { structuredAnalysis?: { identity?: { project_type?: string } } }; runTarget?: 'stackblitz' | 'local' } | null
       if (sandboxProject) {
         project = sandboxProject
         isSandbox = true
@@ -65,29 +65,35 @@ export async function GET(
     const suggestions: string[] = []
 
     if (target === 'stackblitz') {
-      const ra = project?.repositoryAnalysis
-      const nativeMobile = getNativeMobileRepoCategory({
-        identity: ra?.structuredAnalysis?.identity,
-        project_type: ra?.structuredAnalysis?.identity?.project_type,
-      })
-      if (nativeMobile === 'ios_swift') {
-        errors.push('This project is native iOS (Swift/SwiftUI). StackBlitz cannot run it. Use Export to GitHub and open in Xcode to run on simulator or device.')
-        suggestions.push('Export the project, then open the repo in Xcode to build and run.')
-      } else if (nativeMobile === 'android_kotlin') {
-        errors.push('This project is native Android (Kotlin/Java). StackBlitz cannot run it. Use Export to GitHub and open in Android Studio to run on emulator or device.')
-        suggestions.push('Export the project, then open the repo in Android Studio to build and run.')
+      const runTarget = project?.runTarget ?? 'stackblitz'
+      if (runTarget === 'local') {
+        errors.push('This project is set for local/IDE development. Use Export to GitHub or Download project, then run in your terminal (e.g. npm run dev) or open in VS Code/Cursor.')
+        suggestions.push('Export or download the project, then run locally in your preferred environment.')
       } else {
-        const filesArray = isSandbox
-          ? await (await import('@/lib/services/legalSandboxService')).getLegalSandboxFilesForExport(projectId)
-          : await getProjectFilesForExport(projectId, { gripOnly: true })
-        if (!filesArray.length) {
-          errors.push('No files to run. Run the plan and build to generate files, or add files in Develop.')
-          suggestions.push('Use Overview automation to generate files, or use Develop to generate and save files.')
+        const ra = project?.repositoryAnalysis
+        const nativeMobile = getNativeMobileRepoCategory({
+          identity: ra?.structuredAnalysis?.identity,
+          project_type: ra?.structuredAnalysis?.identity?.project_type,
+        })
+        if (nativeMobile === 'ios_swift') {
+          errors.push('This project is native iOS (Swift/SwiftUI). StackBlitz cannot run it. Use Export to GitHub and open in Xcode to run on simulator or device.')
+          suggestions.push('Export the project, then open the repo in Xcode to build and run.')
+        } else if (nativeMobile === 'android_kotlin') {
+          errors.push('This project is native Android (Kotlin/Java). StackBlitz cannot run it. Use Export to GitHub and open in Android Studio to run on emulator or device.')
+          suggestions.push('Export the project, then open the repo in Android Studio to build and run.')
         } else {
-          const validation = validatePackageJsonForStackBlitz(filesArray)
-          if (!validation.ok) {
-            errors.push(...validation.errors)
-            suggestions.push(...validation.suggestions)
+          const filesArray = isSandbox
+            ? await (await import('@/lib/services/legalSandboxService')).getLegalSandboxFilesForExport(projectId)
+            : await getProjectFilesForExport(projectId, { gripOnly: true })
+          if (!filesArray.length) {
+            errors.push('No files to run. Run the plan and build to generate files, or add files in Develop.')
+            suggestions.push('Use Overview automation to generate files, or use Develop to generate and save files.')
+          } else {
+            const validation = validatePackageJsonForStackBlitz(filesArray)
+            if (!validation.ok) {
+              errors.push(...validation.errors)
+              suggestions.push(...validation.suggestions)
+            }
           }
         }
       }

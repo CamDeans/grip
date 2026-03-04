@@ -1,26 +1,28 @@
 ---
-description: When user has uploaded images or docs, GRIP MUST use them in code and implementation
+description: When user uploads images, files, docs, logos, or favicons, GRIP MUST add them to the build (mandatory and concrete)
 alwaysApply: true
 ---
 
-# User Uploads — Must Use in Build
+# User Uploads — Must Be in the Build (Mandatory and Concrete)
 
-**Mandate:** When the user has uploaded images and/or reference docs for a project, GRIP **MUST use them** in code and implementation.
+**Mandate:** When the user uploads images, files, docs, logos, or favicons, GRIP **MUST add them to the build**. Every uploaded asset must be included and referenced. This is mandatory and concrete.
 
 ## Do
 
-- **Images:** Use their paths in code—e.g. `<img src="...">`, CSS `url()`, or asset imports. Paths are in the "User uploads" section of the system prompt (e.g. `public/logo.png`, `public/hero.jpg`).
-- **Reference docs:** Use them for requirements, copy, or specs; incorporate or reference their content where the build needs it.
-- **Plan:** When generating a development plan, include tasks that use uploads (e.g. "Use uploaded logo in header", "Apply copy from reference docs").
+- **Images (logos, hero, branding):** Store in `public/` (or path provided); reference in code—e.g. logo in header (`<img src="/logo.png">`), hero on main page. No placeholders when the user uploaded an image.
+- **Favicon:** If the user uploaded a favicon (.ico, .png), add to `public/` and reference in root layout metadata (`metadata.icons` or `<link rel="icon">`).
+- **Reference docs (PDF, TXT, MD):** Use for requirements, copy, or specs; incorporate content where relevant.
+- **Plan:** Include tasks and "files" that use every upload; layout must reference favicon if uploaded; header/nav must use uploaded logo.
 
 ## Do NOT
 
 - Ignore uploads when they are listed in context.
-- Generate code that omits image paths or doc-derived requirements when the user has provided them.
+- Omit or replace with placeholders when the user has provided assets.
+- Generate code that omits image paths or doc-derived requirements.
 
 ## Where this is enforced in code
 
-- **Enhanced chat:** `buildSystemPrompt` injects "## User uploads (use in the build)" with "You MUST use them in your code and implementation" and the list of image paths and doc paths. `userUploadsSummary` is built from `projectFiles` or `legalSandboxFiles` with `metadata.generatedBy: 'user_upload'`.
-- **Plan generator:** Injects "User uploads (use in implementation)" so the plan includes tasks that use them.
-
-See `docs/UPLOADS_AND_DOCS_ANALYSIS.md` — mandatory usage rules for docs; global "MUST use" rule.
+- **buildQualityPlan:** MANDATORY_GRIP_USER_UPLOADS_IN_BUILD.
+- **Plan generator:** Injects uploads block with this rule; "files" and tasks must use uploads.
+- **Enhanced chat:** "User uploads — MANDATORY: add to the build" with paths; favicon in layout, logo/hero in UI.
+- **Export:** All projectFiles (including user_upload) are included in export/StackBlitz.

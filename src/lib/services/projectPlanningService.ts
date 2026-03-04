@@ -8,8 +8,7 @@ import { analyzeProjectDependencies, getProjectDependencyTree, getFileDependenci
 import { storeProjectStructure, getProjectStructure, linkPlanToStructure, storeFileGenerationPlan } from './planStorageService'
 import { syncProjectStateFromPlan } from './projectStateService'
 import { enhanceIdeationForBuild } from './ideationEnhancementService'
-import { buildTechnicalPromptFromEnhancedRequirements } from '@/lib/sandbox/ideationToTechnicalPrompt'
-import { analyzeRepositoryStructureWithTreeSitter } from '@/lib/treeSitter/treeSitterAnalysis'
+import { runPrePlanBuildRequirementsAnalysis, persistMinimalBuildRequirementsDocument } from './prePlanBuildRequirementsService'
 
 /**
  * Project Planning Service - Integrates all Phase 3 components into a unified API
@@ -89,12 +88,21 @@ export async function generateProjectPlan(projectId: string, options?: GenerateP
     let enhancementTokens = 0
 
     // Step 0: Enhance ideation into build requirements (mandatory so AI gets best version; reduces token waste)
-    const projectForIdeation = await db.collection('projects').findOne(
+    let projectForIdeation = await db.collection('projects').findOne(
       { _id: new ObjectId(projectId) },
-      { projection: { ideation: 1 } }
-    ) as { ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string } } | null
+      { projection: { ideation: 1, researchInstructions: 1 } }
+    ) as { ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string }; researchInstructions?: string } | null
+    // Defensive: if ideation missing or all empty, fetch full project so we don't skip enhancement when ideation exists
+    const hasIdeation = projectForIdeation?.ideation && [projectForIdeation.ideation.goals, projectForIdeation.ideation.targetAudience, projectForIdeation.ideation.keyFeatures, projectForIdeation.ideation.technicalRequirements].some((v) => v && String(v).trim())
+    if (!hasIdeation && projectForIdeation) {
+      const full = await db.collection('projects').findOne({ _id: new ObjectId(projectId) }) as typeof projectForIdeation | null
+      if (full?.ideation) {
+        projectForIdeation = full
+        console.log('Step 0: Using ideation from full project read for enhancement')
+      }
+    }
     if (projectForIdeation?.ideation) {
-      const enhancedResult = await enhanceIdeationForBuild(projectForIdeation.ideation)
+      const enhancedResult = await enhanceIdeationForBuild(projectForIdeation.ideation, projectForIdeation.researchInstructions)
       if (enhancedResult) {
         enhancementTokens = enhancedResult.totalTokens
         await db.collection('projects').updateOne(
@@ -111,33 +119,17 @@ export async function generateProjectPlan(projectId: string, options?: GenerateP
       }
     }
 
-    // Step 0b: Align tree-link analysis with enhanced build requirements (before build)
-    // If project has a repo and we have enhanced build requirements, re-run tree-sitter with enhanced prompt and update analysis
-    let treeAnalysisTokens = 0
-    const projectForTree = await db.collection('projects').findOne(
-      { _id: new ObjectId(projectId) },
-      { projection: { repository: 1, enhancedBuildRequirements: 1 } }
-    ) as { repository?: { owner: string; name: string }; enhancedBuildRequirements?: { fullPromptText: string; [k: string]: string } } | null
-    if (projectForTree?.repository && projectForTree?.enhancedBuildRequirements) {
+    // Step 0a: Pre-plan build requirements analysis — ensure full context before plan (mandatory for full scope)
+    // Ensures tree-sitter analysis exists when repo present, builds full project build requirements doc for plan generator
+    try {
+      await runPrePlanBuildRequirementsAnalysis(projectId, { tier: options?.tier })
+      console.log('Step 0a: Pre-plan build requirements analysis complete')
+    } catch (prePlanErr) {
+      console.warn('Pre-plan build requirements analysis failed; persisting minimal doc so plan still has full-scope context:', prePlanErr)
       try {
-        const technicalPrompt = buildTechnicalPromptFromEnhancedRequirements(projectForTree.enhancedBuildRequirements)
-        if (technicalPrompt) {
-          const treeResult = await analyzeRepositoryStructureWithTreeSitter(
-            projectForTree.repository.owner,
-            projectForTree.repository.name,
-            projectId,
-            { technicalPrompt, tier: options?.tier }
-          )
-          treeAnalysisTokens = treeResult?.totalTokens ?? 0
-          const { totalTokens: _t, ...analysisForDb } = treeResult
-          await db.collection('analyses').updateOne(
-            { projectId: new ObjectId(projectId) },
-            { $set: { repositoryAnalysis: analysisForDb, updatedAt: new Date() } }
-          )
-          console.log('Step 0b: Tree-link analysis re-run with enhanced build requirements')
-        }
-      } catch (treeErr) {
-        console.warn('Tree-link analysis alignment failed (non-fatal):', treeErr)
+        await persistMinimalBuildRequirementsDocument(projectId, options?.tier)
+      } catch (fallbackErr) {
+        console.warn('Minimal build requirements persist failed (non-fatal):', fallbackErr)
       }
     }
 
@@ -157,7 +149,7 @@ export async function generateProjectPlan(projectId: string, options?: GenerateP
 
     console.log('Step 4: Generating development plan')
     const { plan, totalTokens: planTokens } = await generateDevelopmentPlan(projectId, { tokenBudgetHint: options?.tokenBudgetHint, tier: options?.tier })
-    const totalTokens = enhancementTokens + treeAnalysisTokens + structureTokens + planTokens
+    const totalTokens = enhancementTokens + structureTokens + planTokens
     
     // Step 5: Link plan to structure
     console.log('Step 5: Linking plan to structure')
@@ -415,16 +407,17 @@ export async function getFilesToGenerate(projectId: string): Promise<Array<IFile
       const filesToGenerate: Array<IFileNode & { generationMetadata: any }> = plan.suggestedFiles.map((f, idx) => {
         const path = f.path.replace(/^\/+/, '').replace(/\\/g, '/')
         const name = path.includes('/') ? path.split('/').pop()! : path
-        // App Router API routes (app/api/**/route.ts) use nextjs-app-api-route; pages under app/pages use nextjs-page
+        // globals.css must always use globals-css template (never nextjs-page) so StackBlitz gets valid CSS
+        const isGlobalsCss = /^(app|src\/app)\/globals\.css$/i.test(path)
         const isAppApiRoute = /^app\/api\/.+\/route\.(ts|js)$/.test(path)
-        const isAppOrPages = !isAppApiRoute && /(^|\/)(app|pages)(\/|$)/.test(path)
+        const isAppOrPages = !isAppApiRoute && !isGlobalsCss && /(^|\/)(app|pages)(\/|$)/.test(path)
         return {
           type: 'file' as const,
           name,
           path,
           description: f.description || `From plan phase ${f.phaseId || '—'}`,
           generationMetadata: {
-            template: isAppApiRoute ? 'nextjs-app-api-route' : (isAppOrPages ? 'nextjs-page' : defaultTemplateForPath(path)),
+            template: isGlobalsCss ? 'globals-css' : (isAppApiRoute ? 'nextjs-app-api-route' : (isAppOrPages ? 'nextjs-page' : defaultTemplateForPath(path))),
             variables: {},
             priority: plan.suggestedFiles!.length - idx,
             dependencies: [],

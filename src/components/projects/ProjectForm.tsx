@@ -19,6 +19,8 @@ interface ProjectFormData {
     keyFeatures: string
     technicalRequirements: string
   }
+  /** Optional: e.g. "Research [public figure/company] and use real data in the build." */
+  researchInstructions?: string
 }
 
 interface ProjectFormProps {
@@ -38,7 +40,8 @@ export function ProjectForm({ owner, repo }: ProjectFormProps) {
       targetAudience: '',
       keyFeatures: '',
       technicalRequirements: ''
-    }
+    },
+    researchInstructions: ''
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -64,7 +67,8 @@ export function ProjectForm({ owner, repo }: ProjectFormProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             repository: formData.repository,
-            ideation: formData.ideation
+            ideation: formData.ideation,
+            ...(formData.researchInstructions?.trim() ? { researchInstructions: formData.researchInstructions.trim() } : {})
           })
         })
 
@@ -235,6 +239,26 @@ export function ProjectForm({ owner, repo }: ProjectFormProps) {
                 aria-label="Technical requirements"
                 required
               />
+            </div>
+            <div>
+              <label
+                htmlFor="research-instructions"
+                className="block text-sm font-medium text-text-secondary mb-1"
+              >
+                Research for GRIP (optional)
+              </label>
+              <textarea
+                id="research-instructions"
+                value={formData.researchInstructions ?? ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, researchInstructions: e.target.value }))}
+                className="form-input mt-1.5"
+                rows={2}
+                placeholder="e.g. Research [public figure / company / client] and use real, findable data in the build so GRIP is not guessing."
+                aria-label="Web research instructions for GRIP"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                If you or your client is a public figure (or has public data), add instructions here so GRIP can incorporate real details into the project.
+              </p>
             </div>
           </div>
         </div>

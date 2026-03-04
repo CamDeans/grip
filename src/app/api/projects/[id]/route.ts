@@ -38,13 +38,14 @@ export async function GET(
     if (project) {
       const ra = (project as { repositoryAnalysis?: { structuredAnalysis?: { identity?: unknown } } }).repositoryAnalysis
       const repoCategory = getNativeMobileRepoCategory({ identity: ra?.structuredAnalysis?.identity as { project_type?: string } }) ?? undefined
-      return NextResponse.json({ ...project, isSandbox: false, repoCategory })
+      const runTarget = (project as { runTarget?: 'stackblitz' | 'local' }).runTarget ?? 'stackblitz'
+      return NextResponse.json({ ...project, isSandbox: false, repoCategory, runTarget })
     }
 
     // Try sandbox projects
     const sandboxProject = await db.collection('sandboxProjects').findOne({ _id: new ObjectId(id) })
     if (sandboxProject) {
-      // Convert to unified format
+      const runTarget = (sandboxProject as { runTarget?: 'stackblitz' | 'local' }).runTarget ?? 'stackblitz'
       return NextResponse.json({
         _id: sandboxProject._id,
         title: sandboxProject.title,
@@ -57,6 +58,7 @@ export async function GET(
         status: 'active',
         isSandbox: true,
         parentProjectId: sandboxProject.parentProjectId,
+        runTarget,
       })
     }
 
@@ -118,6 +120,12 @@ export async function PATCH(
     if (body.deployedUrl !== undefined) update.deployedUrl = body.deployedUrl
     if (body.mongodbCollectionName !== undefined) {
       update.mongodbCollectionName = typeof body.mongodbCollectionName === 'string' ? body.mongodbCollectionName.trim() || null : null
+    }
+    if (body.runTarget !== undefined) {
+      if (body.runTarget !== 'stackblitz' && body.runTarget !== 'local') {
+        return new NextResponse(JSON.stringify({ error: 'Invalid runTarget; use "stackblitz" or "local"' }), { status: 400 })
+      }
+      update.runTarget = body.runTarget
     }
 
     await db.collection('projects').updateOne(

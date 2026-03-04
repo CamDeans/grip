@@ -3,7 +3,18 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { ObjectId } from 'mongodb'
 import { getAnthropicApiKey, ANTHROPIC_MODEL_CHAT } from '@/lib/anthropicConfig'
-import { MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE, MANDATORY_GRIP_IDEATION_100_MATCH } from '@/lib/constants/buildQualityPlan'
+import {
+  GRIP_FULL_POWER_BACKEND,
+  MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE,
+  MANDATORY_GRIP_IDEATION_100_MATCH,
+  MANDATORY_GRIP_IDEATION_FIRST_THEN_MIDDLES,
+  MANDATORY_GRIP_IDEATION_ONLY_NO_FILLER,
+  MANDATORY_GRIP_LAYOUT_IMPORT_GLOBALS_CSS,
+  MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT,
+  MANDATORY_GRIP_NEXTJS_METADATA_NO_HEAD,
+  MANDATORY_GRIP_REPO_PIGGYBACK,
+} from '@/lib/constants/buildQualityPlan'
+import { SCOPE_REMINDER_MAX_CHARS } from '@/lib/constants/tokenLimitsByTier'
 
 // Mock imports until we can properly access the project structure
 // These will be replaced with proper imports when integrating into the main codebase
@@ -29,8 +40,15 @@ const clientPromise = {
 };
 
 /**
- * Template Engine Service - Implements templating system for code generation
- * Part of Phase 4, Step 1 of the G.R.I.P. AI Assistant Enhancement Plan
+ * File generation: user ideation first, then middles (template engine).
+ *
+ * CONCRETE and mandatory order: (1) USER IDEATION FIRST — always and at all times. The user's
+ * input is the spec; no constraints may override or dilute it. (2) THEN middles (repo analysis
+ * alignment, plan, build scope) — used to align structure and patterns; they must not constrain
+ * or override ideation. This service does NOT define its own rules or constraints. Template IDs
+ * only control request shape (one FileContent blob vs. multiple variables). File-type hints
+ * inject only the relevant buildQualityPlan constant when needed. buildMiddleReferenceBlock()
+ * enforces section 1 = ideation first, section 2 = middles.
  */
 
 // Project Context Interface
@@ -142,42 +160,27 @@ export const {{ComponentName}}: FC<{{ComponentName}}Props> = ({
       isBuiltIn: true
     })
     
-    // Next.js page template
+    // Next.js App Router page template (Metadata API only — no next/head; ensures complete first build)
     templates.push({
       id: 'nextjs-page',
       name: 'Next.js Page',
-      description: 'Next.js page component with TypeScript',
+      description: 'Next.js App Router page with Metadata API (no next/head)',
       language: 'typescript',
       fileType: 'tsx',
-      template: `import { ReactElement } from 'react'
-import { NextPage } from 'next'
-import Head from 'next/head'
+      template: `import type { Metadata } from 'next'
 
-interface {{PageName}}Props {
-  {{#props}}
-  {{name}}: {{type}};
-  {{/props}}
+export const metadata: Metadata = {
+  title: '{{PageTitle}}',
+  description: '{{MetaDescription}}',
 }
 
-const {{PageName}}: NextPage<{{PageName}}Props> = ({
-  {{#props}}
-  {{name}},
-  {{/props}}
-}) => {
+export default function {{PageName}}() {
   return (
-    <>
-      <Head>
-        <title>{{PageTitle}}</title>
-        <meta name="description" content="{{MetaDescription}}" />
-      </Head>
-      <main>
-        {{PageContent}}
-      </main>
-    </>
+    <main>
+      {{PageContent}}
+    </main>
   )
-}
-
-export default {{PageName}}`,
+}`,
       variables: ['PageName', 'props', 'PageTitle', 'MetaDescription', 'PageContent'],
       defaultValues: {
         PageName: 'Page',
@@ -771,6 +774,112 @@ function isWebUIFilePath(filePath: string): boolean {
 }
 
 /**
+ * Build the reference block for file generation. Order is CONCRETE and mandatory:
+ * 1. USER IDEATION FIRST — always and at all times. No constraints may override this.
+ * 2. Then middles (repo analysis alignment, plan, build scope) — used to align with, never to constrain or override ideation.
+ * The template engine does not define its own rules or constraints; it assembles this order and passes it to the AI.
+ */
+function buildMiddleReferenceBlock(projectContext: {
+  filePath?: string;
+  description?: string;
+  phaseContext?: { currentPhase: string; stepTitles: string[] };
+  framework?: string;
+  repoCategory?: string;
+  primaryLanguages?: string[];
+  mainLanguages?: Record<string, number>;
+  ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string };
+  projectTitle?: string;
+  scopeReminder?: string;
+}): string {
+  const parts: string[] = []
+
+  // Order is concrete: user ideation first, then middles. No constraints. buildQualityPlan is the single source of truth.
+  parts.push(`${MANDATORY_GRIP_IDEATION_FIRST_THEN_MIDDLES}
+
+${GRIP_FULL_POWER_BACKEND}
+
+`)
+  // ——— 1. USER IDEATION FIRST (ALWAYS AND AT ALL TIMES). No constraints may override. ———
+  parts.push(`## 1. USER IDEATION (FIRST — ALWAYS AND AT ALL TIMES)
+The user's input is the spec. Build exactly what they asked for. No constraints may override or dilute this. Repo and middles align with ideation; they do not replace or limit it.
+`)
+  if (projectContext.ideation && [projectContext.ideation.goals, projectContext.ideation.targetAudience, projectContext.ideation.keyFeatures, projectContext.ideation.technicalRequirements].some((v) => v && String(v).trim())) {
+    const i = projectContext.ideation
+    parts.push(`• Goals: ${(i.goals ?? '').trim() || 'Not specified'}
+• Target Audience: ${(i.targetAudience ?? '').trim() || 'Not specified'}
+• Key Features: ${(i.keyFeatures ?? '').trim() || 'Not specified'}
+• Technical Requirements: ${(i.technicalRequirements ?? '').trim() || 'Not specified'}
+`)
+  }
+  if ((projectContext.projectTitle ?? '').trim()) {
+    parts.push(`Project title (use in main page and metadata): ${projectContext.projectTitle!.trim()}\n`)
+  }
+  parts.push('')
+
+  // ——— 2. THEN MIDDLES (repo analysis alignment, plan, build scope — align with; do not constrain ideation). ———
+  parts.push(`## 2. MIDDLES (repo analysis alignment, plan, build scope)
+Use these to align structure and patterns with the repo and plan. They must not constrain or override the user's ideation above.
+`)
+  if ((projectContext.scopeReminder ?? '').trim()) {
+    parts.push(`Build scope (from pre-plan): ${projectContext.scopeReminder!.trim().slice(0, SCOPE_REMINDER_MAX_CHARS)}\n`)
+  }
+  if (projectContext.phaseContext?.stepTitles?.length) {
+    parts.push(`Current build phase: "${projectContext.phaseContext.currentPhase}". Steps: ${projectContext.phaseContext.stepTitles.join('; ')}.\n`)
+  }
+  if (projectContext.framework || projectContext.repoCategory) {
+    parts.push(`Stack (from repo + analysis): ${projectContext.framework ?? 'not specified'}; Repo type: ${projectContext.repoCategory ?? 'not specified'}.\n`)
+  }
+  if ((projectContext.primaryLanguages?.length ?? 0) > 0 || (projectContext.mainLanguages && Object.keys(projectContext.mainLanguages).length > 0)) {
+    parts.push(`Languages (tree-sitter): Primary: ${(projectContext.primaryLanguages ?? []).join(', ') || 'none'}; Extensions: ${JSON.stringify(projectContext.mainLanguages ?? {})}.\n`)
+  }
+  parts.push('')
+
+  // Mandatory rules support ideation-first; they do not add constraints that override user input.
+  parts.push(`## Mandatory rules (support ideation-first; no constraints that override user input)
+${MANDATORY_GRIP_IDEATION_100_MATCH}
+
+${MANDATORY_GRIP_IDEATION_ONLY_NO_FILLER}
+
+${MANDATORY_GRIP_REPO_PIGGYBACK}
+
+${MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE}
+`)
+
+  return parts.join('\n')
+}
+
+/**
+ * File-type hint: only inject the minimal rule from buildQualityPlan when this file type requires it.
+ * Template engine does not define rules—it only references the middle (buildQualityPlan).
+ */
+function buildFileTypeHint(filePath: string, projectTitle?: string): string {
+  const n = (filePath || '').replace(/\\/g, '/')
+  const hints: string[] = []
+
+  if (/(^|\/)app\/layout\.tsx$/i.test(n) || /(^|\/)src\/app\/layout\.tsx$/i.test(n)) {
+    hints.push(`This file is the Next.js App Router root layout. Follow these rules exactly:\n${MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT}\n${MANDATORY_GRIP_LAYOUT_IMPORT_GLOBALS_CSS}`)
+  }
+  if (/(^|\/)(app|src\/app)\/.+\.(tsx|ts|jsx|js)$/i.test(n)) {
+    hints.push(`CRITICAL — First build must succeed. Next.js App Router file: ${MANDATORY_GRIP_NEXTJS_METADATA_NO_HEAD} Do NOT output or reference next/head or <Head> in any variable value; the template already uses the Metadata API.`)
+  }
+  if (/(^|\/)(app|src\/app)\/page\.(tsx|jsx)$/i.test(n)) {
+    hints.push(`This file is the root page (main landing). Use project title "${(projectTitle || 'this app').trim()}", ideation-based content only, and working Next.js Link navigation to other pages. FORBIDDEN: "Your app is running", "Edit this page in the editor", "Run plan and build in GRIP".`)
+  }
+  if (/next\.config\.(js|mjs|cjs)$/i.test(n)) {
+    hints.push('This project uses "type": "module". Write next.config.js in ESM only: "const nextConfig = { ... }; export default nextConfig;" — do NOT use module.exports or require().')
+  }
+  if (/postcss\.config\.(js|mjs)$/i.test(n)) {
+    hints.push('Write postcss.config in ESM only so it works in Next.js/StackBlitz: "export default { plugins: { tailwindcss: {}, autoprefixer: {} } };". Do NOT use module.exports or require() — that causes "ReferenceError: module is not defined" when Node loads .js as ESM.')
+  }
+  if (n.toLowerCase().endsWith('package.json')) {
+    hints.push('Do NOT add expo, react-native, or @expo/* to dependencies unless this project is a 100% Expo/React Native app. For web (Next.js/Vite/CRA) use only web stack deps.')
+  }
+
+  if (hints.length === 0) return ''
+  return '\n## File-type rule\n' + hints.join('\n\n')
+}
+
+/**
  * Generate template variables using AI
  * @param template Template to use
  * @param projectContext Context information about the project
@@ -795,76 +904,36 @@ export async function generateTemplateVariables(
     mainLanguages?: Record<string, number>;
     /** User ideation (goals, audience, features, technical requirements); code and design must match 100% */
     ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string };
+    /** Project display name; must appear in main page and metadata. */
+    projectTitle?: string;
+    /** Short scope reminder from pre-plan build requirements; for file-level context and for fix-build to trace files/code blocks on build failure. */
+    scopeReminder?: string;
   }
 ): Promise<{ variables: ITemplateVariables; totalTokens: number }> {
   try {
-    // Full-file template: AI returns complete runnable file content (no 200-char limit)
+    // Full-file template: single FileContent blob. Prompt is built only from middles (reference block + file-type hint from buildQualityPlan).
     if (template.id === 'full-file' && template.variables?.includes('FileContent')) {
-      const phaseBlock = projectContext.phaseContext?.stepTitles?.length
-        ? `\nCurrent build phase: "${projectContext.phaseContext.currentPhase}". Steps: ${projectContext.phaseContext.stepTitles.join('; ')}.\n`
-        : ''
-      const stackBlock =
-        projectContext.framework || projectContext.repoCategory
-          ? `\nProject stack: ${projectContext.framework ?? 'not specified'}; Repo type: ${projectContext.repoCategory ?? 'not specified'}.\n`
-          : ''
-      const isNextConfig = /next\.config\.(js|mjs|cjs)$/i.test(projectContext.filePath || '')
-      const esmNextConfigBlock = isNextConfig
-        ? `
-CRITICAL for next.config.js: This project uses "type": "module" in package.json, so all .js files are ES modules. You MUST write next.config.js in ESM only: use "const nextConfig = { ... }; export default nextConfig;" — do NOT use module.exports or require(). Using module.exports will cause "ReferenceError: module is not defined in ES module scope" when running next dev or next build.`
-        : ''
-      const isAppLayout = /(^|\/)app\/layout\.tsx$/i.test((projectContext.filePath || '').replace(/\\/g, '/'))
-      const appLayoutBlock = isAppLayout
-        ? `
-CRITICAL for app/layout.tsx (Next.js App Router root layout): (1) You MUST define children in the function signature: export default function RootLayout({ children }: { children: React.ReactNode }) { ... }. Using {children} in JSX without defining it in the parameters causes "ReferenceError: children is not defined". (2) Do NOT use next/head or <Head> in the app directory — use the Metadata API: export const metadata = { title: '...', description: '...' }. (3) Return ONLY <html><body>{children}</body></html>. Do NOT wrap in <><Head /><main><html>...</html></main></> or any fragment/main wrapper. The root layout must return exactly <html lang="en"><body>{children}</body></html>.`
-        : ''
-      const isAppPage = /(^|\/)(app|src\/app)\/page\.(tsx|jsx)$/i.test((projectContext.filePath || '').replace(/\\/g, '/'))
-      const appPageBlock = isAppPage
-        ? `
-CRITICAL for app/page.tsx (root route): This file is the MAIN LANDING PAGE for the app at "/". When the user opens the project in StackBlitz or GRIP Preview, they must see this page. Generate full, styled content for the main page here — do not redirect away from / or leave it empty. The root route must always show the main page.`
-        : ''
-      const isPackageJson = (projectContext.filePath || '').replace(/\\/g, '/').toLowerCase().endsWith('package.json')
-      const packageJsonExpoBlock = isPackageJson
-        ? `
-CRITICAL for package.json: Do NOT add "expo", "react-native", or any "@expo/*" / "@react-native/*" to dependencies or devDependencies unless this project is a 100% Expo/React Native mobile app. For web projects (Next.js, Vite, CRA) package.json must contain only web stack deps (e.g. next, react, react-dom). Adding "expo": "*" or expo to a web project corrupts npm install and StackBlitz. Only include expo when the project is explicitly an Expo/React Native app.`
-        : ''
-      const webUIFileBlock = isWebUIFilePath(projectContext.filePath || '')
-        ? `
-
-${MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE}
-
-For this file (web UI): Use the same high-quality design styling method as the plan (Tailwind, shadcn-style components, Headless UI). Apply full styling so the app is production-ready and deployment-ready in one run. Code must be consistent and complete—no placeholder styles, no back-and-forth. No plain unstyled UI; no mock data.`
-        : ''
-      const ideation = projectContext.ideation
-      const ideationBlock =
-        ideation &&
-        [ideation.goals, ideation.targetAudience, ideation.keyFeatures, ideation.technicalRequirements].some((v) => v && String(v).trim())
-          ? `
-
-User ideation (build code and design to match 100% — do not ignore or dilute):
-• Goals: ${(ideation.goals ?? '').trim() || 'Not specified'}
-• Target Audience: ${(ideation.targetAudience ?? '').trim() || 'Not specified'}
-• Key Features: ${(ideation.keyFeatures ?? '').trim() || 'Not specified'}
-• Technical Requirements: ${(ideation.technicalRequirements ?? '').trim() || 'Not specified'}
-
-${MANDATORY_GRIP_IDEATION_100_MATCH}`
-          : ''
+      const middleReference = buildMiddleReferenceBlock(projectContext)
+      const fileTypeHint = buildFileTypeHint(projectContext.filePath || '', projectContext.projectTitle)
       const fullFilePrompt = `
-Generate the COMPLETE, runnable source code for this file. No placeholders, no TODOs, no stub comments—only real code.
+Generate the COMPLETE, runnable source code for this file. Order is CONCRETE: USER IDEATION FIRST (always and at all times), then middles (repo analysis alignment). No constraints may override or dilute the user's input. Build exactly what the user asked for; use repo/plan to align structure and patterns only.
 
-File path: ${projectContext.filePath}
-Project description: ${projectContext.description || 'Not provided'}
-${stackBlock}${phaseBlock}${ideationBlock}
+## Reference (1 = user ideation first, 2 = middles — no constraints override section 1)
+${middleReference}
 
-GRIP mandatory: the file must be full, valid, and runnable. Match the file type (e.g. next.config.js = Next.js config, tailwind.config.js = Tailwind config, prisma/schema.prisma = Prisma schema, lib/*.ts = real implementations). For next.config.js: always use ESM (const nextConfig = { ... }; export default nextConfig;). Never use require() or module.exports in next.config.js — it causes build failures when package.json has "type": "module".${esmNextConfigBlock}${appLayoutBlock}${appPageBlock}${packageJsonExpoBlock}${webUIFileBlock}
+## File to generate
+Path: ${projectContext.filePath}
+Description: ${projectContext.description || 'Not provided'}
+${fileTypeHint}
 
-Return ONLY a single JSON object with one key: "FileContent". The value must be the exact file content. Use \\n for newlines inside the string so the JSON is valid. Example: {"FileContent":"const x = 1;\\nexport default x;"}
+GRIP mandatory: output must be full, valid, runnable code that matches the file type and the reference above. Return ONLY a single JSON object with one key: "FileContent". The value must be the exact file content. Use \\n for newlines inside the string so the JSON is valid. Example: {"FileContent":"const x = 1;\\nexport default x;"}
 `
       const anthropic = getAnthropicClient()
       if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
       console.info('[GRIP Files] Calling Anthropic API for template variables (generateTemplateVariables). Usage will appear in Anthropic console.')
       const response = await anthropic.messages.create({
         model: ANTHROPIC_MODEL_CHAT,
-        max_tokens: 8000,
+        max_tokens: 12_000,
         temperature: 0.2,
         messages: [{ role: 'user', content: fullFilePrompt }]
       })
@@ -886,53 +955,45 @@ Return ONLY a single JSON object with one key: "FileContent". The value must be 
       return { variables: { FileContent: fileContent } as ITemplateVariables, totalTokens }
     }
 
-    // Extract needed variables from template
+    // Variable-generation templates (e.g. react-component, nextjs-page): use same middle reference; template ID only defines which variables to ask for.
     const missingVariables = template.variables.filter(v => {
-      // Skip props and functions - they're complex types that will be handled specially
       return !['props', 'functions'].includes(v)
     })
     
     if (missingVariables.length === 0) {
-      // No variables to generate
       return { variables: {}, totalTokens: 0 }
     }
     
-    const phaseBlock = projectContext.phaseContext?.stepTitles?.length
-      ? `\nCurrent build phase: "${projectContext.phaseContext.currentPhase}". Steps in this phase: ${projectContext.phaseContext.stepTitles.join('; ')}. Generate variable values that support implementing these steps.\n`
+    const middleReference = buildMiddleReferenceBlock(projectContext)
+    const fileTypeHint = buildFileTypeHint(projectContext.filePath || '', projectContext.projectTitle)
+    const webUIHint = isWebUIFilePath(projectContext.filePath || '')
+      ? '\nThis file is web UI: generate variable values that produce styled, complete UI (Tailwind/shadcn patterns). No mock data, no plain unstyled content.'
       : ''
-    const stackBlock =
-      projectContext.framework || projectContext.repoCategory
-        ? `\nProject stack (from repo + analysis): Framework: ${projectContext.framework ?? 'not specified'}; Repo type: ${projectContext.repoCategory ?? 'not specified'}. Generate variable values that fit this stack and project structure.\n`
-        : ''
-    const languagesBlock =
-      (projectContext.primaryLanguages?.length ?? 0) > 0 || (projectContext.mainLanguages && Object.keys(projectContext.mainLanguages).length > 0)
-        ? `\nLanguages used/referenced in tree-sitter analysis: Primary: ${(projectContext.primaryLanguages ?? []).join(', ') || 'none'}; Extension counts: ${JSON.stringify(projectContext.mainLanguages ?? {})}. Generate variable values that match the languages and conventions of this project.\n`
-        : ''
-    
-    const webUIMandateBlock = isWebUIFilePath(projectContext.filePath || '')
-      ? `\n\nMANDATORY for this file (web UI): First build must be 100% deployable with full styling and no mock data. Generate variable values that produce styled, complete UI (Tailwind/shadcn/Headless UI patterns)—no plain unstyled content. No mock or fake data.\n`
+    const isAppDirNextjsPage = /(^|\/)(app|src\/app)\//i.test(projectContext.filePath || '') && template.id === 'nextjs-page'
+    const criticalAppRouterLine = isAppDirNextjsPage
+      ? '\nCRITICAL: This file is in the App Router (app/ or src/app/). The template uses the Metadata API only. Do NOT put next/head, <Head>, or "import Head" in any variable value (PageTitle, MetaDescription, PageContent, etc.). Output only content that fits the Metadata-based template so the first build succeeds.'
       : ''
-    // Build prompt for AI
     const prompt = `
-I need to generate appropriate values for variables in a code template.
+Generate values for template variables. USER IDEATION FIRST (always and at all times), then middles. No constraints may override the user's input. Build exactly what the user asked for; use repo/plan to align only.
 
+## Reference (1 = user ideation first, 2 = middles — no constraints override section 1)
+${middleReference}
+
+## Template and file
 Template: ${template.name} (${template.description})
-Template Variables: ${missingVariables.join(', ')}
+Variables to generate: ${missingVariables.join(', ')}
+File path: ${projectContext.filePath}
+Description: ${projectContext.description || 'Not provided'}
+${fileTypeHint}${webUIHint}${criticalAppRouterLine}
 
-File Path: ${projectContext.filePath}
-Project Description: ${projectContext.description || 'Not provided'}
-${stackBlock}${languagesBlock}${phaseBlock}
-
-GRIP mandatory rule: every file must have real, runnable code. Generate variable values that produce complete content—never placeholder or empty. The rendered template must be a full, valid file (e.g. a real component with real JSX, or real logic), not a stub or TODO.${webUIMandateBlock}
-
-Return ONLY a single JSON object. Use double quotes for keys and string values. Do not use backticks. Keep string values short (under 200 chars) so the JSON is valid. Example: {"ComponentName":"MyComponent","ComponentContent":"<p>Hello</p>"}
+Generate variable values that produce complete, valid output. Return ONLY a single JSON object. Use double quotes for keys and string values. Keep string values under 200 chars. Example: {"ComponentName":"MyComponent","ComponentContent":"<p>Hello</p>"}
 `
     const anthropic = getAnthropicClient()
     if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not set')
     console.info('[GRIP Files] Calling Anthropic API for template variables (generateTemplateVariables). Usage will appear in Anthropic console.')
     const response = await anthropic.messages.create({
       model: ANTHROPIC_MODEL_CHAT,
-      max_tokens: 1000,
+      max_tokens: 2000,
       temperature: 0.2,
       messages: [{ role: 'user', content: prompt }]
     })

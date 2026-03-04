@@ -53,13 +53,22 @@ const WEB_APP_KEYWORDS = /multi-?page|app\s*shell|navigation|layout|route|spa|da
 const GAMES_MEDIA_KEYWORDS = /game|2d|3d|model|animation|sprite|texture|canvas|webgl|three|unity|babylon|rendering|asset|scene|glb|gltf|interactive\s*media/i
 
 /**
- * Build checklist summary from tree-sitter structured analysis (routes, entrypoints, missing capabilities).
+ * Build checklist summary from tree-sitter structured analysis (100% context — no dropping).
+ * Includes: routes, entrypoints, subsystems, behavior flows, matched/missing capabilities,
+ * boot sequence, symbol_index, import_graph, user stories, acceptance criteria.
  */
 function buildChecklistSummaryFromStructuredAnalysis(sa: any): string {
   if (!sa) return ''
   const routes = Array.isArray(sa.route_map) ? sa.route_map : []
   const entrypoints = Array.isArray(sa.entrypoints) ? sa.entrypoints : []
   const missing = Array.isArray(sa.ideation_alignment?.missing_capabilities) ? sa.ideation_alignment.missing_capabilities : []
+  const matched = Array.isArray(sa.ideation_alignment?.matched_capabilities) ? sa.ideation_alignment.matched_capabilities : []
+  const subs = Array.isArray(sa.architecture_summary?.subsystems) ? sa.architecture_summary.subsystems : []
+  const flows = Array.isArray(sa.behavior_flows) ? sa.behavior_flows : []
+  const boot = Array.isArray(sa.setup_analysis?.recommended_boot_sequence) ? sa.setup_analysis.recommended_boot_sequence : []
+  const coreModules = Array.isArray(sa.architecture_summary?.core_modules) ? sa.architecture_summary.core_modules : []
+  const symbolIndex = Array.isArray(sa.symbol_index) ? sa.symbol_index : []
+  const importGraph = Array.isArray(sa.import_graph) ? sa.import_graph : []
   const lines: string[] = []
   if (routes.length) {
     lines.push('Routes to implement: ' + routes.map((r: any) => `${r.method || 'GET'} ${r.route || ''}`).join('; '))
@@ -67,8 +76,48 @@ function buildChecklistSummaryFromStructuredAnalysis(sa: any): string {
   if (entrypoints.length) {
     lines.push('Entrypoints: ' + entrypoints.map((e: any) => `${e.file}:${e.symbol || ''}`).join('; '))
   }
+  if (subs.length) {
+    lines.push('Subsystems: ' + subs.map((s: any) => `${s.name}: ${s.purpose || ''}`).join('; '))
+  }
+  if (flows.length) {
+    lines.push('Behavior flows: ' + flows.map((f: any) => `${f.flow_id}: ${f.trigger} → ${f.entrypoint}`).join('; '))
+  }
+  if (matched.length) {
+    lines.push('Matched capabilities (implement in new code): ' + matched.map((c: any) => c.repo_capability).join('; '))
+  }
   if (missing.length) {
-    lines.push('Missing capabilities: ' + missing.map((c: any) => c.needed_capability || '').join('; '))
+    lines.push('Missing capabilities (must include in plan): ' + missing.map((c: any) => `${c.needed_capability}${(c as any).recommended_approach ? ` (${(c as any).recommended_approach})` : ''}`).join('; '))
+  }
+  if (boot.length) {
+    lines.push('Recommended boot/setup sequence: ' + boot.join(' → '))
+  }
+  if (coreModules.length) {
+    lines.push('Core modules: ' + coreModules.join(', '))
+  }
+  if (symbolIndex.length) {
+    const symLines = symbolIndex.map((entry: any) => {
+      const syms = (entry.symbols || []).map((s: any) => s.name || '').filter(Boolean)
+      return syms.length ? `${entry.file}: ${syms.join(', ')}` : ''
+    }).filter(Boolean)
+    if (symLines.length) lines.push('Key exports (file: symbols): ' + symLines.join(' | '))
+  }
+  if (importGraph.length) {
+    const impLines = importGraph.slice(0, 120).map((entry: any) => {
+      const targets = (entry.imports || []).map((i: any) => i.target || '').filter(Boolean)
+      return targets.length ? `${entry.source_file} → ${targets.join(', ')}` : ''
+    }).filter(Boolean)
+    if (impLines.length) lines.push('Import graph (module dependencies): ' + impLines.join('; '))
+  }
+  const norm = sa.ideation_alignment?.normalized_requirements
+  if (norm) {
+    const userStories = Array.isArray(norm.user_stories) ? norm.user_stories : []
+    if (userStories.length) {
+      lines.push('User stories: ' + userStories.map((u: any) => `As ${u.as_a} I want ${u.i_want}`).join(' | '))
+    }
+    const acceptanceCriteria = Array.isArray(norm.acceptance_criteria) ? norm.acceptance_criteria : []
+    if (acceptanceCriteria.length) {
+      lines.push('Acceptance criteria: ' + acceptanceCriteria.map((a: any) => a.criterion || a.id).join('; '))
+    }
   }
   return lines.join('\n')
 }
@@ -113,7 +162,7 @@ function buildLayerPrompts(
   const fileManifest = Array.isArray(sa?.file_manifest) ? sa.file_manifest : []
   const assetPaths = fileManifest
     .filter((f: any) => /\.(glb|gltf|fbx|obj|png|jpg|jpeg|webp|gif|svg)$/i.test(f.path || '') || /(models|textures|scenes|assets)\//.test((f.path || '')))
-    .slice(0, 12)
+    .slice(0, 60)
     .map((f: any) => f.path)
   const assetList = assetPaths.length ? assetPaths.join(', ') : 'align with repo'
 
@@ -122,14 +171,14 @@ function buildLayerPrompts(
   }
 
   if (activeLayers.webApp) {
-    const routeList = routes.length ? routes.slice(0, 15).map((r: any) => `${r.method || 'GET'} ${r.route || ''}`).join(', ') : 'none'
-    const entryList = entrypoints.length ? entrypoints.slice(0, 10).map((e: any) => `${e.file}:${e.symbol || ''}`).join(', ') : 'none'
+    const routeList = routes.length ? routes.slice(0, 80).map((r: any) => `${r.method || 'GET'} ${r.route || ''}`).join(', ') : 'none'
+    const entryList = entrypoints.length ? entrypoints.slice(0, 60).map((e: any) => `${e.file}:${e.symbol || ''}`).join(', ') : 'none'
     out.webApp = `Web app layer: Focus on app shell, navigation, layouts, and auth-guarded routes. Routes to align with: ${routeList}. Entrypoints: ${entryList}. Implement each in new code; do not copy repo source.`
   }
 
   if (activeLayers.data) {
     const apiRoutes = routes.filter((r: any) => /^(get|post|put|patch|delete)\s+/i.test((r.method || '') + ' ') || (r.route || '').includes('api'))
-    const apiList = apiRoutes.length ? apiRoutes.slice(0, 12).map((r: any) => `${r.method || 'GET'} ${r.route || ''}`).join(', ') : 'from analysis'
+    const apiList = apiRoutes.length ? apiRoutes.slice(0, 60).map((r: any) => `${r.method || 'GET'} ${r.route || ''}`).join(', ') : 'from analysis'
     out.data = `Data layer: Focus on API routes, data shapes, and storage. API/routes to implement: ${apiList}. Data patterns: ${dataPatterns.length ? dataPatterns.join(', ') : 'align with repo'}. Auth patterns: ${authPatterns.length ? authPatterns.join(', ') : 'align with repo'}. Implement in new code only.`
   }
 

@@ -17,6 +17,7 @@ import crypto from 'crypto'
 import { connectToDatabase } from '@/lib/mongodb'
 import { getFileDependencies } from '@/lib/services/dependencyResolverService'
 import { gripLog } from '@/lib/gripLogger'
+import { CANONICAL_GLOBALS_CSS, isGlobalsCssPath } from '@/lib/constants/canonicalAppFiles'
 
 /**
  * File Generator Service - Creates service to generate code based on templates and context
@@ -51,6 +52,10 @@ export interface FileGenerationRequest {
   mainLanguages?: Record<string, number>;
   /** User ideation (goals, audience, features, technical requirements); code and design must match 100% */
   ideation?: { goals?: string; targetAudience?: string; keyFeatures?: string; technicalRequirements?: string };
+  /** Project display name; must appear in main page and metadata (no generic "Welcome" without project name). */
+  projectTitle?: string;
+  /** Short scope reminder from pre-plan build requirements; used for file-level context and for fix-build to trace which files/code blocks to update on unsuccessful build. */
+  scopeReminder?: string;
 }
 
 /**
@@ -68,6 +73,8 @@ export interface FileGenerationResult {
   error?: string;
   /** Tokens used by AI (e.g. generateTemplateVariables) for this file */
   totalTokens?: number;
+  /** Version after save (1 = created, 2+ = updated); for UI to show "Created" / "Updated v2" */
+  version?: number;
 }
 
 /**
@@ -101,6 +108,14 @@ function isPlaceholderOrEmpty(content: string, filename: string): boolean {
     if (trimmed.length > 500 && /\bexport\b/.test(trimmed)) return false
     // CommonJS config (next.config.js, tailwind.config.js, etc.)
     if (/\bmodule\.exports\b|require\s*\(/.test(trimmed)) return false
+  }
+  // .txt (e.g. robots.txt): allow if it looks like real content (User-agent, Disallow, Allow, Sitemap)
+  if (ext === 'txt') {
+    if (/User-agent|Disallow|Allow|Sitemap:/i.test(trimmed) || (trimmed.length >= 20 && !/^\/\*\*?[\s\S]*\*\/\s*$/.test(trimmed))) return false
+  }
+  // .xml (e.g. sitemap.xml): allow if it has XML declaration or root element
+  if (ext === 'xml') {
+    if (/<\?xml|<\s*urlset|<\s*sitemapindex|<\s*feed/i.test(trimmed) || (trimmed.length >= 50 && /<[a-zA-Z]/.test(trimmed))) return false
   }
   // .sql and other non-ts/js: allow if substantial and not only comments
   if (trimmed.length > 200 && !/^[\s\-]*$/.test(trimmed) && !/^\/\*\*?[\s\S]*\*\/\s*$/.test(trimmed)) return false
@@ -270,7 +285,9 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
             repoCategory: request.repoCategory,
             primaryLanguages: request.primaryLanguages,
             mainLanguages: request.mainLanguages,
-            ideation: request.ideation
+            ideation: request.ideation,
+            projectTitle: request.projectTitle,
+            scopeReminder: request.scopeReminder
           })
           variables = tvResult?.variables ?? { ...template.defaultValues } as ITemplateVariables
           templateTokens = tvResult?.totalTokens ?? 0
@@ -309,11 +326,66 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
     const filename = request.filename || generateFileName(template, variables)
 
     // GRIP mandatory: create all code for all files — no placeholders, no empty files (MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES)
-    const content = renderTemplate(template, variables)
+    let content = renderTemplate(template, variables)
+    // App Router: strip any next/head that slipped into variables so first build always succeeds (no reject → retry loop)
+    const normalizedPathForSanitize = (request.filePath || '').replace(/\\/g, '/')
+    if (/^(app|src\/app)\/.+\.(tsx|ts|jsx|js)$/i.test(normalizedPathForSanitize) && (/from\s+['"]next\/head['"]|import\s+Head\s+from|<Head\s*\/?>/.test(content))) {
+      content = content
+        .replace(/\n?\s*import\s+Head\s+from\s+['"]next\/head['"];?\s*\n?/g, '\n')
+        .replace(/<Head[^>]*>[\s\S]*?<\/Head>/g, '')
+      // If any Head reference remains, remove standalone <Head /> or stray imports
+      content = content.replace(/\n?\s*import\s+.*next\/head.*\n?/g, '\n').replace(/<Head\s*\/?>\s*/g, '')
+    }
+    // globals.css: if content is not valid CSS (e.g. JS/TS from wrong template), use canonical so StackBlitz build never fails
+    if (isGlobalsCssPath(normalizedPathForSanitize)) {
+      const looksLikeJsOrTs = /\bimport\s+|\bexport\s+default\s+|from\s+['"]next\/|<Head\s*\/?>|React\.ReactNode/.test(content)
+      if (looksLikeJsOrTs || !/@tailwind|:root|body\s*\{/.test(content)) {
+        content = CANONICAL_GLOBALS_CSS
+        gripLog(4, 'globals.css corrected to canonical (was non-CSS or missing Tailwind)', { path: request.filePath })
+      }
+    }
     if (isPlaceholderOrEmpty(content, filename)) {
       const msg = `Generated content for ${request.filePath || filename} is empty or placeholder. GRIP mandatory rule: create all code for all file creations — every file must have real, runnable code.`
       console.warn('[GRIP Stage 4] file rejected as placeholder/empty', { path: request.filePath, filename, templateId: request.templateId, contentLength: content?.length ?? 0, contentPreview: (content || '').slice(0, 120) })
       gripLog(4, 'file rejected as placeholder/empty', { path: request.filePath, filename, templateId: request.templateId, contentLength: content?.length ?? 0 })
+      return {
+        fileId: '',
+        projectId: request.projectId,
+        path: request.filePath,
+        filename,
+        content: '',
+        size: 0,
+        language: template.language,
+        success: false,
+        error: msg,
+      }
+    }
+    // Root page: reject generic/placeholder content so main page always has ideation (no export placeholder overwrite)
+    const normalizedPath = (request.filePath || '').replace(/\\/g, '/')
+    const isRootPage = normalizedPath === 'app/page.tsx' || normalizedPath === 'app/page.jsx' || normalizedPath === 'src/app/page.tsx' || normalizedPath === 'src/app/page.jsx'
+    const rootContent = content || ''
+    if (isRootPage && (/Your app is running|Edit this page in the editor|Run plan and build in GRIP|generate your full app with ideation/.test(rootContent))) {
+      const msg = `Root page must reflect project ideation and project name, not generic placeholder. GRIP mandatory: do not output "Your app is running", "Edit this page in the editor", or "Run plan and build in GRIP".`
+      console.warn('[GRIP Stage 4] file rejected as generic root page', { path: request.filePath })
+      gripLog(4, 'file rejected as generic root page', { path: request.filePath })
+      return {
+        fileId: '',
+        projectId: request.projectId,
+        path: request.filePath,
+        filename,
+        content: '',
+        size: 0,
+        language: template.language,
+        success: false,
+        error: msg,
+      }
+    }
+    // App directory: reject next/head — App Router requires Metadata API only (strengthens no next/head rule)
+    const isAppDirFile = /^(app|src\/app)\/.+\.(tsx|ts|jsx|js)$/i.test(normalizedPath)
+    if (isAppDirFile && (/from\s+['"]next\/head['"]|import\s+Head\s+from|<Head\s*\/?>/.test(rootContent))) {
+      const msg = `App Router forbids next/head in app/ or src/app/. Use the Metadata API only: export const metadata = { title, description }. Do not import Head from 'next/head' or use <Head>.`
+      console.warn('[GRIP Stage 4] file rejected: next/head in app directory', { path: request.filePath })
+      gripLog(4, 'file rejected next/head in app dir', { path: request.filePath })
       return {
         fileId: '',
         projectId: request.projectId,
@@ -361,7 +433,7 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
       existingFile.hash = hash
       existingFile.metadata.dependencies = dependencies
       existingFile.metadata.imports = imports
-      
+
       if (existingFile.hash !== hash) {
         existingFile.history.push({
           version: existingFile.version,
@@ -371,7 +443,7 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
         })
         existingFile.version += 1
       }
-      
+
       await existingFile.save()
       file = existingFile
     } else {
@@ -392,10 +464,42 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
         },
         history: []
       })
-      
-      await file.save()
+
+      try {
+        await file.save()
+      } catch (saveErr: unknown) {
+        // Concurrent request may have inserted same (projectId, path, filename); retry as update
+        const isDup = saveErr && typeof saveErr === 'object' && 'code' in saveErr && (saveErr as { code?: number }).code === 11000
+        if (isDup) {
+          const existing = await ProjectFile.findOne({
+            projectId: new ObjectId(request.projectId),
+            path: pathDir,
+            filename
+          })
+          if (existing) {
+            existing.content = content
+            existing.size = Buffer.byteLength(content, 'utf8')
+            existing.hash = hash
+            existing.metadata.dependencies = dependencies
+            existing.metadata.imports = imports
+            existing.history.push({
+              version: existing.version,
+              content: existing.content,
+              timestamp: new Date(),
+              changes: 'Updated via template generator (concurrent)'
+            })
+            existing.version += 1
+            await existing.save()
+            file = existing
+          } else {
+            throw saveErr
+          }
+        } else {
+          throw saveErr
+        }
+      }
     }
-    
+
     // Return result
     return {
       fileId: file._id?.toString() || '',
@@ -406,7 +510,8 @@ export async function generateFile(request: FileGenerationRequest): Promise<File
       size: file.size,
       totalTokens: templateTokens,
       language: file.language,
-      success: true
+      success: true,
+      version: file.version ?? 1
     }
   } catch (error) {
     console.error('Error generating file:', error)

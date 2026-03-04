@@ -37,7 +37,9 @@ export type EnhanceIdeationResult = {
  * Aligns with: latest libraries, modern UX/UI, clean design, best first-build flow.
  */
 export async function enhanceIdeationForBuild(
-  ideation: RawIdeation | null | undefined
+  ideation: RawIdeation | null | undefined,
+  /** Optional: user asked GRIP to do web research (e.g. public figure, company) and use real data in the build. */
+  researchInstructions?: string | null
 ): Promise<EnhanceIdeationResult | null> {
   if (!ideation) return null
   const goals = (ideation.goals ?? '').trim()
@@ -49,11 +51,15 @@ export async function enhanceIdeationForBuild(
   const apiKey = getAnthropicApiKey()
   if (!apiKey) return null
 
+  const researchBlock = (researchInstructions ?? '').trim()
+    ? `\n\nThe user also provided research instructions for GRIP: "${(researchInstructions ?? '').trim()}". When producing build requirements, note that GRIP should use real, findable data (e.g. from web research on the named person/company) in the build so the app is not generic—incorporate this into clarifiedGoals or keyFeaturesNormalized where relevant.`
+    : ''
+
   try {
     const anthropic = new Anthropic({ apiKey })
     const response = await anthropic.messages.create({
       model: ANTHROPIC_MODEL_CHAT,
-      max_tokens: 2400,
+      max_tokens: 5000,
       temperature: 0.2,
       messages: [
         {
@@ -75,7 +81,7 @@ User ideation:
 - Goals: ${goals || '(none)'}
 - Target audience: ${audience || '(none)'}
 - Key features: ${features || '(none)'}
-- Technical requirements: ${tech || '(none)'}`
+- Technical requirements: ${tech || '(none)'}${researchBlock}`
         }
       ]
     })

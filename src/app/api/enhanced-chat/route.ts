@@ -16,11 +16,12 @@ import { getProjectState, updateProjectState, recordFileSaveAndAdvanceStep } fro
 import { createProjectFolder, saveProjectFile } from '@/lib/services/gripProjectActions'
 import { mergeReadmeBlocks } from '@/lib/mergeReadmeBlocks'
 import { runMainProject } from '@/lib/runMainProject'
-import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONE_STACK_ONLY, MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS, MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT, MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT, MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE, MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY, MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE, MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS } from '@/lib/constants/buildQualityPlan'
+import { MANDATORY_GRIP_APP_VS_USER_SETTINGS, MANDATORY_GRIP_BUILD_QUALITY, MANDATORY_GRIP_ALL_CODE_FOR_ALL_FILES, MANDATORY_GRIP_NO_BLANK_FILES_AND_FULL_BUILD, MANDATORY_GRIP_ONE_STACK_ONLY, MANDATORY_GRIP_EXPO_ONLY_FOR_EXPO_APPS, MANDATORY_GRIP_NEXTJS_APP_ROUTER_LAYOUT, MANDATORY_GRIP_STACKBLITZ_MAIN_PAGE_ON_FIRST_VISIT, MANDATORY_GRIP_FIRST_BUILD_COMPLETE_DEPLOYABLE, MANDATORY_GRIP_NAVIGATION_AND_INTERACTIVITY, MANDATORY_GRIP_STYLING_AND_FIRST_VISIT_UX, MANDATORY_GRIP_ONLY_REQUIRED_PACKAGE_AND_BUILD, MANDATORY_GRIP_PACKAGE_JSON_AND_RUNNABLE, MANDATORY_GRIP_BUILD_ARTIFACTS_ALIGN_WITH_CODE, MANDATORY_GRIP_NPM_BUILD_ENVIRONMENT, MANDATORY_GRIP_ENV_AND_PRODUCTION_SETUP, MANDATORY_GRIP_PROJECT_SPECIFIC_SCAFFOLDING, MANDATORY_GRIP_PRODUCTION_READINESS, MANDATORY_GRIP_FULL_ANALYSIS_CONTEXT } from '@/lib/constants/buildQualityPlan'
 import { STYLING_REQUIREMENTS_FOR_GRIP } from '@/lib/constants/stylingReferenceRepos'
 import { detectRepoType, getMandatoryRepoTypeRules } from '@/lib/repoTypeDetection'
 import { getReferenceReposGuidanceLine } from '@/lib/constants/referenceRepos'
 import { buildPlanContextFromAnalysis } from '@/lib/services/planContextFromAnalysisService'
+import { MAX_BUILD_FIX_ATTEMPTS } from '@/lib/constants/overviewBuild'
 
 // Phase 2, Step 2: Create Project Data Fetcher for enhanced chat
 //
@@ -225,15 +226,16 @@ ${projectContext.ideation.technicalRequirements}
 This project has sandbox experiments (isolated builds for testing). The user can create or open them from the project Overview. ${sandboxExperimentsSummary}
 `
     }
-    // User uploads (images and reference docs): so GRIP uses them in the build
+    // User uploads (images, files, docs, logos, favicons): MANDATORY — add every one to the build
     if (userUploadsSummary && userUploadsSummary.trim()) {
       prompt += `
-## User uploads (use in the build)
-The user has uploaded images and/or reference docs for this project. You MUST use them in your code and implementation.
+## User uploads — MANDATORY: add to the build (concrete rule)
+When the user uploads images, files, docs, logos, or favicons, GRIP MUST add them to the build. Every uploaded asset must be included and referenced.
 ${userUploadsSummary}
-- **Images (logos, branding, hero, favicon):** Use the paths above in \`<img src="...">\`, CSS \`url()\`, or asset imports so the user's assets appear in the app. Prefer user-provided logos and branding over placeholders.
-- **Reference docs:** Use them for requirements, copy, or specs; incorporate or reference their content when implementing features.
-- GRIP receives all uploads in context; use each according to its type (image vs reference doc) and path.
+- **Images (logos, hero, branding):** Use the paths above in \`<img src="...">\`, CSS \`url()\`, or asset imports. Logo in header, hero on main page. No placeholders when the user uploaded an image.
+- **Favicon:** If the user uploaded a favicon (.ico, .png), add it to public/ and reference in layout metadata (\`metadata.icons\` or \`<link rel="icon">\`).
+- **Reference docs (PDF, TXT, MD):** Use for requirements, copy, or specs; incorporate content where relevant.
+- Do not omit or replace with placeholders; the built app must use every uploaded image, file, doc, logo, and favicon.
 `
     }
   }
@@ -496,7 +498,8 @@ Based on the repository analysis, you can help with:
   // Add structured analysis summary (tree-link JSON) if available — ties to checklist and user input
   if (structuredSummary && structuredSummary.trim()) {
     prompt += `\n## Structured repo analysis (tree-link summary — capabilities vs requirements; no repo code)\n`
-    prompt += `Summary from tree-sitter analysis. Use with the "Repository features and APIs" checklist: implement each item in new code; align with user stories and acceptance criteria when present.\n\n`
+    prompt += `Summary from tree-sitter analysis. Use with the "Repository features and APIs" checklist: implement each item in new code; align with user stories and acceptance criteria when present.\n`
+    prompt += `${MANDATORY_GRIP_FULL_ANALYSIS_CONTEXT}\n\n`
     prompt += `${structuredSummary.slice(0, ss)}\n`
   }
 
@@ -1398,21 +1401,29 @@ export async function POST(request: NextRequest) {
           lines.push(`- Summary: ${identity.summary}`)
         }
         if (subsystems.length) {
-          lines.push('- Subsystems (partial): ' + subsystems.slice(0, 3).map((s: any) => s.name || '(unnamed)').join(', '))
+          lines.push('- Subsystems: ' + subsystems.map((s: any) => s.name || '(unnamed)').join(', '))
         }
         if (routes.length) {
-          lines.push('- Routes (partial): ' + routes.slice(0, 5).map((r: any) => r.route || '').join(', '))
+          lines.push('- Routes: ' + routes.map((r: any) => r.route || '').join(', '))
         }
         if (entrypoints.length) {
-          lines.push('- Entrypoints: ' + entrypoints.slice(0, 5).map((e: any) => `${e.file}:${e.symbol || ''}`).join('; '))
+          lines.push('- Entrypoints: ' + entrypoints.map((e: any) => `${e.file}:${e.symbol || ''}`).join('; '))
         }
         if (symbolIndex.length > 0) {
           const symbols: string[] = []
-          for (const fileEntry of symbolIndex.slice(0, 8)) {
-            const syms = (fileEntry.symbols || []).slice(0, 5).map((s: any) => s.name || '').filter(Boolean)
+          for (const fileEntry of symbolIndex.slice(0, 50)) {
+            const syms = (fileEntry.symbols || []).slice(0, 25).map((s: any) => s.name || '').filter(Boolean)
             if (syms.length) symbols.push(`${fileEntry.file}: ${syms.join(', ')}`)
           }
           if (symbols.length) lines.push('Key exports (file: symbols): ' + symbols.join(' | '))
+        }
+        const importGraph = Array.isArray(sa.import_graph) ? sa.import_graph : []
+        if (importGraph.length > 0) {
+          const impLines = importGraph.slice(0, 80).map((entry: any) => {
+            const targets = (entry.imports || []).map((i: any) => i.target || '').filter(Boolean)
+            return targets.length ? `${entry.source_file} → ${targets.join(', ')}` : ''
+          }).filter(Boolean)
+          if (impLines.length) lines.push('Import graph (module dependencies): ' + impLines.join('; '))
         }
         if (ideation.normalized_requirements?.product_summary) {
           lines.push(`- Ideation product summary: ${ideation.normalized_requirements.product_summary}`)
@@ -1929,7 +1940,6 @@ export async function POST(request: NextRequest) {
     const runAfterApply = runAfterApplyRaw !== false // default: run when files changed
     let buildRan = false
     let buildSucceeded = false
-    const MAX_BUILD_FIX_ATTEMPTS = 5
     let lastAppliedPaths = appliedPaths
     let buildRunCount = 0
     let lastRunOutput = ''
